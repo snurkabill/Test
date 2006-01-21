@@ -35,90 +35,7 @@ import com.vectrace.MercurialEclipse.preferences.PreferenceConstants;
  */
 public class MercurialConfigurationWizard extends Wizard implements IConfigurationWizard {
 
-
-	class SummaryPage extends WizardPage {
-	  public static final String PAGE_NAME = "Summary";
-
-	  private Label textLabel;
-
-	  public SummaryPage() {
-	    super(PAGE_NAME, "Summary Page", null);
-	  }
-
-	  public void createControl(Composite parent) {
-	    Composite topLevel = new Composite(parent, SWT.NONE);
-	    topLevel.setLayout(new FillLayout());
-
-	    textLabel = new Label(topLevel, SWT.CENTER);
-	    textLabel.setText("");
-
-	    setControl(topLevel);
-	    setPageComplete(true);
-	  }
-
-	  public void updateText(String newText) {
-	    textLabel.setText(newText);
-	  }
-	}
-
-	class DirectoryPage extends WizardPage {
-	  public static final String PAGE_NAME = "Directory";
-
-	  private Button button;
-
-	  public DirectoryPage() {
-	    super(PAGE_NAME, "Directory Page", null);
-	  }
-
-	  public void createControl(Composite parent) {
-	    Composite topLevel = new Composite(parent, SWT.NONE);
-	    topLevel.setLayout(new GridLayout(2, false));
-
-	    Label l = new Label(topLevel, SWT.CENTER);
-	    l.setText("Use default directory?");
-
-	    button = new Button(topLevel, SWT.CHECK);
-
-    
-	    setControl(topLevel);
-	    setPageComplete(true);
-	  }
-
-	  public boolean useDefaultDirectory() {
-	    return button.getSelection();
-	  }
-	}
-
-	class ChooseDirectoryPage extends WizardPage {
-	  public static final String PAGE_NAME = "Choose Directory";
-
-	  private Text text;
-
-	  public ChooseDirectoryPage() {
-	    super(PAGE_NAME, "Choose Directory Page", null);
-	  }
-
-	  public void createControl(Composite parent) {
-	    Composite topLevel = new Composite(parent, SWT.NONE);
-	    topLevel.setLayout(new GridLayout(2, false));
-
-	    Label l = new Label(topLevel, SWT.CENTER);
-	    l.setText("Enter the directory to use:");
-
-	    text = new Text(topLevel, SWT.SINGLE);
-	    text.setLayoutData(new GridData(GridData.FILL_HORIZONTAL));
-
-	    setControl(topLevel);
-	    setPageComplete(true);
-	  }
-
-	  public String getDirectory() {
-	    return text.getText();
-	  }
-	}
-	
-	
-	public class NewWizardPage1 extends WizardPage implements SelectionListener 
+	public class NewWizardPage extends WizardPage implements SelectionListener 
 	{
 		String hgPath;
 		String hgPathOrginal;
@@ -258,7 +175,7 @@ public class MercurialConfigurationWizard extends Wizard implements IConfigurati
 	    MercurialRootDir=findMercurialRoot(projectLocation.toFile());
 	    if (MercurialRootDir == null)
 	    {    
-			addPage( new NewWizardPage1(project.getLocation().toString()) );
+			addPage( new NewWizardPage(project.getLocation().toString()) );
 	    }
 	    else
 	    {
