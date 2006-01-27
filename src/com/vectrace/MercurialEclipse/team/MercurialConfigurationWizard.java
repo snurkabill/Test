@@ -12,7 +12,10 @@
  */
 package com.vectrace.MercurialEclipse.team;
 
+import java.io.BufferedReader;
 import java.io.File;
+import java.io.IOException;
+import java.io.InputStreamReader;
 
 import org.eclipse.core.resources.IProject;
 import org.eclipse.core.runtime.IPath;
@@ -22,9 +25,11 @@ import org.eclipse.swt.SWT;
 import org.eclipse.swt.events.SelectionEvent;
 import org.eclipse.swt.events.SelectionListener;
 import org.eclipse.swt.layout.GridLayout;
+import org.eclipse.swt.program.Program;
 import org.eclipse.swt.widgets.Button;
 import org.eclipse.swt.widgets.Composite;
 import org.eclipse.swt.widgets.DirectoryDialog;
+import org.eclipse.swt.widgets.Display;
 import org.eclipse.swt.widgets.Label;
 import org.eclipse.swt.widgets.Text;
 import org.eclipse.swt.widgets.Shell;
@@ -174,6 +179,7 @@ public class MercurialConfigurationWizard extends Wizard implements IConfigurati
 	    pathProject=project.getLocation().toString();
 	    if (MercurialRootDir == null)
 	    {   
+	    	foundhgPath=null;
 	    	hgPathOrginal=project.getLocation().toString();
 	    	hgPath=hgPathOrginal;
 			addPage( new NewWizardPage(true) );
@@ -195,9 +201,32 @@ public class MercurialConfigurationWizard extends Wizard implements IConfigurati
 		{
 			hgPath=directoryText.getText();
 		}
-		// System.out.println("MercurialConfigurationWizard.preformFinish()");
-		System.out.println("execute >cd " + hgPath + ";hg init<");
-		return false;
+//		System.out.println("MercurialConfigurationWizard.preformFinish()");
+//		System.out.println("Path:" + hgPath);
+		if( (foundhgPath==null) ||  (! foundhgPath.equals(hgPath) ) )
+		{
+			String launchCmd[] = { "hg", "init", hgPath };
+			try {
+				String line;
+				Process process = Runtime.getRuntime().exec(launchCmd); 
+				BufferedReader input = new BufferedReader( new InputStreamReader(process.getInputStream()));
+		        while ((line = input.readLine()) != null) 
+		        {
+//TODO output this text nicer
+		        	System.out.println(line);
+				}
+				input.close();
+				int exitVal = process.waitFor();
+			} catch (IOException e) {
+				// TODO Auto-generated catch block
+				e.printStackTrace();
+			} catch (InterruptedException e) {
+				// TODO Auto-generated catch block
+				e.printStackTrace();
+			}			
+		}
+
+		return true;
 	}
 	
 	

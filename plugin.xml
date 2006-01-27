@@ -12,7 +12,7 @@
 	<extension
 	      point="org.eclipse.team.ui.configurationWizards">
 	   <wizard
-	        name="MercurialWizard"
+	        name="Mercurial"
 	        icon="icons/sample.gif"
 	        class="com.vectrace.MercurialEclipse.team.MercurialConfigurationWizard"
 	        id="com.vectrace.MercurialEclipse.team.MercurialConfigurationWizard">
