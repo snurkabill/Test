@@ -28,11 +28,14 @@ public class SampleAction implements IWorkbenchWindowActionDelegate {
 	 * in the workbench UI.
 	 * @see IWorkbenchWindowActionDelegate#run
 	 */
-	public void run(IAction action) {
-		MessageDialog.openInformation(
-			window.getShell(),
-			"MercurialEclipse",
-			"Hello, Eclipse world");
+	 
+	public void run(IAction action) 
+	{
+		System.out.println("SampleAction.run()");
+//        if((window !=null) && (window.getShell() != null))
+//        {
+//        	MessageDialog.openInformation(window.getShell(),"MercurialEclipse",	"Hello, Eclipse world");
+//        }
 	}
 
 	/**

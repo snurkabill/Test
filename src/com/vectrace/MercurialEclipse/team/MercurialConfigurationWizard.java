@@ -25,16 +25,17 @@ import org.eclipse.swt.SWT;
 import org.eclipse.swt.events.SelectionEvent;
 import org.eclipse.swt.events.SelectionListener;
 import org.eclipse.swt.layout.GridLayout;
-import org.eclipse.swt.program.Program;
 import org.eclipse.swt.widgets.Button;
 import org.eclipse.swt.widgets.Composite;
 import org.eclipse.swt.widgets.DirectoryDialog;
-import org.eclipse.swt.widgets.Display;
 import org.eclipse.swt.widgets.Label;
 import org.eclipse.swt.widgets.Text;
 import org.eclipse.swt.widgets.Shell;
+import org.eclipse.team.core.RepositoryProvider;
+import org.eclipse.team.core.TeamException;
 import org.eclipse.team.ui.IConfigurationWizard;
 import org.eclipse.ui.IWorkbench;
+
 
 /**
  * @author zingo
@@ -111,7 +112,6 @@ public class MercurialConfigurationWizard extends Wizard implements IConfigurati
 		{
 			if(e.widget==changeDirButton )
 			{
-				// TODO Auto-generated method stub
 				DirectoryDialog directoryDialog;
 			    directoryDialog = new DirectoryDialog( new Shell() );
 			    directoryDialog.setText("Select mercurial root");
@@ -154,7 +154,7 @@ public class MercurialConfigurationWizard extends Wizard implements IConfigurati
 	private String hgPath;
 	private String hgPathOrginal;
 	private String foundhgPath;
-	private String pathProject;
+//	private String pathProject;
 	private Text directoryText;
 	
 	
@@ -173,10 +173,11 @@ public class MercurialConfigurationWizard extends Wizard implements IConfigurati
 	public void addPages() {
 //		System.out.println("MercurialConfigurationWizard.addPages()");
 
-	    IPath projectLocation = project.getLocation();
+//	    IPath projectLocation = project.getLocation();
 	    String MercurialRootDir;
-	    MercurialRootDir=findMercurialRoot(projectLocation.toFile());
-	    pathProject=project.getLocation().toString();
+	    MercurialRootDir=MercurialUtilities.search4MercurialRoot(project);
+//	    MercurialRootDir=MercurialUtilities.search4MercurialRoot(projectLocation.toFile());
+//	    pathProject=project.getLocation().toString();
 	    if (MercurialRootDir == null)
 	    {   
 	    	foundhgPath=null;
@@ -206,26 +207,43 @@ public class MercurialConfigurationWizard extends Wizard implements IConfigurati
 		if( (foundhgPath==null) ||  (! foundhgPath.equals(hgPath) ) )
 		{
 			String launchCmd[] = { "hg", "init", hgPath };
-			try {
+			try 
+			{
 				String line;
 				Process process = Runtime.getRuntime().exec(launchCmd); 
 				BufferedReader input = new BufferedReader( new InputStreamReader(process.getInputStream()));
 		        while ((line = input.readLine()) != null) 
 		        {
-//TODO output this text nicer
+//TODO output this text nice:er
 		        	System.out.println(line);
 				}
 				input.close();
-				int exitVal = process.waitFor();
-			} catch (IOException e) {
-				// TODO Auto-generated catch block
+				/*int exitVal =*/ process.waitFor();
+			} 
+			catch (IOException e) 
+			{
 				e.printStackTrace();
-			} catch (InterruptedException e) {
-				// TODO Auto-generated catch block
+				return false;
+			} 
+			catch (InterruptedException e) 
+			{
 				e.printStackTrace();
+				return false;
 			}			
 		}
-
+		try 
+		{
+			RepositoryProvider.map( project, MercurialTeamProvider.class.getName() );
+			MercurialTeamProvider hgProvider; 
+			hgProvider = (MercurialTeamProvider) RepositoryProvider.getProvider( project );
+		    hgProvider.setRepositoryPath( hgPath );
+			
+		} 
+		catch (TeamException e) 
+		{
+			e.printStackTrace();
+			return false;
+		}
 		return true;
 	}
 	
@@ -238,31 +256,6 @@ public class MercurialConfigurationWizard extends Wizard implements IConfigurati
 		this.project=project;
 	}
 
-    private static String findMercurialRoot( final File file ) {
-        String path = null;
-        File parent = file;
-        File hgFolder = new File( parent, ".hg" );
-//        System.out.println("pathcheck:" + parent.toString());
-        while ((parent!=null) && !(hgFolder.exists() && hgFolder.isDirectory()) )
-        {
-        	parent=parent.getParentFile();
-        	if(parent!=null)
-        	{
-//              System.out.println("pathcheck:" + parent.toString());
-              hgFolder = new File( parent, ".hg" );
-        	}
-        }
-        if(parent!=null)
-        {
-          path = hgFolder.getParentFile().toString();
-        }
-        else
-        {
-          path = null;
-        }
-//        System.out.println("pathcheck: >" + path + "<");
-        return path;
-      }
 	
 
 	
