@@ -4,7 +4,10 @@
  */
 package com.vectrace.MercurialEclipse.team;
 
+import java.util.Iterator;
+
 import org.eclipse.core.resources.IProject;
+import org.eclipse.core.resources.IResource;
 import org.eclipse.jface.action.IAction;
 import org.eclipse.jface.viewers.ISelection;
 import org.eclipse.jface.viewers.IStructuredSelection;
@@ -17,13 +20,13 @@ import org.eclipse.ui.IWorkbenchWindowActionDelegate;
  * @author zingo
  *
  */
-public class ActionStatus implements IWorkbenchWindowActionDelegate {
+public class ActionDiff implements IWorkbenchWindowActionDelegate {
 
 //	private IWorkbenchWindow window;
 //    private IWorkbenchPart targetPart;
     private IStructuredSelection selection;
     
-	public ActionStatus() {
+	public ActionDiff() {
 		super();
 	}
 
@@ -43,7 +46,7 @@ public class ActionStatus implements IWorkbenchWindowActionDelegate {
 	 * @see IWorkbenchWindowActionDelegate#init
 	 */
 	public void init(IWorkbenchWindow window) {
-		System.out.println("ActionStatus:init(window)");
+		System.out.println("ActionDiff:init(window)");
 //		this.window = window;
 	}
 
@@ -55,20 +58,37 @@ public class ActionStatus implements IWorkbenchWindowActionDelegate {
 	 */
 	
 
-	public void run(IAction action) {
+	public void run(IAction action) 
+	{
 		IProject proj;
 		String Repository;
+		String FullPath;
 		proj=MercurialUtilities.getProject(selection);
 		Repository=MercurialUtilities.getRepositoryPath(proj);
 		if(Repository==null)
 		{
 			Repository="."; //never leave this empty add a . to point to current path
 		}
-		//Setup and run command
-	    System.out.println("hg --cwd " + Repository + " status");
-		String launchCmd[] = { "hg","--cwd", Repository ,"status" };
-		MercurialUtilities.ExecuteCommand(launchCmd);
+
+		Object obj;
+	    Iterator itr; 
+	    // the last argument will be replaced with a path
+		String launchCmd[] = { "hg","--cwd", Repository ,"diff", "" };
+	    itr=selection.iterator();
+	    while(itr.hasNext())
+	    {
+	    	obj=itr.next();
+	    	if (obj instanceof IResource)
+	    	{
+				//Setup and run command
+		    	FullPath=( ((IResource) obj).getLocation() ).toString();
+		    	launchCmd[4]=FullPath;
+//				    System.out.println(">" + launchCmd[0] + " " + launchCmd[1] + " " + launchCmd[2 ] + " " + launchCmd[3] + " " + launchCmd[4]);
+				MercurialUtilities.ExecuteCommand(launchCmd);
+	    	}
+	    }
 	}
+
 	
   
 	/**
@@ -85,7 +105,5 @@ public class ActionStatus implements IWorkbenchWindowActionDelegate {
 			selection = ( IStructuredSelection )in_selection;
 		}
 	}
-
-
 	
 }

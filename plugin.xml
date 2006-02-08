@@ -52,20 +52,28 @@
               value="org.eclipse.team.core.repository=com.vectrace.MercurialEclipse.team.MercurialTeamProvider">
         </filter>
          <action
+               label="&amp;hg add"
+               icon="icons/sample.gif"
+               class="com.vectrace.MercurialEclipse.team.ActionAdd"
+               tooltip="hg add"
+               menubarPath="team.main/projectGroup"
+               id="com.vectrace.MercurialEclipse.team.ActionAdd">
+         </action>
+         <action
+               label="&amp;hg diff"
+               icon="icons/sample.gif"
+               class="com.vectrace.MercurialEclipse.team.ActionDiff"
+               tooltip="hg diff"
+               menubarPath="team.main/projectGroup"
+               id="com.vectrace.MercurialEclipse.team.ActionDiff">
+         </action>
+         <action
                label="&amp;hg status"
                icon="icons/sample.gif"
                class="com.vectrace.MercurialEclipse.team.ActionStatus"
                tooltip="hg status"
-               menubarPath="team.main/group3"
+               menubarPath="team.main/projectGroup"
                id="com.vectrace.MercurialEclipse.team.ActionStatus">
-         </action>
-         <action
-               label="&amp;hg commit"
-               icon="icons/sample.gif"
-               class="com.vectrace.MercurialEclipse.team.ActionCommit"
-               tooltip="hg status"
-               menubarPath="team.main/group3"
-               id="com.vectrace.MercurialEclipse.team.ActionCommit">
          </action>
 
         <!-- action
