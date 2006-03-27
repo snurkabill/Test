@@ -22,7 +22,7 @@
 
    <extension
          point="org.eclipse.ui.popupMenus">
-      <objectContribution
+      <!-- objectContribution
             objectClass="org.eclipse.core.resources.IFile"
             nameFilter="plugin.xml"
             id="com.vectrace.MercurialEclipse.contribution1">
@@ -41,40 +41,40 @@
                enablesFor="1"
                id="com.vectrace.MercurialEclipse.newAction">
          </action>
-      </objectContribution>
+      </objectContribution -->
       
        <objectContribution
            objectClass="org.eclipse.core.resources.IFile"
            adaptable="true"
            id="com.vectrace.MercurialEclipse.IFileContributions">
-        <filter
+           <filter
               name="projectPersistentProperty"
               value="org.eclipse.team.core.repository=com.vectrace.MercurialEclipse.team.MercurialTeamProvider">
-        </filter>
-         <action
+           </filter>
+           <action
                label="&amp;hg add"
                icon="icons/sample.gif"
                class="com.vectrace.MercurialEclipse.team.ActionAdd"
                tooltip="hg add"
                menubarPath="team.main/projectGroup"
                id="com.vectrace.MercurialEclipse.team.ActionAdd">
-         </action>
-         <action
+           </action>
+           <action
                label="&amp;hg diff"
                icon="icons/sample.gif"
                class="com.vectrace.MercurialEclipse.team.ActionDiff"
                tooltip="hg diff"
                menubarPath="team.main/projectGroup"
                id="com.vectrace.MercurialEclipse.team.ActionDiff">
-         </action>
-         <action
+           </action>
+           <action
                label="&amp;hg status"
                icon="icons/sample.gif"
                class="com.vectrace.MercurialEclipse.team.ActionStatus"
                tooltip="hg status"
                menubarPath="team.main/projectGroup"
                id="com.vectrace.MercurialEclipse.team.ActionStatus">
-         </action>
+           </action>
 
         <!-- action
               label="%IgnoreAction.label"
@@ -116,7 +116,7 @@
    </extension>
 
 
-   <extension
+   <!-- extension
          point="org.eclipse.ui.actionSets">
       <actionSet
             label="Sample Action Set"
@@ -139,8 +139,8 @@
                id="com.vectrace.MercurialEclipse.actions.SampleAction">
          </action>
       </actionSet>
-   </extension>
-   <extension
+   </extension -->
+   <!-- extension
          point="org.eclipse.ui.propertyPages">
       <page
             objectClass="org.eclipse.core.resources.IFile"
@@ -149,8 +149,8 @@
             class="com.vectrace.MercurialEclipse.properties.SamplePropertyPage"
             id="com.vectrace.MercurialEclipse.properties.samplePropertyPage">
       </page>
-   </extension>
-   <extension
+   </extension -->
+   <!-- extension
          point="org.eclipse.ui.editors">
       <editor
             name="Sample XML Editor"
@@ -168,8 +168,8 @@
             class="com.vectrace.MercurialEclipse.editors.MultiPageEditor"
             id="com.vectrace.MercurialEclipse.editors.MultiPageEditor">
       </editor>
-   </extension>
-   <extension
+   </extension -->
+   <!-- extension
          point="org.eclipse.ui.views">
       <category
             name="Sample Category"
@@ -182,8 +182,8 @@
             class="com.vectrace.MercurialEclipse.views.SampleView"
             id="com.vectrace.MercurialEclipse.views.SampleView">
       </view>
-   </extension>
-   <extension
+   </extension -->
+   <!-- extension
          point="org.eclipse.ui.perspectiveExtensions">
       <perspectiveExtension
             targetID="org.eclipse.ui.resourcePerspective">
@@ -194,8 +194,8 @@
                id="com.vectrace.MercurialEclipse.views.SampleView">
          </view>
       </perspectiveExtension>
-   </extension>
-   <extension
+   </extension -->
+   <!-- extension
          point="org.eclipse.ui.newWizards">
       <category
             name="Sample Wizards"
@@ -208,24 +208,24 @@
             class="com.vectrace.MercurialEclipse.wizards.SampleNewWizard"
             id="com.vectrace.MercurialEclipse.wizards.SampleNewWizard">
       </wizard>
-   </extension>
+   </extension -->
 
 
-   <extension
+   <!-- extension
          point="org.eclipse.ui.preferencePages">
       <page
             name="Sample Preferences"
             class="com.vectrace.MercurialEclipse.preferences.SamplePreferencePage"
             id="com.vectrace.MercurialEclipse.preferences.SamplePreferencePage">
       </page>
-   </extension>
-   <extension
+   </extension -->
+   <!-- extension
          point="org.eclipse.core.runtime.preferences">
       <initializer
             class="com.vectrace.MercurialEclipse.preferences.PreferenceInitializer">
       </initializer>
-   </extension>
-   <extension
+   </extension -->
+   <!-- extension
          point="org.eclipse.help.toc">
       <toc
             file="toc.xml">
@@ -234,6 +234,6 @@
             file="testToc.xml"
             primary="true">
       </toc>
-   </extension>
+   </extension -->
 
 </plugin>
