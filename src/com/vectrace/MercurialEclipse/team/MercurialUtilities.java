@@ -7,31 +7,41 @@ package com.vectrace.MercurialEclipse.team;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.PrintStream;
 
 import org.eclipse.core.resources.IProject;
 import org.eclipse.core.resources.IResource;
-import org.eclipse.core.runtime.IPath;
 import org.eclipse.jface.viewers.IStructuredSelection;
 import org.eclipse.team.core.RepositoryProvider;
-
+import org.eclipse.ui.console.ConsolePlugin;
+import org.eclipse.ui.console.IConsole;
+import org.eclipse.ui.console.IConsoleManager;
+import org.eclipse.ui.console.IOConsole;
+import org.eclipse.ui.console.IOConsoleInputStream;
+import org.eclipse.ui.console.IOConsoleOutputStream;
 /**
  * @author zingo
  *
  */
 public class MercurialUtilities 
 {
-
-	/**
+	static IOConsole console;
+  static IOConsoleInputStream console_in;
+  static IOConsoleOutputStream console_out;
+  static PrintStream console_out_printstream;
+  
+  /**
 	 * This class is full of utilities metods, useful allover the place
 	 */
 	public MercurialUtilities() 
 	{
+
 	}
     
-    static String search4MercurialRoot( final IProject project ) 
-    {
-        return MercurialUtilities.search4MercurialRoot(project.getLocation().toFile());    
-    }
+	static String search4MercurialRoot( final IProject project ) 
+  {
+	  return MercurialUtilities.search4MercurialRoot(project.getLocation().toFile());    
+  }
 
 	
     static String search4MercurialRoot( final File file ) 
@@ -97,35 +107,101 @@ public class MercurialUtilities
 	//   System.out.println("hg --cwd " + Repository + " status");
 	//	String launchCmd[] = { "hg","--cwd", Repository ,"status" };
 	    System.out.println("ExecuteCommand:" + cmd.toString());
-		try 
-		{
-		    int c;
-			Process process = Runtime.getRuntime().exec(cmd); 
-			InputStream in = process.getInputStream();
-			System.out.println("Output:");
-			while ((c = in.read()) != -1) 
-			{
-				System.out.print((char)c);
-			}
-			in.close();
-			System.out.println("Error:");	        
-			InputStream err = process.getErrorStream();
-			while ((c = err.read()) != -1) 
-			{
-				System.out.print((char)c);
-			}
-			err.close();	        
-			process.waitFor();
-			//TODO put output in a window or something
-		} 
-		catch (IOException e) 
-		{
-			e.printStackTrace();
-		} 
-		catch (InterruptedException e) 
-		{
-			e.printStackTrace();
-		}		
-	}
+
+      if(console==null)
+      {
+        console=new IOConsole("Mercurial Console",null);
+        IConsoleManager manager = ConsolePlugin.getDefault().getConsoleManager();
+        manager.addConsoles(new IConsole[] { console });
+      }
+      if (console_in==null)
+      {
+        console_in  = console.getInputStream();
+      }
+      if(console_out==null)
+      {
+        console_out = console.newOutputStream();
+        if(console_out!=null)
+        {
+          console_out_printstream = new PrintStream(console_out);
+//          console_out_printstream.setColor(Display.getDefault().getSystemColor(SWT.COLOR_GREEN));     
+
+        }
+        //console_out_printstream.println("Hello word!"); 
+      }
+      try 
+		  {
+  		  int c;
+  			Process process = Runtime.getRuntime().exec(cmd); 
+  			InputStream in = process.getInputStream();
+//  			System.out.println("Output:");
+  			while ((c = in.read()) != -1) 
+  			{
+//  				System.out.print((char)c);
+          console_out_printstream.print((char)c);
+  			}
+  			in.close();
+//  			System.out.println("Error:");	        
+  			InputStream err = process.getErrorStream();
+  			while ((c = err.read()) != -1) 
+  			{
+//  				System.out.print((char)c);
+          console_out_printstream.print((char)c);
+  			}
+  			err.close();	        
+  			process.waitFor();
+  			//TODO put output in a window or something
+  		} 
+  		catch (IOException e) 
+  		{
+  			e.printStackTrace();
+  		} 
+  		catch (InterruptedException e) 
+  		{
+  			e.printStackTrace();
+  		}		
+  	}
     
+
+/*
+  public void runTest(IOConsole console) {
+      final Display display = Display.getDefault();
+      
+      final IOConsoleInputStream in = console.getInputStream();
+      display.asyncExec(new Runnable() {
+          public void run() {        
+              in.setColor(display.getSystemColor(SWT.COLOR_BLUE));
+          }
+      });
+      IConsoleManager manager = ConsolePlugin.getDefault().getConsoleManager();
+      manager.addConsoles(new IConsole[] { console });
+      
+      final IOConsoleOutputStream out = console.newOutputStream(); //$NON-NLS-1$
+      Display.getDefault().asyncExec(new Runnable() {
+          public void run() {
+              out.setColor(Display.getDefault().getSystemColor(SWT.COLOR_GREEN));     
+              out.setFontStyle(SWT.ITALIC);
+          }
+      });
+      
+      PrintStream ps = new PrintStream(out);
+      ps.println("Any text entered should be echoed back"); //$NON-NLS-1$
+      for(;;) {
+          byte[] b = new byte[1024];
+          int bRead = 0;
+          try {
+              bRead = in.read(b);
+          } catch (IOException io) {
+              io.printStackTrace();
+          }
+          
+          try {
+              out.write(b, 0, bRead);
+              ps.println();
+          } catch (IOException e) {
+              e.printStackTrace();
+          }
+      }
+  }
+*/
 }
