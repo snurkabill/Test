@@ -17,7 +17,7 @@ public class MercurialEclipsePlugin extends AbstractUIPlugin {
 	 */
 	public MercurialEclipsePlugin() {
 		plugin = this;
-		System.out.println("MercurialEclipsePlugin.MercurialEclipsePlugin()");
+//		System.out.println("MercurialEclipsePlugin.MercurialEclipsePlugin()");
 	}
 
 	/**
@@ -25,11 +25,11 @@ public class MercurialEclipsePlugin extends AbstractUIPlugin {
 	 */
 	public void start(BundleContext context) throws Exception {
 		try {
-			System.out.println("MercurialEclipsePlugin.start()");
+//			System.out.println("MercurialEclipsePlugin.start()");
 			super.start(context);			
 		} catch (Exception e) {
 			// TODO: handle exception
-			System.out.println("MercurialEclipsePlugin.start() got execption");
+//			System.out.println("MercurialEclipsePlugin.start() got execption");
 			throw e;
 		}
 	}

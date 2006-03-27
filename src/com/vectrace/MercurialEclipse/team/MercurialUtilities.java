@@ -106,7 +106,7 @@ public class MercurialUtilities
 	//Setup and run command
 	//   System.out.println("hg --cwd " + Repository + " status");
 	//	String launchCmd[] = { "hg","--cwd", Repository ,"status" };
-	    System.out.println("ExecuteCommand:" + cmd.toString());
+	//    System.out.println("ExecuteCommand:" + cmd.toString());
 
       if(console==null)
       {
