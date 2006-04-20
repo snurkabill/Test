@@ -66,7 +66,7 @@ public class ActionStatus implements IWorkbenchWindowActionDelegate {
 		}
 		//Setup and run command
 //	    System.out.println("hg --cwd " + Repository + " status");
-		String launchCmd[] = { "hg","--cwd", Repository ,"status" };
+		String launchCmd[] = { MercurialUtilities.getHGExecutable(),"--cwd", Repository ,"status" };
 		MercurialUtilities.ExecuteCommand(launchCmd);
 	}
 	
