@@ -1,0 +1,245 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?eclipse version="3.0"?>
+<plugin>
+
+   <extension point="org.eclipse.team.core.repository">
+	  <repository
+    	 class="com.vectrace.MercurialEclipse.team.MercurialTeamProvider"
+		 id="com.vectrace.MercurialEclipse.team.MercurialTeamProvider">
+ 	  </repository>
+   </extension>
+
+	<extension
+	      point="org.eclipse.team.ui.configurationWizards">
+	   <wizard
+	        name="Mercurial"
+	        icon="icons/sample.gif"
+	        class="com.vectrace.MercurialEclipse.team.MercurialConfigurationWizard"
+	        id="com.vectrace.MercurialEclipse.team.MercurialConfigurationWizard">
+	   </wizard>
+	</extension>
+
+
+   <extension
+         point="org.eclipse.ui.popupMenus">
+      <!-- objectContribution
+            objectClass="org.eclipse.core.resources.IFile"
+            nameFilter="plugin.xml"
+            id="com.vectrace.MercurialEclipse.contribution1">
+         <menu
+               label="New Submenu"
+               path="additions"
+               id="com.vectrace.MercurialEclipse.menu1">
+            <separator
+                  name="group1">
+            </separator>
+         </menu>
+         <action
+               label="New Action"
+               class="com.vectrace.MercurialEclipse.popup.actions.NewAction"
+               menubarPath="com.vectrace.MercurialEclipse.menu1/group1"
+               enablesFor="1"
+               id="com.vectrace.MercurialEclipse.newAction">
+         </action>
+      </objectContribution -->
+      
+       <objectContribution
+           adaptable="true"
+           objectClass="org.eclipse.core.resources.IResource"
+           id="com.vectrace.MercurialEclipse.IFileContributions">
+           <visibility>
+             <or>
+               <objectClass name="org.eclipse.core.resources.IFile"/>
+               <objectClass name="org.eclipse.core.resources.IFolder"/>
+             </or>
+           </visibility>             
+           <filter
+              name="projectPersistentProperty"
+              value="org.eclipse.team.core.repository=com.vectrace.MercurialEclipse.team.MercurialTeamProvider">
+           </filter>
+           <action
+               label="&amp;hg add"
+               icon="icons/sample.gif"
+               class="com.vectrace.MercurialEclipse.team.ActionAdd"
+               tooltip="hg add"
+               menubarPath="team.main/projectGroup"
+               id="com.vectrace.MercurialEclipse.team.ActionAdd">
+           </action>
+           <action
+               label="&amp;hg diff"
+               icon="icons/sample.gif"
+               class="com.vectrace.MercurialEclipse.team.ActionDiff"
+               tooltip="hg diff"
+               menubarPath="team.main/projectGroup"
+               id="com.vectrace.MercurialEclipse.team.ActionDiff">
+           </action>
+           <action
+               label="&amp;hg status"
+               icon="icons/sample.gif"
+               class="com.vectrace.MercurialEclipse.team.ActionStatus"
+               tooltip="hg status"
+               menubarPath="team.main/projectGroup"
+               id="com.vectrace.MercurialEclipse.team.ActionStatus">
+           </action>
+
+        <!-- action
+              label="%IgnoreAction.label"
+              tooltip="%IgnoreAction.tooltip"
+              class="org.eclipse.team.internal.ccvs.ui.actions.IgnoreAction"
+              menubarPath="team.main/group3"
+              helpContextId="org.eclipse.team.cvs.ui.team_ignore_action_context"
+              id="org.eclipse.team.ccvs.ui.ignore">
+        </action -->
+      </objectContribution>
+      
+      
+      <objectContribution
+       	   id="org.eclipse.team.ui.ResourceContributions"
+           objectClass="org.eclipse.core.resources.IResource" adaptable="true">
+        <filter
+              name="projectPersistentProperty"
+              value="org.eclipse.team.core.repository=com.vectrace.MercurialEclipse.team.MercurialTeamProvider">
+        </filter>
+		<menu
+			id="team.main"
+			path="additions"
+			label="Team (hg)">
+			<separator name="group1"/>
+			<separator name="group2"/>
+			<separator name="group3"/>
+			<separator name="group4"/>
+			<separator name="group5"/>
+			<separator name="group6"/>
+			<separator name="group7"/>
+			<separator name="group8"/>
+			<separator name="group9"/>
+			<separator name="group10"/>
+			<separator name="targetGroup"/>
+			<separator name="projectGroup"/>
+		</menu>
+      </objectContribution>
+
+   </extension>
+
+
+   <!-- extension
+         point="org.eclipse.ui.actionSets">
+      <actionSet
+            label="Sample Action Set"
+            visible="true"
+            id="com.vectrace.MercurialEclipse.actionSet">
+         <menu
+               label="Sample &amp;Menu"
+               id="sampleMenu">
+            <separator
+                  name="sampleGroup">
+            </separator>
+         </menu>
+         <action
+               label="&amp;Sample Action"
+               icon="icons/sample.gif"
+               class="com.vectrace.MercurialEclipse.actions.SampleAction"
+               tooltip="Hello, Eclipse world"
+               menubarPath="sampleMenu/sampleGroup"
+               toolbarPath="sampleGroup"
+               id="com.vectrace.MercurialEclipse.actions.SampleAction">
+         </action>
+      </actionSet>
+   </extension -->
+   <!-- extension
+         point="org.eclipse.ui.propertyPages">
+      <page
+            objectClass="org.eclipse.core.resources.IFile"
+            name="Sample Page"
+            nameFilter="*.*"
+            class="com.vectrace.MercurialEclipse.properties.SamplePropertyPage"
+            id="com.vectrace.MercurialEclipse.properties.samplePropertyPage">
+      </page>
+   </extension -->
+   <!-- extension
+         point="org.eclipse.ui.editors">
+      <editor
+            name="Sample XML Editor"
+            extensions="xml"
+            icon="icons/sample.gif"
+            contributorClass="org.eclipse.ui.texteditor.BasicTextEditorActionContributor"
+            class="com.vectrace.MercurialEclipse.editors.XMLEditor"
+            id="com.vectrace.MercurialEclipse.editors.XMLEditor">
+      </editor>
+      <editor
+            name="Sample Multi-page Editor"
+            extensions="mpe"
+            icon="icons/sample.gif"
+            contributorClass="com.vectrace.MercurialEclipse.editors.MultiPageEditorContributor"
+            class="com.vectrace.MercurialEclipse.editors.MultiPageEditor"
+            id="com.vectrace.MercurialEclipse.editors.MultiPageEditor">
+      </editor>
+   </extension -->
+   <!-- extension
+         point="org.eclipse.ui.views">
+      <category
+            name="Sample Category"
+            id="com.vectrace.MercurialEclipse">
+      </category>
+      <view
+            name="Sample View"
+            icon="icons/sample.gif"
+            category="com.vectrace.MercurialEclipse"
+            class="com.vectrace.MercurialEclipse.views.SampleView"
+            id="com.vectrace.MercurialEclipse.views.SampleView">
+      </view>
+   </extension -->
+   <!-- extension
+         point="org.eclipse.ui.perspectiveExtensions">
+      <perspectiveExtension
+            targetID="org.eclipse.ui.resourcePerspective">
+         <view
+               ratio="0.5"
+               relative="org.eclipse.ui.views.TaskList"
+               relationship="right"
+               id="com.vectrace.MercurialEclipse.views.SampleView">
+         </view>
+      </perspectiveExtension>
+   </extension -->
+   <!-- extension
+         point="org.eclipse.ui.newWizards">
+      <category
+            name="Sample Wizards"
+            id="com.vectrace.MercurialEclipse">
+      </category>
+      <wizard
+            name="Multi-page Editor file"
+            icon="icons/sample.gif"
+            category="com.vectrace.MercurialEclipse"
+            class="com.vectrace.MercurialEclipse.wizards.SampleNewWizard"
+            id="com.vectrace.MercurialEclipse.wizards.SampleNewWizard">
+      </wizard>
+   </extension -->
+
+
+   <!-- extension
+         point="org.eclipse.ui.preferencePages">
+      <page
+            name="Sample Preferences"
+            class="com.vectrace.MercurialEclipse.preferences.SamplePreferencePage"
+            id="com.vectrace.MercurialEclipse.preferences.SamplePreferencePage">
+      </page>
+   </extension -->
+   <!-- extension
+         point="org.eclipse.core.runtime.preferences">
+      <initializer
+            class="com.vectrace.MercurialEclipse.preferences.PreferenceInitializer">
+      </initializer>
+   </extension -->
+   <!-- extension
+         point="org.eclipse.help.toc">
+      <toc
+            file="toc.xml">
+      </toc>
+      <toc
+            file="testToc.xml"
+            primary="true">
+      </toc>
+   </extension -->
+
+</plugin>
