@@ -1,4 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
+<?eclipse version="3.3"?>
+
 <!-- 
 /*******************************************************************************
  * Copyright (c) 2005-2008 VecTrace (Zingo Andersen) and others.
@@ -11,10 +13,11 @@
  *     VecTrace (Zingo Andersen) - implementation
  *     Software Balm Consulting Inc (Peter Hunnisett <peter_hge at softwarebalm dot com>) - some updates
  *     StefanC                   - Some updates
+ *     Charles O'Farrell         - Annotation with color
  *     Jerome Negre              - Moving menus around
  *******************************************************************************/
 -->
-<?eclipse version="3.3"?>
+
 <plugin>
 
 <!--            Team exstension points                     -->
@@ -140,6 +143,14 @@
                tooltip="hg revert"
                menubarPath="team.main/group2"
                id="com.vectrace.MercurialEclipse.team.ActionRevert">
+           </action>
+           <action
+               label="hg &amp;import"
+               icon="icons/mercurialeclipse.png"
+               class="com.vectrace.MercurialEclipse.team.ActionImport"
+               tooltip="Import patch from file (hg import)"
+               menubarPath="team.main/group1"
+               id="com.vectrace.MercurialEclipse.team.ActionImport">
            </action>
            <action
                label="Pull..."
@@ -270,4 +281,12 @@
             project="true"/>
    </extension>
 
+   <extension
+         point="org.eclipse.ui.workbench.texteditor.quickDiffReferenceProvider">
+      <referenceprovider
+            label="Hg Quick Diff"
+            class="com.vectrace.MercurialEclipse.annotatations.HgPristineCopyQuickDiffProvider"
+            id="com.vectrace.MercurialEclipse.annotatations.HgReferenceProvider">
+      </referenceprovider>
+   </extension>
 </plugin>
