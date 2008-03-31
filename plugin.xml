@@ -1,0 +1,309 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?eclipse version="3.3"?>
+
+<!-- 
+/*******************************************************************************
+ * Copyright (c) 2005-2008 VecTrace (Zingo Andersen) and others.
+ * All rights reserved. This program and the accompanying materials
+ * are made available under the terms of the Eclipse Public License v1.0
+ * which accompanies this distribution, and is available at
+ * http://www.eclipse.org/legal/epl-v10.html
+ *
+ * Contributors:
+ *     VecTrace (Zingo Andersen) - implementation
+ *     Software Balm Consulting Inc (Peter Hunnisett <peter_hge at softwarebalm dot com>) - some updates
+ *     StefanC                   - Some updates
+ *     Charles O'Farrell         - Annotation with color
+ *     Jerome Negre              - Moving menus around
+ *******************************************************************************/
+-->
+
+<plugin>
+
+<!--            Team exstension points                     -->
+   <extension point="org.eclipse.team.core.repository">
+	  <repository
+    	 class="com.vectrace.MercurialEclipse.team.MercurialTeamProvider"
+		 id="com.vectrace.MercurialEclipse.team.MercurialTeamProvider"
+		  metaFilePaths=".hg/">
+ 	  </repository>
+   </extension>
+	<extension point="org.eclipse.team.ui.configurationWizards">
+	   <wizard
+	        name="Mercurial"
+	        icon="icons/mercurialeclipse.png"
+	        class="com.vectrace.MercurialEclipse.team.MercurialConfigurationWizard"
+	        id="com.vectrace.MercurialEclipse.team.MercurialConfigurationWizard">
+	   </wizard>
+	</extension>
+
+<!-- TODO 
+	<extension point="org.eclipse.team.ui.synchronizeParticipants">
+	   <participant
+	        icon="icons/mercurialeclipse.png"
+	        id="com.vectrace.MercurialEclipse.team.MercurialSynchronizeParticipant"
+	        class="com.vectrace.MercurialEclipse.team.MercurialSynchronizeParticipant"
+	        name="Mercurial Syncronisation"
+	        persistent="true">
+	   </participant>
+	</extension>
+
+	<extension point= "org.eclipse.team.ui.synchronizeWizards" >
+	   <wizard
+	        name="Mercurial"
+			description="Mercurial synchronize wizard"
+	        icon="icons/mercurialeclipse.png"
+	        class="com.vectrace.MercurialEclipse.team.MercurialConfigurationWizard"
+	        id="com.vectrace.MercurialEclipse.team.MercurialConfigurationWizard">
+	   </wizard>
+	</extension>
+-->
+
+	<extension point="org.eclipse.ui.decorators">
+	    <decorator
+	            adaptable="true"
+	            label="Mercurial Eclipse decorations"
+	            state="false"
+	            lightweight= "true"
+	            location= "BOTTOM_RIGHT"
+	            class="com.vectrace.MercurialEclipse.team.DecoratorStatus"
+	            id="com.vectrace.MercurialEclipse.team.DecoratorStatus">
+	         <description>
+	            Label decorations for Mercurial eclipse plugin.
+	         </description>
+	         <enablement>
+               <objectClass name="org.eclipse.core.resources.IResource"/>
+
+               <!-- pluginState
+                 id="com.vectrace.MercurialEclipse.team.MercurialTeamProvider"
+                 value="activated" >
+               </pluginState -->
+                 
+               
+	         </enablement>
+	    </decorator>
+	    
+	</extension>
+
+
+   <extension
+         point="org.eclipse.ui.popupMenus">
+
+<!--            All Team menu                     -->
+              
+       <objectContribution
+           adaptable="true"
+           objectClass="org.eclipse.core.resources.IResource"
+           id="com.vectrace.MercurialEclipse.IResourceContributions">
+           <filter
+              name="projectPersistentProperty"
+              value="org.eclipse.team.core.repository=com.vectrace.MercurialEclipse.team.MercurialTeamProvider">
+           </filter>
+           <!-- Team -->
+           <action
+               label="Add to .hgignore..."
+               class="com.vectrace.MercurialEclipse.team.HgIgnoreAction"
+               tooltip="hg add"
+               menubarPath="team.main/group10"
+               id="com.vectrace.MercurialEclipse.team.HgIgnoreAction"
+               enablesFor="1">
+           </action>
+           <action
+               label="Remove from Version Control"
+               class="com.vectrace.MercurialEclipse.team.ActionRemove"
+               tooltip="hg remove"
+               menubarPath="team.main/group10"
+               id="com.vectrace.MercurialEclipse.team.ActionRemove">
+           </action>
+           <action
+               label="Add to Version Control..."
+               class="com.vectrace.MercurialEclipse.team.AddAction"
+               tooltip="hg add"
+               menubarPath="team.main/group10"
+               id="com.vectrace.MercurialEclipse.team.AddAction">
+           </action>
+           <action
+               label="Tag as Version..."
+               class="com.vectrace.MercurialEclipse.team.TagAction"
+               tooltip="hg tag"
+               menubarPath="team.main/group3"
+               id="com.vectrace.MercurialEclipse.team.TagAction"
+               enablesFor="1">
+           </action>
+           <action
+               label="hg &amp;log"
+               class="com.vectrace.MercurialEclipse.team.ActionChangeLog"
+               tooltip="hg log"
+               menubarPath="team.main/group2"
+               id="com.vectrace.MercurialEclipse.team.ActionChangeLog">
+           </action>
+           <action
+               label="hg &amp;revert"
+               class="com.vectrace.MercurialEclipse.team.ActionRevert"
+               tooltip="hg revert"
+               menubarPath="team.main/group2"
+               id="com.vectrace.MercurialEclipse.team.ActionRevert">
+           </action>
+           <action
+               label="hg &amp;import"
+               icon="icons/mercurialeclipse.png"
+               class="com.vectrace.MercurialEclipse.team.ActionImport"
+               tooltip="Import patch from file (hg import)"
+               menubarPath="team.main/group1"
+               id="com.vectrace.MercurialEclipse.team.ActionImport">
+           </action>
+           <action
+               label="Pull..."
+               class="com.vectrace.MercurialEclipse.team.ActionPull"
+               tooltip="pull changes from remote/local reposetory (hg pull)"
+               menubarPath="team.main/group1"
+               id="com.vectrace.MercurialEclipse.team.ActionPull">
+           </action>
+           <action
+               label="Push..."
+               class="com.vectrace.MercurialEclipse.team.ActionPush"
+               tooltip="push changes to remote/local reposetory (hg push)"
+               menubarPath="team.main/group1"
+               id="com.vectrace.MercurialEclipse.team.ActionPush">
+           </action>
+           <action
+               label="Commit... (old and slow)"
+               class="com.vectrace.MercurialEclipse.team.ActionCommit"
+               tooltip="Commit files (hg commit)"
+               menubarPath="team.main/group1"
+               id="com.vectrace.MercurialEclipse.team.ActionCommit">
+           </action>
+           <action
+               label="Commit... (new and buggy)"
+               class="com.vectrace.MercurialEclipse.team.CommitAction"
+               tooltip="Commit files (hg commit)"
+               menubarPath="team.main/group1"
+               id="com.vectrace.MercurialEclipse.team.CommitAction">
+           </action>
+      </objectContribution>
+
+<!--            Project Team menu                     -->
+      <objectContribution
+            adaptable="true"
+            objectClass="org.eclipse.core.resources.IProject"
+            id="com.vectrace.MercurialEclipse.IProjectContributions">
+           <filter
+               name="projectPersistentProperty"
+               value="org.eclipse.team.core.repository=com.vectrace.MercurialEclipse.team.MercurialTeamProvider">
+           </filter>
+
+           <action
+               label="hg &amp;view (All files)"
+               class="com.vectrace.MercurialEclipse.team.ActionView"
+               tooltip="View releases reflect all files (hg view)"
+               menubarPath="team.main/group1"
+               id="com.vectrace.MercurialEclipse.team.ActionView">
+           </action>
+           <!-- action
+               label="&amp;hg status"
+               icon="icons/mercurialeclipse.png"
+               class="com.vectrace.MercurialEclipse.team.ActionStatus"
+               tooltip="hg status"
+               menubarPath="team.main/projectGroup"
+               id="com.vectrace.MercurialEclipse.team.ActionStatus">
+           </action -->
+      </objectContribution>
+      
+      <!-- File Team Menu -->
+      <objectContribution
+            adaptable="true"
+            objectClass="org.eclipse.core.resources.IFile"
+            id="com.vectrace.MercurialEclipse.IFileContributions">
+           <filter
+               name="projectPersistentProperty"
+               value="org.eclipse.team.core.repository=com.vectrace.MercurialEclipse.team.MercurialTeamProvider">
+           </filter>
+                 <!-- Team -->
+            <action
+               label="Show Annotation"
+               class="com.vectrace.MercurialEclipse.team.ShowAnnotationAction"
+               tooltip="hg annotate"
+               menubarPath="team.main/group3"
+               id="com.vectrace.MercurialEclipse.team.ShowAnnotationAction"
+               enablesFor="1">
+           </action>
+                 <!-- Compare -->
+           <action
+               label="Another Changeset..."
+               class="com.vectrace.MercurialEclipse.team.CompareWithAction"
+               tooltip="hg diff"
+               menubarPath="compareWithMenu/compareWithGroup"
+               id="com.vectrace.MercurialEclipse.team.CompareWithAction"
+               enablesFor="1">
+           </action>
+           <action
+               label="Parent Changeset"
+               class="com.vectrace.MercurialEclipse.team.CompareAction"
+               tooltip="hg diff"
+               menubarPath="compareWithMenu/compareWithGroup"
+               id="com.vectrace.MercurialEclipse.team.CompareAction"
+               enablesFor="1">
+           </action>
+      </objectContribution>
+   </extension>
+
+   <extension point="org.eclipse.ui.preferencePages">
+      <page class="com.vectrace.MercurialEclipse.preferences.MercurialPreferencePage"
+            id="com.vectrace.MercurialEclipse.prefspage"
+            category="org.eclipse.team.ui.TeamPreferences"
+            name="Mercurial Eclipse"/>
+   </extension>
+
+   <extension point="org.eclipse.core.runtime.preferences">
+      <initializer class="com.vectrace.MercurialEclipse.preferences.PreferenceInitializer"/>
+   </extension>
+   
+   <extension point="org.eclipse.ui.importWizards">
+      <category
+            id="com.vectrace.MercurialEclipse.wizards.sampleCategory"
+            name="Mercurial"/>
+      <wizard
+            category="com.vectrace.MercurialEclipse.wizards.sampleCategory"
+            class="com.vectrace.MercurialEclipse.wizards.CloneRepoWizard"
+            icon="icons/mercury_Hg.png"
+            id="com.vectrace.MercurialEclipse.wizards.ImportWizard"
+            name="Clone Repository using Mercurial">
+         <description>
+            Import a file from the local file system into the workspace.
+         </description>
+      </wizard>
+   </extension>
+   
+   <extension point="org.eclipse.ui.newWizards">
+      <category
+            id="com.vectrace.MercurialEclipse"
+            name="Mercurial"/>
+      <wizard
+            canFinishEarly="false"
+            category="com.vectrace.MercurialEclipse"
+            class="com.vectrace.MercurialEclipse.wizards.CloneRepoWizard"
+            icon="icons/mercury_Hg.png"
+            id="com.vectrace.MercurialEclipse.wizards.NewHgProjectWizard"
+            name="Clone Repository using Mercurial"
+            project="true"/>
+   </extension>
+
+   <extension
+         point="org.eclipse.ui.workbench.texteditor.quickDiffReferenceProvider">
+      <referenceprovider
+            label="Hg Quick Diff"
+            class="com.vectrace.MercurialEclipse.annotations.HgPristineCopyQuickDiffProvider"
+            id="com.vectrace.MercurialEclipse.annotations.HgReferenceProvider">
+      </referenceprovider>
+   </extension>
+
+   <!-- Adapters -->
+   <extension point="org.eclipse.core.runtime.adapters">
+     <factory
+       adaptableType="org.eclipse.team.core.history.provider.FileHistoryProvider"
+       class="com.vectrace.MercurialEclipse.AdapterFactory">
+       <adapter type="org.eclipse.team.ui.history.IHistoryPageSource"/>
+     </factory>
+   </extension>
+   
+</plugin>
