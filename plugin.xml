@@ -124,9 +124,31 @@
                id="com.vectrace.MercurialEclipse.team.AddAction">
            </action>
            <action
+               label="Swith to Another Changeset..."
+               class="com.vectrace.MercurialEclipse.team.SwitchAction"
+               menubarPath="team.main/group3"
+               id="com.vectrace.MercurialEclipse.team.SwitchAction"
+               enablesFor="1">
+           </action>
+           <action
+               label="Merge... (work in progress)"
+               class="com.vectrace.MercurialEclipse.team.MergeAction"
+               icon="icons/branches_rep.gif"
+               menubarPath="team.main/group3"
+               id="com.vectrace.MercurialEclipse.team.MergeAction">
+               <enablement>
+                   <not>
+	               	   <objectState
+	                       name="projectPersistentProperty"
+	                       value="com.vectrace.MercurialEclipse.merging">
+	                   </objectState>
+                   </not>
+               </enablement>
+           </action>
+           <action
                label="Tag as Version..."
                class="com.vectrace.MercurialEclipse.team.TagAction"
-               tooltip="hg tag"
+               icon="icons/tags.gif"
                menubarPath="team.main/group3"
                id="com.vectrace.MercurialEclipse.team.TagAction"
                enablesFor="1">
@@ -173,6 +195,13 @@
                tooltip="push changes to remote/local repository (hg push)"
                menubarPath="team.main/group1"
                id="com.vectrace.MercurialEclipse.team.ActionPush">
+           </action>
+           <action
+               label="Update"
+               class="com.vectrace.MercurialEclipse.team.UpdateAction"
+               menubarPath="team.main/group1"
+               id="com.vectrace.MercurialEclipse.team.UpdateAction"
+               enablesFor="1">
            </action>
            <action
                label="Commit... (Slow: repo everyware)"
@@ -313,6 +342,16 @@
        class="com.vectrace.MercurialEclipse.AdapterFactory">
        <adapter type="org.eclipse.team.ui.history.IHistoryPageSource"/>
      </factory>
+   </extension>
+   
+   <!-- Views -->
+   
+   <extension point="org.eclipse.ui.views">
+      <view
+        class="com.vectrace.MercurialEclipse.views.MergeView"
+        id="com.vectrace.MercurialEclipse.views.MergeView"
+        name="Merge">
+      </view>
    </extension>
    
 </plugin>

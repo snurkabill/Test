@@ -21,10 +21,16 @@ public class HgLogClient {
 	
 	public static ChangeSet[] getRevisions(IFile file) throws HgException {
 		HgCommand command = new HgCommand("log", file.getParent(), true);
+		command.addOptions("-f");
 		command.addFiles(file.getName());
 		return getRevisions(command);
 	}
 
+    public static ChangeSet[] getHeads(IProject project) throws HgException {
+        HgCommand command = new HgCommand("heads", project, true);
+        return getRevisions(command);
+    }
+    
 	/**
 	 * 
 	 * @param command a command with optionally its Files set
