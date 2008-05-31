@@ -63,30 +63,31 @@ public abstract class AbstractParseChangesetClient extends AbstractClient {
     private static final String STYLE_TEMP_EXTN = ".tmpl";
 
     /**
-     * Return a File reference to a copy of the required mercurial style file. Two types
-     * are available, one that includes  the files and one that doesn't. Using the one
-     * with files can be very slow on large repos.
+     * Return a File reference to a copy of the required mercurial style file.
+     * Two types are available, one that includes the files and one that
+     * doesn't. Using the one with files can be very slow on large repos.
      * <p>
-     * These style files are included in the plugin jar file and need to be copied out of there
-     * into the plugin state area so a path can be given to the hg command.
+     * These style files are included in the plugin jar file and need to be
+     * copied out of there into the plugin state area so a path can be given to
+     * the hg command.
      * 
-     * @param withFiles return the style that includes the files if true.
+     * @param withFiles
+     *            return the style that includes the files if true.
      * @return a File reference to an existing file
      */
     protected static File getStyleFile(boolean withFiles) throws HgException {
         String style_src;
         String style;
-        
-        if(withFiles) {
+
+        if (!withFiles) {
             style = STYLE;
             style_src = STYLE_SRC;
-        }
-        else {
+        } else {
             style = STYLE_WITH_FILES;
             style_src = STYLE_WITH_FILES_SRC;
         }
-        String style_tmpl = style+STYLE_TEMP_EXTN;
-        String style_tmpl_src = style_src+STYLE_TEMP_EXTN;
+        String style_tmpl = style + STYLE_TEMP_EXTN;
+        String style_tmpl_src = style_src + STYLE_TEMP_EXTN;
 
         IPath sl = MercurialEclipsePlugin.getDefault().getStateLocation();
 
@@ -95,7 +96,7 @@ public abstract class AbstractParseChangesetClient extends AbstractClient {
 
         ClassLoader cl = AbstractParseChangesetClient.class.getClassLoader();
 
-        if(stylefile.canRead()&&tmplfile.canRead()) {
+        if (stylefile.canRead() && tmplfile.canRead()) {
             // Already have copies, return the file reference to the style file
             return stylefile;
         }
@@ -112,28 +113,29 @@ public abstract class AbstractParseChangesetClient extends AbstractClient {
 
             byte buffer[] = new byte[1024];
             int n;
-            while((n = styleistr.read(buffer))!=-1) {
-                styleostr.write(buffer,0,n);
+            while ((n = styleistr.read(buffer)) != -1) {
+                styleostr.write(buffer, 0, n);
             }
-            while((n = tmplistr.read(buffer))!=-1) {
-                tmplostr.write(buffer,0,n);
+            while ((n = tmplistr.read(buffer)) != -1) {
+                tmplostr.write(buffer, 0, n);
             }
             styleostr.close();
             tmplostr.close();
 
             return stylefile;
-        }
-        catch (IOException e) {
-            throw new HgException("Failed to setup hg style file",e);
+        } catch (IOException e) {
+            throw new HgException("Failed to setup hg style file", e);
         }
     }
 
     /**
      * Parse log output into a set of changesets.
      * <p>
-     * Format of input is defined in the two style files in /styles and is as follows for
-     * each changeset. The changesets are separated by a line of '=' characters "^=+$". 
-     * <br><pre>
+     * Format of input is defined in the two style files in /styles and is as
+     * follows for each changeset. The changesets are separated by a line of '='
+     * characters "^=+$". <br>
+     * 
+     * <pre>
      * &lt;cs&gt;
      * &lt;br&gt;b2_1_5&lt;/br&gt;
      * &lt;tg&gt;&lt;/tg&gt;
@@ -155,16 +157,22 @@ public abstract class AbstractParseChangesetClient extends AbstractClient {
      * &lt;/fd&gt;
      * &lt;/cs&gt;
      * ================
-     * </pre><br>
+     * </pre>
      * 
-     * @param input output from the hg log command
+     * <br>
+     * 
+     * @param input
+     *            output from the hg log command
      * @param proj
-     * @param withFiles Are files included in the log output
-     * @param direction Incoming, Outgoing or Local changesets
+     * @param withFiles
+     *            Are files included in the log output
+     * @param direction
+     *            Incoming, Outgoing or Local changesets
      * @param repository
      * @param bundleFile
      * @return
-     * @throws HgException TODO
+     * @throws HgException
+     *             TODO
      */
     protected static Map<IResource, SortedSet<ChangeSet>> createMercurialRevisions(
             String input, IProject proj, boolean withFiles,
@@ -172,15 +180,15 @@ public abstract class AbstractParseChangesetClient extends AbstractClient {
             File bundleFile) throws HgException {
 
         Map<IResource, SortedSet<ChangeSet>> fileRevisions = new HashMap<IResource, SortedSet<ChangeSet>>();
-        
+
         if (input == null || input.length() == 0) {
             return fileRevisions;
         }
 
         /*
          * Would be nice to do this as a single XML document using the SAX
-         * parser but I haven't worked out how to get a mercurial style file
-         * to create a valid XML document (cannot get the closing element output)
+         * parser but I haven't worked out how to get a mercurial style file to
+         * create a valid XML document (cannot get the closing element output)
          */
         String[] changeSetStrings = input.split("\n====+\n");
 
@@ -239,9 +247,9 @@ public abstract class AbstractParseChangesetClient extends AbstractClient {
     }
 
     private static FileStatus[] getFileStatuses(Element csn) {
-        HashSet<String> files = getFilesValue(csn,"fl");
-        HashSet<String> adds = getFilesValue(csn,"fa");
-        HashSet<String> del = getFilesValue(csn,"fd");
+        HashSet<String> files = getFilesValue(csn, "fl");
+        HashSet<String> adds = getFilesValue(csn, "fa");
+        HashSet<String> del = getFilesValue(csn, "fd");
 
         files.removeAll(adds);
         files.removeAll(del);
@@ -256,15 +264,15 @@ public abstract class AbstractParseChangesetClient extends AbstractClient {
 
     private static HashSet<String> getFilesValue(Element csn, String name) {
         NodeList nl = csn.getElementsByTagName(name);
-        if(nl.getLength()==0) {
+        if (nl.getLength() == 0) {
             return new HashSet<String>(0);
         }
-        NodeList files = ((Element)nl.item(0)).getElementsByTagName("f");
+        NodeList files = ((Element) nl.item(0)).getElementsByTagName("f");
         HashSet<String> ret = new HashSet<String>(files.getLength());
-        for(int i=0; i<files.getLength(); i++) {
+        for (int i = 0; i < files.getLength(); i++) {
             ret.add(files.item(i).getTextContent());
         }
-        
+
         return ret;
     }
 
@@ -296,54 +304,60 @@ public abstract class AbstractParseChangesetClient extends AbstractClient {
     private static String untab(String string) {
         return string.replaceAll("\n\t", "\n");
     }
+
     /**
-     * Parse a changeset as output from the log command (see {@link #createMercurialRevisions()}).
+     * Parse a changeset as output from the log command (see
+     * {@link #createMercurialRevisions()}).
      * 
      * @param changeSet
      * @return
      */
     private static ChangeSet getChangeSet(String changeSet) throws HgException {
-        
+
         if (changeSet == null) {
             return null;
         }
         try {
-            DocumentBuilderFactory docBuilderFactory = DocumentBuilderFactory.newInstance();
+            DocumentBuilderFactory docBuilderFactory = DocumentBuilderFactory
+                    .newInstance();
             DocumentBuilder docBuilder = docBuilderFactory.newDocumentBuilder();
             Reader ir = new StringReader(changeSet);
-            Document doc = docBuilder.parse (new InputSource(ir));
+            Document doc = docBuilder.parse(new InputSource(ir));
 
             // normalize text representation
-            doc.getDocumentElement ().normalize ();
+            doc.getDocumentElement().normalize();
 
             NodeList csnl = doc.getElementsByTagName("cs");
             int totalCs = csnl.getLength();
-            if(totalCs != 1) {
+            if (totalCs != 1) {
                 // Something screwy going on, should have 1 and 1 only.
-                throw new HgException("Cannot parse changeset, bad log output?: "+changeSet);
+                throw new HgException(
+                        "Cannot parse changeset, bad log output?: " + changeSet);
             }
-            Element csn = (Element)csnl.item(0);
+            Element csn = (Element) csnl.item(0);
 
             ChangeSet cs = new ChangeSet();
 
-            cs.setTag(getValue(csn,"tg"));
-            cs.setBranch(getValue(csn,"br"));
-            cs.setChangesetIndex(Integer.parseInt(getValue(csn,"rv")));
-            cs.setNodeShort(getValue(csn,"ns"));
-            cs.setChangeset(getValue(csn,"nl"));
-            cs.setDate(getValue(csn,"di"));
-            cs.setAgeDate(getValue(csn,"da"));
-            cs.setUser(getValue(csn,"au"));
-            cs.setDescription(untab(unescape(getValue(csn,"de"))));
-            cs.setParents(splitClean(getValue(csn,"pr"), " "));
+            cs.setTag(getValue(csn, "tg"));
+            cs.setBranch(getValue(csn, "br"));
+            cs.setChangesetIndex(Integer.parseInt(getValue(csn, "rv")));
+            cs.setNodeShort(getValue(csn, "ns"));
+            cs.setChangeset(getValue(csn, "nl"));
+            cs.setDate(getValue(csn, "di"));
+            cs.setAgeDate(getValue(csn, "da"));
+            cs.setUser(getValue(csn, "au"));
+            cs.setDescription(untab(unescape(getValue(csn, "de"))));
+            cs.setParents(splitClean(getValue(csn, "pr"), " "));
             cs.setChangedFiles(getFileStatuses(csn));
             return cs;
         } catch (ParserConfigurationException e) {
-            throw new HgException("Changeset parser Configuration error",e);
+            throw new HgException("Changeset parser Configuration error", e);
         } catch (SAXException e) {
-            throw new HgException("Changeset parsing error for \""+changeSet+"\"", e);
+            throw new HgException("Changeset parsing error for \"" + changeSet
+                    + "\"", e);
         } catch (IOException e) {
-            throw new HgException("Error parsing changeset \""+changeSet+"\"", e);
+            throw new HgException("Error parsing changeset \"" + changeSet
+                    + "\"", e);
         }
     }
 
