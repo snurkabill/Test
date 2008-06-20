@@ -66,8 +66,7 @@ public class CommitDialog extends Dialog
   public static String FILE_REMOVED = "Removed";
   public static String FILE_UNTRACKED = "Untracked";
   public static String FILE_DELETED = "Already Deleted";
-  private static String DEFAULT_COMMIT_MESSAGE = "(no commit message)";
-
+  
   class CommittableFilesFilter extends ViewerFilter 
   {
     public CommittableFilesFilter() 
@@ -91,10 +90,13 @@ public class CommitDialog extends Dialog
     }
   }
 
+  private String defaultCommitMessage = "(no commit message)";
+
   private Text commitTextBox;
   private Label commitTextLabel;
   private Label commitFilesLabel;
   private CheckboxTableViewer commitFilesList;
+  private boolean selectableFiles;
   private Button showUntrackedFilesButton;
   private Button selectAllButton;
   private UntrackedFilesFilter untrackedFilesFilter;
@@ -121,6 +123,18 @@ private IResource[] inResources;
     this.inResources = inResources;
     this.untrackedFilesFilter = new UntrackedFilesFilter();
     this.committableFilesFilter = new CommittableFilesFilter();
+    this.selectableFiles = true;
+  }
+  public CommitDialog(Shell shell, IProject project, IResource[] inResources, String defaultCommitMessage, boolean selectableFiles) 
+  {
+    super(shell);
+    setShellStyle(getShellStyle() | SWT.RESIZE);
+    this.setProject(project);
+    this.inResources = inResources;
+    this.untrackedFilesFilter = new UntrackedFilesFilter();
+    this.committableFilesFilter = new CommittableFilesFilter();
+    this.defaultCommitMessage = defaultCommitMessage;
+    this.selectableFiles = selectableFiles;
   }
 
   public String getCommitMessage() 
@@ -177,7 +191,7 @@ private IResource[] inResources;
     commitFilesLabel.setLayoutData(fd_commitFilesLabel);
     commitFilesLabel.setText("Select Files:");
 
-    commitFilesList = createFilesList(container);
+    commitFilesList = createFilesList(container, selectableFiles);
     Table table = commitFilesList.getTable();
     fd_commitFilesLabel.bottom = new FormAttachment(table, -7, SWT.DEFAULT);
     final FormData fd_table = new FormData();
@@ -187,22 +201,23 @@ private IResource[] inResources;
     fd_table.left = new FormAttachment(0, 9);
     table.setLayoutData(fd_table);
 
-    selectAllButton = new Button(container, SWT.CHECK);
-    final FormData fd_selectAllButton = new FormData();
-    fd_selectAllButton.bottom = new FormAttachment(100, -11);
-    fd_selectAllButton.right = new FormAttachment(0, 115);
-    fd_selectAllButton.left = new FormAttachment(0, 9);
-    selectAllButton.setLayoutData(fd_selectAllButton);
-    selectAllButton.setText("Check/uncheck all");
+    if(selectableFiles) {
+        selectAllButton = new Button(container, SWT.CHECK);
+        final FormData fd_selectAllButton = new FormData();
+        fd_selectAllButton.bottom = new FormAttachment(100, -11);
+        fd_selectAllButton.right = new FormAttachment(0, 115);
+        fd_selectAllButton.left = new FormAttachment(0, 9);
+        selectAllButton.setLayoutData(fd_selectAllButton);
+        selectAllButton.setText("Check/uncheck all");
 
-    showUntrackedFilesButton = new Button(container, SWT.CHECK);
-    final FormData fd_showUntrackedFilesButton = new FormData();
-    fd_showUntrackedFilesButton.bottom = new FormAttachment(100, -34);
-    fd_showUntrackedFilesButton.right = new FormAttachment(0, 129);
-    fd_showUntrackedFilesButton.left = new FormAttachment(0, 9);
-    showUntrackedFilesButton.setLayoutData(fd_showUntrackedFilesButton);
-    showUntrackedFilesButton.setText("Show untracked files");
-
+        showUntrackedFilesButton = new Button(container, SWT.CHECK);
+        final FormData fd_showUntrackedFilesButton = new FormData();
+        fd_showUntrackedFilesButton.bottom = new FormAttachment(100, -34);
+        fd_showUntrackedFilesButton.right = new FormAttachment(0, 129);
+        fd_showUntrackedFilesButton.left = new FormAttachment(0, 9);
+        showUntrackedFilesButton.setLayoutData(fd_showUntrackedFilesButton);
+        showUntrackedFilesButton.setText("Show untracked files");
+    }
     makeActions();
     return container;
   }
@@ -210,53 +225,54 @@ private IResource[] inResources;
   private void makeActions() 
   {
     commitTextBox.setCapture(true);
-    selectAllButton.setSelection(true); // Start selected
-    showUntrackedFilesButton.setSelection(true); // Start selected.
+    if(selectableFiles) {
+        selectAllButton.setSelection(true); // Start selected
+        showUntrackedFilesButton.setSelection(true); // Start selected.
 
-    showUntrackedFilesButton.addSelectionListener(new SelectionAdapter() 
-      {
-        @Override
-        public void widgetSelected(SelectionEvent e) 
+        showUntrackedFilesButton.addSelectionListener(new SelectionAdapter() 
         {
-          if (showUntrackedFilesButton.getSelection()) 
-          {
-              commitFilesList.removeFilter(untrackedFilesFilter);
-          } 
-          else 
-          {
-              commitFilesList.addFilter(untrackedFilesFilter);
-          }
-          commitFilesList.refresh(true);
-        }
-      });
-    selectAllButton.addSelectionListener(new SelectionAdapter() 
-      {
-        @Override
-        public void widgetSelected(SelectionEvent e) 
+            @Override
+            public void widgetSelected(SelectionEvent e) 
+            {
+                if (showUntrackedFilesButton.getSelection()) 
+                {
+                    commitFilesList.removeFilter(untrackedFilesFilter);
+                } 
+                else 
+                {
+                    commitFilesList.addFilter(untrackedFilesFilter);
+                }
+                commitFilesList.refresh(true);
+            }
+        });
+        selectAllButton.addSelectionListener(new SelectionAdapter() 
         {
-          if (selectAllButton.getSelection()) 
-          {
-              commitFilesList.setAllChecked(true);
-          } 
-          else 
-          {
-              commitFilesList.setAllChecked(false);
-          }
-        }
-      });    
-    commitFilesList.addDoubleClickListener(new IDoubleClickListener() 
-      {
-        public void doubleClick(DoubleClickEvent event) 
+            @Override
+            public void widgetSelected(SelectionEvent e) 
+            {
+                if (selectAllButton.getSelection()) 
+                {
+                    commitFilesList.setAllChecked(true);
+                } 
+                else 
+                {
+                    commitFilesList.setAllChecked(false);
+                }
+            }
+        });    
+        commitFilesList.addDoubleClickListener(new IDoubleClickListener() 
         {
-          IStructuredSelection sel = (IStructuredSelection) commitFilesList.getSelection();
-          if (sel.getFirstElement() instanceof CommitResource) 
-          {
-            CommitResource resource = (CommitResource) sel.getFirstElement();
-            CompareUtils.openEditor(resource.getResource(), true);
-          }
+            public void doubleClick(DoubleClickEvent event) 
+            {
+                IStructuredSelection sel = (IStructuredSelection) commitFilesList.getSelection();
+                if (sel.getFirstElement() instanceof CommitResource) 
+                {
+                    CommitResource resource = (CommitResource) sel.getFirstElement();
+                    CompareUtils.openEditor(resource.getResource(), true);
+                }
+            }
+        });
         }
-      });
-
     setupDefaultCommitMessage();
     
     final Table table = commitFilesList.getTable();
@@ -281,7 +297,7 @@ private IResource[] inResources;
 
   private void setupDefaultCommitMessage() 
   {
-    commitTextBox.setText(DEFAULT_COMMIT_MESSAGE);
+    commitTextBox.setText(defaultCommitMessage);
     commitMouseListener = new MouseListener() 
       {
 
@@ -326,9 +342,16 @@ private IResource[] inResources;
     commitTextBox.addKeyListener(commitKeyListener);
   }
 
-  private CheckboxTableViewer createFilesList(Composite container) 
+  private CheckboxTableViewer createFilesList(Composite container, boolean selectable) 
   {
-    Table table = new Table(container, SWT.H_SCROLL | SWT.V_SCROLL | SWT.FULL_SELECTION | SWT.MULTI | SWT.CHECK | SWT.BORDER);
+    int flags = SWT.H_SCROLL | SWT.V_SCROLL | SWT.BORDER;
+    if(selectable) {
+        flags |= SWT.CHECK | SWT.FULL_SELECTION | SWT.MULTI;
+    }
+    else {
+        flags |= SWT.READ_ONLY | SWT.HIDE_SELECTION;
+    }
+    Table table = new Table(container, flags);
     table.setHeaderVisible(true);
     table.setLinesVisible(true);
     TableLayout layout = new TableLayout();
@@ -340,7 +363,6 @@ private IResource[] inResources;
     col.setResizable(false);
     col.setText("");
     layout.addColumnData(new ColumnPixelData(20, false));
-
     // File name
     col = new TableColumn(table, SWT.NONE);
     col.setResizable(true);
