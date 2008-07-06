@@ -15,7 +15,6 @@ import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
-import java.io.PrintStream;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -87,12 +86,15 @@ public abstract class AbstractShellCommand {
     private String timeoutConstant;
     private InputStreamConsumer consumer;
     private Process process;
+    // private HgConsole console;
 
     protected AbstractShellCommand() {
+       //  this.console = MercurialUtilities.getMercurialConsole();
     }
 
     public AbstractShellCommand(List<String> commands, File workingDir,
             boolean escapeFiles) {
+        this();
         this.command = null;
         this.escapeFiles = escapeFiles;
         this.workingDir = workingDir;
@@ -126,11 +128,13 @@ public abstract class AbstractShellCommand {
      * @return
      * @throws HgException
      */
-    public byte[] executeToBytes(int timeout,
-            boolean expectPositiveReturnValue) throws HgException {
+    public byte[] executeToBytes(int timeout, boolean expectPositiveReturnValue)
+            throws HgException {
         try {
-            long start = System.currentTimeMillis();
             List<String> cmd = getCommands();
+            String cmdString = cmd.toString().replace(",", "").substring(1);
+            cmdString = cmdString.substring(0, cmdString.length() - 1);
+            
             ProcessBuilder builder = new ProcessBuilder(cmd);
             builder.redirectErrorStream(true); // makes my life easier
             if (workingDir != null) {
@@ -139,27 +143,32 @@ public abstract class AbstractShellCommand {
             process = builder.start();
             consumer = new InputStreamConsumer(process.getInputStream());
             consumer.start();
+            getConsole().commandInvoked(cmdString);
             consumer.join(timeout); // 30 seconds timeout
             if (!consumer.isAlive()) {
-                if (process.waitFor() == 0) {
-                    getConsole().println("Done in "
-                            + (System.currentTimeMillis() - start) + " ms");
+                int exitCode = process.waitFor();
+                byte[] returnValue = consumer.getBytes();
+
+                // everything fine
+                if (exitCode == 0 || !expectPositiveReturnValue) {
+                    getConsole().commandCompleted(exitCode, new String(returnValue), null);
                     return consumer.getBytes();
                 }
-                String msg = "";
-                if (consumer.getBytes() != null) {
-                    msg = new String(consumer.getBytes());
-                    System.out.println(msg);
-                }
 
-                if (!expectPositiveReturnValue) {
-                    return msg.getBytes();
-                }
+                // exit code > 0
+                HgException hgex = new HgException(
+                        "Process error, return code: " + exitCode
+                                + ", message: " + new String(returnValue));
 
-                throw new HgException("Process error, return code: "
-                        + process.exitValue() + ", message: " + msg);
+                // exit code == 1 usually isn't fatal.
+                String msg = new String(returnValue);
+                getConsole().commandCompleted(exitCode, msg, hgex);
+
+                throw hgex;
             }
-            throw new HgException("Process timeout");
+            HgException hgEx = new HgException("Process timeout");
+            getConsole().printError(new String(consumer.getBytes()), hgEx);
+            throw hgEx;
         } catch (IOException e) {
             throw new HgException(e.getMessage(), e);
         } catch (InterruptedException e) {
@@ -187,8 +196,6 @@ public abstract class AbstractShellCommand {
             result.add("--");
         }
         result.addAll(files);
-        getConsole().println("Command: (" + result.size() + ") "
-                + result.toString().replace(",", ""));
         // TODO check that length <= MAX_PARAMS
         return result;
     }
@@ -233,7 +240,7 @@ public abstract class AbstractShellCommand {
     /**
      * @return the console
      */
-    private static PrintStream getConsole() {
+    private static IConsole getConsole() {
         return HgClients.getConsole();
     }
 }

@@ -11,7 +11,6 @@
 package com.vectrace.MercurialEclipse.commands;
 
 import java.io.IOException;
-import java.io.PrintStream;
 
 import com.vectrace.MercurialEclipse.MercurialEclipsePlugin;
 
@@ -58,11 +57,11 @@ public final class HgClients {
     /**
      * @return
      */
-    public static PrintStream getConsole() {
+    public static IConsole getConsole() {
         if(console == null) {
             throw new IllegalStateException("HgClients has not been initialized with a console");
         }
-        return console.getOutputStream();
+        return console;
     }
 
     /**

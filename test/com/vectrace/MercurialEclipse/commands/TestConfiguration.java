@@ -52,7 +52,9 @@ public class TestConfiguration  extends TestCase implements IConsole, IErrorHand
      * @see com.vectrace.MercurialEclipse.commands.IConfiguration#getExecutable()
      */
     public String getExecutable() {
-        return "hg";
+        String path = "c:/program/mercurial/hg.exe";
+        // path = "hg";
+        return path;
     }
 
     /* (non-Javadoc)
@@ -60,5 +62,30 @@ public class TestConfiguration  extends TestCase implements IConsole, IErrorHand
      */
     public int getTimeOut(String commandId) {
         return 12000;
+    }
+
+    /* (non-Javadoc)
+     * @see com.vectrace.MercurialEclipse.commands.IConsole#commandCompleted(int, java.lang.String, java.lang.Throwable)
+     */
+    public void commandCompleted(int exitCode, String message, Throwable error) {
+        System.out.println(exitCode + " - " + message);
+        if(error != null) {
+            error.printStackTrace(System.out);
+        }
+    }
+
+    /* (non-Javadoc)
+     * @see com.vectrace.MercurialEclipse.commands.IConsole#commandInvoked(java.lang.String)
+     */
+    public void commandInvoked(String command) {
+        System.out.println(command);
+    }
+
+    /* (non-Javadoc)
+     * @see com.vectrace.MercurialEclipse.commands.IConsole#printError(java.lang.String, java.lang.Throwable)
+     */
+    public void printError(String message, Throwable root) {
+        System.out.println(message);
+        root.printStackTrace(System.out);
     }
 }

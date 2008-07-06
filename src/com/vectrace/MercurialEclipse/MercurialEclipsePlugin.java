@@ -75,7 +75,8 @@ public class MercurialEclipsePlugin extends AbstractUIPlugin
     public void start(BundleContext context) throws Exception {
         try {
             super.start(context);
-            checkHgInstallation();
+            getPreferenceStore();
+            checkHgInstallation();            
             DefaultConfiguration cfg = new DefaultConfiguration();
             HgClients.initialize(cfg , cfg, cfg);
         } catch (Exception e) {
@@ -278,5 +279,12 @@ public void stop(BundleContext context) throws Exception
      */
     public boolean isHgUsable() {
         return hgUsable;
+    }
+
+    /**
+     * @return
+     */
+    public static Display getStandardDisplay() {
+        return PlatformUI.getWorkbench().getDisplay();
     }
 }

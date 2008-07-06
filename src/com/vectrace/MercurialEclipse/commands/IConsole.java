@@ -10,7 +10,6 @@
  *******************************************************************************/
 package com.vectrace.MercurialEclipse.commands;
 
-import java.io.PrintStream;
 
 /**
  * @author Stefan
@@ -19,8 +18,20 @@ import java.io.PrintStream;
 public interface IConsole {
 
     /**
-     * @return
+     * @param command
      */
-    PrintStream getOutputStream();
+    void commandInvoked(String command);
+
+    /**
+     * @param status
+     * @param error
+     */
+    void commandCompleted(int exitCode, String message, Throwable error);
+
+    /**
+     * @param string
+     * @param hgEx
+     */
+    void printError(String message, Throwable root);
 
 }

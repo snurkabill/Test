@@ -29,7 +29,7 @@ public class HgStatusClientTest extends TestCase {
         HgClients.initialize(cfg, cfg, cfg);
     }
     public void testGetStatus() throws Exception {
-        String status = HgStatusClient.getStatus(new File("."));
-        System.out.println(status);
+        HgStatusClient.getStatus(new File("."));
+      //   System.out.println(status);
     }
 }
