@@ -28,6 +28,7 @@ import org.eclipse.core.runtime.preferences.AbstractPreferenceInitializer;
 import org.eclipse.jface.preference.IPreferenceStore;
 
 import com.vectrace.MercurialEclipse.MercurialEclipsePlugin;
+import com.vectrace.MercurialEclipse.team.MercurialUtilities;
 
 /**
  * Class used to initialize default preference values.
@@ -44,9 +45,10 @@ public class PreferenceInitializer extends AbstractPreferenceInitializer {
 		// try to find out, IF we have the built-in hg executable
 		detectAndSetHgExecutable(store);
 
-		store.setDefault(MERCURIAL_USERNAME, System.getProperty ( "user.name" )); //$NON-NLS-1$
+		store.setDefault(MERCURIAL_USERNAME, MercurialUtilities.getHGUsername());
+
 		store.setDefault(PREF_AUTO_SHARE_PROJECTS, true);
-		
+
 		// "Highest" importance should be default, like "merge conflict"
 		// when having 2 different statuses in a folder it should have the more important one
 		store.setDefault(LABELDECORATOR_LOGIC, MercurialPreferenceConstants.LABELDECORATOR_LOGIC_HB);
