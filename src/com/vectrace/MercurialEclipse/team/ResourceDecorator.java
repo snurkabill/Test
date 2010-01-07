@@ -402,7 +402,7 @@ public class ResourceDecorator extends LabelProvider implements ILightweightLabe
 		} else {
 			suffix.append(" ["); //$NON-NLS-1$
 			String hex = changeSet.getNodeShort();
-			String tags = changeSet.getTag();
+			String tags = changeSet.getTagsString();
 			String merging = HgStatusClient.getMergeChangesetId(project);
 
 			// rev info

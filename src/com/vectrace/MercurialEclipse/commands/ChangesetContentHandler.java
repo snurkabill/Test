@@ -143,7 +143,7 @@ final class ChangesetContentHandler implements ContentHandler {
 			// only collect changesets from requested branch. Null is: collect everything.
 			if(expectedBranch == null || Branch.same(branchStr, expectedBranch)){
 				ChangeSet.Builder csb = new ChangeSet.Builder(rev, nodeLong, branchStr, dateIso, unescape(author), hgRoot);
-				csb.tag(tags);
+				csb.tags(tags);
 				csb.nodeShort(nodeShort);
 				csb.ageDate(dateAge);
 				csb.description(untab(unescape(description)));

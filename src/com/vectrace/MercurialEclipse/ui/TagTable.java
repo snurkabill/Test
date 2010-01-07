@@ -118,8 +118,11 @@ public class TagTable extends Composite {
 						if(monitor.isCanceled()) {
 							return Status.CANCEL_STATUS;
 						}
-						if(cs.getTag() != null && cs.getTag().length() > 0) {
-							tagged.put(cs.getTag(), cs);
+						if(cs.getTagsString() != null && cs.getTagsString().length() > 0) {
+							Tag[] csTags = cs.getTags();
+							for (Tag tag : csTags) {
+								tagged.put(tag.getName(), cs);
+							}
 						}
 					}
 				} catch (HgException e1) {
@@ -130,7 +133,7 @@ public class TagTable extends Composite {
 					if(monitor.isCanceled()) {
 						return Status.CANCEL_STATUS;
 					}
-					if (showTip || !HgRevision.TIP.getChangeset().equals(tag.getName())) {
+					if (showTip || !tag.isTip()) {
 						ChangeSet changeSet = tagged.get(tag.getName());
 						if(changeSet != null) {
 							tagToCs.put(tag, changeSet);
