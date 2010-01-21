@@ -78,8 +78,15 @@ public class PushPullSynchronizeOperation extends SynchronizeModelOperation {
 			if(monitor.isCanceled()){
 				return;
 			}
-			changeSet = Collections.min(group.getChangesets(),	new ChangeSetComparator());
-			hgRoot = changeSet.getHgRoot();
+			if(isPull){
+				// see issue #10802: if we run "pull" on the changesets group, pull latest
+				// version, which mean: do NOT specify the range for pull
+				changeSet = null;
+				hgRoot = group.getChangesets().iterator().next().getHgRoot();
+			} else {
+				changeSet = Collections.min(group.getChangesets(),	new ChangeSetComparator());
+				hgRoot = changeSet.getHgRoot();
+			}
 		}
 
 		if(hgRoot == null){
@@ -115,21 +122,24 @@ public class PushPullSynchronizeOperation extends SynchronizeModelOperation {
 
 	private void checkChangesets(final IProgressMonitor monitor, ChangesetGroup group) {
 		int csCount = group.getChangesets().size();
-		if(csCount <= 1) {
-			if(csCount == 0){
-				// paranoia...
-				monitor.setCanceled(true);
-			}
+		if(csCount < 1){
+			// paranoia...
+			monitor.setCanceled(true);
 			return;
 		}
 		final String title;
 		final String message;
 		if(isPull){
 			title = "Hg Pull";
-			message = "Pulling " + csCount + " changesets from remote repository. Continue?";
+			message = "Pulling " + csCount + " changesets (or more) from the remote repository.\n" +
+					"The pull will fetch the *latest* version available remote.\n" +
+					"Continue?";
 		} else {
+			if(csCount == 1){
+				return;
+			}
 			title = "Hg Push";
-			message = "Pushing " + csCount + " changesets to remote repository. Continue?";
+			message = "Pushing " + csCount + " changesets to the remote repository. Continue?";
 		}
 		getShell().getDisplay().syncExec(new Runnable(){
 			public void run() {

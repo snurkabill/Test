@@ -337,7 +337,7 @@ public class LocalChangesetCache extends AbstractCache {
 				return changeSet;
 			}
 			String nodeId = HgIdentClient.getCurrentChangesetId(root);
-			if (!"0000000000000000000000000000000000000000".equals(nodeId)) { //$NON-NLS-1$
+			if (!HgIdentClient.VERSION_ZERO.equals(nodeId)) {
 				ChangeSet lastSet = HgLogClient.getChangeset(root, nodeId);
 				if(lastSet != null) {
 					latestChangesets.put(root, lastSet);
