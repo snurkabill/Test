@@ -29,6 +29,7 @@ import com.vectrace.MercurialEclipse.utils.IniFile;
  * @author bastian
  */
 public class HgRoot extends File {
+	private static final String HG_HGRC = ".hg/hgrc";
 	private static final String HGENCODING;
 	static {
 		// next in line is HGENCODING in environment
@@ -61,9 +62,6 @@ public class HgRoot extends File {
 		this.encoding = charset;
 	}
 
-	/**
-	 * @return the encoding
-	 */
 	public Charset getEncoding() {
 		if(encoding == null){
 			setEncoding(Charset.forName(HGENCODING));
@@ -72,17 +70,19 @@ public class HgRoot extends File {
 	}
 
 	/**
-	 * @return
+	 * Gets the resource hgrc as a {@link java.io.File}.
+	 *
+	 * @return the {@link java.io.File} referencing the hgrc file, <code>null</code> if it doesn't exist.
 	 */
 	public File getConfig() {
 		if (config == null) {
-			File hgrc = new File(this, ".hg/hgrc");
-			if (hgrc.exists()) {
+			File hgrc = new File(this, HG_HGRC);
+			if (hgrc.isFile()) {
 				config = hgrc;
 				return hgrc;
 			}
 		}
-		return null;
+		return config;
 	}
 
 	public String getConfigItem(String section, String key) {
@@ -97,9 +97,6 @@ public class HgRoot extends File {
 		return null;
 	}
 
-	/**
-	 * @return the fallbackencoding
-	 */
 	public Charset getFallbackencoding() {
 		if(fallbackencoding == null){
 			// set fallbackencoding to windows standard codepage
@@ -135,6 +132,13 @@ public class HgRoot extends File {
 		}
 		// +1 is to remove the file separator / at the start of the relative path
 		return fullPath.substring(getPath().length() + 1);
+	}
+
+	/**
+	 * @return the {@link IPath} object corresponding to this root, never null
+	 */
+	public IPath getIPath() {
+		return path;
 	}
 
 	public IPath toAbsolute(IPath relative){

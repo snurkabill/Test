@@ -80,7 +80,7 @@ public class DefaultConfiguration implements IConsole, IErrorHandler, IConfigura
 		return timeout;
 	}
 
-	public HgRoot getHgRoot(File file) {
+	public HgRoot getHgRoot(File file) throws HgCoreException {
 		try {
 			return MercurialTeamProvider.getHgRoot(file);
 		} catch (CoreException e) {
@@ -95,7 +95,7 @@ public class DefaultConfiguration implements IConsole, IErrorHandler, IConfigura
 	 *
 	 * ======================================================
 	 */
-	public void commandCompleted(final int exitCode, final String message, final Throwable error) {
+	public void commandCompleted(final int exitCode, final long timeInMillis, final String message, final Throwable error) {
 		MercurialEclipsePlugin.getStandardDisplay().asyncExec(new Runnable() {
 			public void run() {
 				int severity = IStatus.OK;
@@ -109,7 +109,7 @@ public class DefaultConfiguration implements IConsole, IErrorHandler, IConfigura
 				default:
 					severity = IStatus.ERROR;
 				}
-				HgConsoleHolder.getInstance().getConsole().commandCompleted(
+				HgConsoleHolder.getInstance().getConsole().commandCompleted(timeInMillis,
 						new Status(severity, MercurialEclipsePlugin.ID, message), error);
 			}
 		});

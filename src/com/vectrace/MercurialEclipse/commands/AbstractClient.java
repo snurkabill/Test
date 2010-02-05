@@ -17,6 +17,7 @@ import java.io.File;
 import java.net.URI;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.regex.Pattern;
 
 import org.eclipse.core.net.proxy.IProxyData;
 import org.eclipse.core.net.proxy.IProxyService;
@@ -37,8 +38,33 @@ import com.vectrace.MercurialEclipse.utils.ResourceUtils;
  */
 public abstract class AbstractClient {
 
+	private final static String HTTP_PATTERN_STRING = "[hH][tT][tT][pP]:.*[@]"; //$NON-NLS-1$
+	private final static String HTTPS_PATTERN_STRING = "[hH][tT][tT][pP][sS]:.*[@]"; //$NON-NLS-1$
+	private final static String SSH_PATTERN_STRING = "[sS][sS][hH]:.*[@]"; //$NON-NLS-1$
+	private final static String SVN_PATTERN_STRING = "[sS][vV][nN]:.*[@]"; //$NON-NLS-1$
+
+	private final static Pattern HTTP_PATTERN = Pattern.compile(HTTP_PATTERN_STRING);
+	private final static Pattern HTTPS_PATTERN = Pattern.compile(HTTPS_PATTERN_STRING);
+	private final static Pattern SSH_PATTERN = Pattern.compile(SSH_PATTERN_STRING);
+	private final static Pattern SVN_PATTERN = Pattern.compile(SVN_PATTERN_STRING);
+
 	public AbstractClient() {
 		super();
+	}
+
+	public static String obfuscateLoginData(String line) {
+		String myLine = line == null? "" : line;
+		myLine = HTTP_PATTERN.matcher(myLine).replaceAll("http://***@"); //$NON-NLS-1$
+		if (myLine.equals(line)) {
+			myLine = HTTPS_PATTERN.matcher(line).replaceAll("https://***@"); //$NON-NLS-1$
+		}
+		if (myLine.equals(line)) {
+			myLine = SSH_PATTERN.matcher(line).replaceAll("ssh://***@"); //$NON-NLS-1$
+		}
+		if (myLine.equals(line)) {
+			myLine = SVN_PATTERN.matcher(line).replaceAll("svn://***@"); //$NON-NLS-1$
+		}
+		return myLine;
 	}
 
 	protected static File getWorkingDirectory(IResource resource) {
@@ -135,7 +161,7 @@ public abstract class AbstractClient {
 	protected static void addRepoToHgCommand(HgRepositoryLocation repo, AbstractShellCommand cmd) throws HgException {
 		URI uri = repo.getUri();
 		String location;
-		if (uri != null) {
+		if (uri != null && uri.getHost() != null) {
 			location = uri.toASCIIString();
 			addProxyToHgCommand(uri, cmd);
 		} else {
@@ -155,33 +181,35 @@ public abstract class AbstractClient {
 	 */
 	protected static void addProxyToHgCommand(URI repository, AbstractShellCommand command) {
 		IProxyService proxyService = MercurialEclipsePlugin.getDefault().getProxyService();
-		if (proxyService != null) {
-			// check if there is an applicable proxy for the location
-			IProxyData[] proxies = proxyService.getProxyDataForHost(repository.getHost());
+		// Host can be null URI is a local path
+		final String host = repository.getHost();
+		if (proxyService == null || host == null) {
+			return;
+		}
+		// check if there is an applicable proxy for the location
 
-			if (proxies.length > 0) {
-				// there is at least one applicable proxy, use the first
-				IProxyData proxy = proxies[0];
+		// TODO the method we calling is deprecated, but we have to use it
+		// to be compatible with Eclipse 3.4 API...
+		IProxyData proxy = proxyService.getProxyDataForHost(host, repository.getScheme());
+		if (proxy == null || proxy.getHost() == null) {
+			return;
+		}
 
-				if (proxy.getHost() != null) {
-					// set the host incl. port
-					command.addOptions("--config", "http_proxy.host=" + getProxyHost(proxy)); //$NON-NLS-1$ //$NON-NLS-2$
+		// set the host incl. port
+		command.addOptions("--config", "http_proxy.host=" + getProxyHost(proxy)); //$NON-NLS-1$ //$NON-NLS-2$
 
-					// check if authentication is required
-					if (proxy.isRequiresAuthentication()) {
+		// check if authentication is required
+		if (proxy.isRequiresAuthentication()) {
 
-						// set the user name if available
-						if (proxy.getUserId() != null) {
-							command.addOptions("--config", "http_proxy.user=" + proxy.getUserId()); //$NON-NLS-1$ //$NON-NLS-2$
-						}
+			// set the user name if available
+			if (proxy.getUserId() != null) {
+				command.addOptions("--config", "http_proxy.user=" + proxy.getUserId()); //$NON-NLS-1$ //$NON-NLS-2$
+			}
 
-						// set the password if available
-						if (proxy.getPassword() != null) {
-							command.addOptions("--config", "http_proxy.passwd=" //$NON-NLS-1$ //$NON-NLS-2$
-									+ proxy.getPassword());
-						}
-					}
-				}
+			// set the password if available
+			if (proxy.getPassword() != null) {
+				command.addOptions("--config", "http_proxy.passwd=" //$NON-NLS-1$ //$NON-NLS-2$
+						+ proxy.getPassword());
 			}
 		}
 	}

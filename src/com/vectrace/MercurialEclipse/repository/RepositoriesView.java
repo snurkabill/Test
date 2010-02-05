@@ -12,7 +12,6 @@
  ******************************************************************************/
 package com.vectrace.MercurialEclipse.repository;
 
-import java.io.IOException;
 import java.util.Iterator;
 
 import org.eclipse.jface.action.Action;
@@ -49,7 +48,6 @@ import org.eclipse.ui.dialogs.PropertyDialogAction;
 import org.eclipse.ui.model.WorkbenchLabelProvider;
 import org.eclipse.ui.part.DrillDownAdapter;
 import org.eclipse.ui.part.ViewPart;
-import org.eclipse.ui.part.WorkbenchPart;
 
 import com.vectrace.MercurialEclipse.MercurialEclipsePlugin;
 import com.vectrace.MercurialEclipse.exception.HgException;
@@ -145,7 +143,16 @@ public class RepositoriesView extends ViewPart implements ISelectionListener {
 
 		// Properties
 		propertiesAction = new PropertyDialogAction(
-				new SameShellProvider(shell), getViewer());
+				new SameShellProvider(shell), getViewer()){
+			@Override
+			public void run() {
+				super.run();
+				IStructuredSelection selection = (IStructuredSelection) treeViewer.getSelection();
+				if(!selection.isEmpty()) {
+					treeViewer.refresh(selection.getFirstElement());
+				}
+			}
+		};
 		getViewSite().getActionBars().setGlobalActionHandler(
 				ActionFactory.PROPERTIES.getId(), propertiesAction);
 		IStructuredSelection selection = (IStructuredSelection) getViewer()
@@ -238,9 +245,6 @@ public class RepositoriesView extends ViewPart implements ISelectionListener {
 		bars.updateActionBars();
 	} // contributeActions
 
-	/*
-	 * see org.tigris.subversion.subclipse.ui.repo.RemoteViewPart#addWorkbenchActions(org.eclipse.jface.action.IMenuManager)
-	 */
 	protected void addWorkbenchActions(IMenuManager manager) {
 		// New actions go next
 
@@ -322,10 +326,6 @@ public class RepositoriesView extends ViewPart implements ISelectionListener {
 
 	}
 
-	/**
-	 * @see org.eclipse.ui.ISelectionListener#selectionChanged(org.eclipse.ui.IWorkbenchPart,
-	 *      org.eclipse.jface.viewers.ISelection)
-	 */
 	public void selectionChanged(IWorkbenchPart part, ISelection selection) {
 		String msg = getStatusLineMessage(selection);
 		getViewSite().getActionBars().getStatusLineManager().setMessage(msg);
@@ -346,28 +346,15 @@ public class RepositoriesView extends ViewPart implements ISelectionListener {
 		return Messages.getString("RepositoriesView.oneSelected"); //$NON-NLS-1$
 	}
 
-	/**
-	 * @see WorkbenchPart#setFocus
-	 */
 	@Override
 	public void setFocus() {
 		treeViewer.getControl().setFocus();
 	}
 
-	/**
-	 * Method getShell.
-	 *
-	 * @return Shell
-	 */
 	protected Shell getShell() {
 		return treeViewer.getTree().getShell();
 	}
 
-	/**
-	 * Returns the viewer.
-	 *
-	 * @return TreeViewer
-	 */
 	protected TreeViewer getViewer() {
 		return treeViewer;
 	}
@@ -383,11 +370,8 @@ public class RepositoriesView extends ViewPart implements ISelectionListener {
 		}
 		if (refreshRepositoriesFolders) {
 			try {
-				MercurialEclipsePlugin.getRepoManager().refreshRepositories(
-						null);
+				MercurialEclipsePlugin.getRepoManager().refreshRepositories(null);
 			} catch (HgException e) {
-				MercurialEclipsePlugin.logError(e);
-			} catch (IOException e) {
 				MercurialEclipsePlugin.logError(e);
 			}
 		}
@@ -433,17 +417,11 @@ public class RepositoriesView extends ViewPart implements ISelectionListener {
 		if (selection instanceof IStructuredSelection) {
 			IStructuredSelection structured = (IStructuredSelection) selection;
 			if (structured.size() == 1) {
-				Object first = structured.getFirstElement();
-				// Try to expand/contract
-				treeViewer.setExpandedState(first, !treeViewer
-						.getExpandedState(first));
+				propertiesAction.run();
 			}
 		}
 	}
 
-	/**
-	 * @see org.eclipse.ui.IWorkbenchPart#dispose()
-	 */
 	@Override
 	public void dispose() {
 		MercurialEclipsePlugin.getRepoManager().removeRepositoryListener(

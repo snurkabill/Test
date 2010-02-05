@@ -13,11 +13,6 @@ package com.vectrace.MercurialEclipse.views.console;
 
 import static com.vectrace.MercurialEclipse.preferences.MercurialPreferenceConstants.*;
 
-import java.text.DateFormat;
-import java.text.SimpleDateFormat;
-import java.util.Date;
-import java.util.regex.Pattern;
-
 import org.eclipse.core.runtime.CoreException;
 import org.eclipse.core.runtime.IStatus;
 import org.eclipse.core.runtime.OperationCanceledException;
@@ -46,18 +41,7 @@ public class HgConsole extends MessageConsole {
 	private Color commandColor;
 	private Color messageColor;
 	private Color errorColor;
-	private final static String HTTP_PATTERN_STRING = "[hH][tT][tT][pP]:.*[@]"; //$NON-NLS-1$
-	private final static String HTTPS_PATTERN_STRING = "[hH][tT][tT][pP][sS]:.*[@]"; //$NON-NLS-1$
-	private final static String SSH_PATTERN_STRING = "[sS][sS][hH]:.*[@]"; //$NON-NLS-1$
-	private final static String SVN_PATTERN_STRING = "[sS][vV][nN]:.*[@]"; //$NON-NLS-1$
 
-	private final static Pattern HTTP_PATTERN = Pattern.compile(HTTP_PATTERN_STRING);
-	private final static Pattern HTTPS_PATTERN = Pattern.compile(HTTPS_PATTERN_STRING);
-	private final static Pattern SSH_PATTERN = Pattern.compile(SSH_PATTERN_STRING);
-	private final static Pattern SVN_PATTERN = Pattern.compile(SVN_PATTERN_STRING);
-
-	/** used to time the commands*/
-	private long commandStarted = 0;
 
 	/** streams for each command type - each stream has its own color */
 	private MessageConsoleStream commandStream;
@@ -65,10 +49,6 @@ public class HgConsole extends MessageConsole {
 	private MessageConsoleStream errorStream;
 
 	private final ConsoleDocument document;
-
-	/** format for timings printed to console. Not static to avoid thread issues*/
-	private final DateFormat TIME_FORMAT = new SimpleDateFormat("m:ss.SSS"); //$NON-NLS-1$
-
 
 	/** Indicates whether the console is visible in the Console view */
 	private boolean visible;
@@ -164,16 +144,6 @@ public class HgConsole extends MessageConsole {
 	private void appendLine(int type, String line) {
 		HgConsoleHolder.getInstance().showConsole(false);
 		String myLine = line == null? "" : line;
-		myLine = HTTP_PATTERN.matcher(myLine).replaceAll("http://***@"); //$NON-NLS-1$
-		if (myLine.equals(line)) {
-			myLine = HTTPS_PATTERN.matcher(line).replaceAll("https://***@"); //$NON-NLS-1$
-		}
-		if (myLine.equals(line)) {
-			myLine = SSH_PATTERN.matcher(line).replaceAll("ssh://***@"); //$NON-NLS-1$
-		}
-		if (myLine.equals(line)) {
-			myLine = SVN_PATTERN.matcher(line).replaceAll("svn://***@"); //$NON-NLS-1$
-		}
 		synchronized (document) {
 			if (visible) {
 				switch (type) {
@@ -226,7 +196,6 @@ public class HgConsole extends MessageConsole {
 	}
 
 	public void commandInvoked(String line) {
-		commandStarted = System.currentTimeMillis();
 		appendLine(ConsoleDocument.COMMAND, line);
 	}
 
@@ -242,8 +211,8 @@ public class HgConsole extends MessageConsole {
 		return debugTimeEnabled;
 	}
 
-	public void commandCompleted(IStatus status, Throwable exception) {
-		String time = getTimeString();
+	public void commandCompleted(long timeInMillis, IStatus status, Throwable exception) {
+		String time = getTimeString(timeInMillis);
 		if (status != null) {
 			if(status.getSeverity() == IStatus.ERROR) {
 				printStatus(status, time, false);
@@ -281,20 +250,19 @@ public class HgConsole extends MessageConsole {
 
 	/**
 	 *
+	 * @param timeInMillis
 	 * @return empty string if time measurement was not enabled or we are failed to measure it
 	 */
-	private String getTimeString() {
+	private String getTimeString(long timeInMillis) {
 		if(!isDebugTimeEnabled()){
 			return "";
 		}
 		String time;
-		long commandRuntime = System.currentTimeMillis() - commandStarted;
 		try {
-			time = Messages.getString("HgConsole.doneIn") + TIME_FORMAT.format(new Date(commandRuntime)) //$NON-NLS-1$
-					+ Messages.getString("HgConsole.minutes"); //$NON-NLS-1$
+			time = String.format("  Done in %1$tM:%1$tS:%1$tL", Long.valueOf(timeInMillis));
 		} catch (RuntimeException e) {
 			MercurialEclipsePlugin.logError(e);
-			time = ""; // Messages.getString("HgConsole.unknown"); //$NON-NLS-1$
+			time = "";
 		}
 		return time;
 	}

@@ -32,7 +32,11 @@ import org.eclipse.core.resources.ResourcesPlugin;
 import org.eclipse.core.runtime.CoreException;
 import org.eclipse.core.runtime.IAdaptable;
 import org.eclipse.core.runtime.IPath;
+import org.eclipse.core.runtime.IProgressMonitor;
+import org.eclipse.core.runtime.IStatus;
 import org.eclipse.core.runtime.Path;
+import org.eclipse.core.runtime.Status;
+import org.eclipse.core.runtime.jobs.Job;
 import org.eclipse.ui.IEditorPart;
 import org.eclipse.ui.IFileEditorInput;
 import org.eclipse.ui.PlatformUI;
@@ -101,7 +105,7 @@ public class ResourceUtils {
 	/**
 	 * Checks which editor is active an determines the IResource that is edited.
 	 */
-	public static IResource getActiveResourceFromEditor() {
+	public static IFile getActiveResourceFromEditor() {
 		IEditorPart editorPart = PlatformUI.getWorkbench().getActiveWorkbenchWindow().getActivePage().getActiveEditor();
 
 		if (editorPart != null) {
@@ -123,7 +127,8 @@ public class ResourceUtils {
 
 	/**
 	 * @param path a path to possibly non-existing or not mapped resource
-	 * @return a (file) representing given resource
+	 * @return a (file) representing given resource, may return null if the resource is
+	 * not in the workspace
 	 */
 	public static IFile getFileHandle(IPath path){
 		IWorkspaceRoot root = ResourcesPlugin.getWorkspace().getRoot();
@@ -253,10 +258,13 @@ public class ResourceUtils {
 	 * @param resources non null
 	 * @return never null
 	 */
-	public static Map<HgRoot, List<IResource>> groupByRoot(List<IResource> resources) throws HgException {
+	public static Map<HgRoot, List<IResource>> groupByRoot(Collection<? extends IResource> resources) {
 		Map<HgRoot, List<IResource>> result = new HashMap<HgRoot, List<IResource>>();
 		for (IResource resource : resources) {
-			HgRoot root = MercurialTeamProvider.getHgRoot(resource);
+			HgRoot root = MercurialTeamProvider.hasHgRoot(resource);
+			if(root == null){
+				continue;
+			}
 			List<IResource> list = result.get(root);
 			if (list == null) {
 				list = new ArrayList<IResource>();
@@ -356,5 +364,22 @@ public class ResourceUtils {
 			}
 		}
 		return null;
+	}
+
+	public static void touch(final IResource res){
+		Job job = new Job("Refresh for: " + res.getName()) {
+
+			@Override
+			protected IStatus run(IProgressMonitor monitor) {
+				// triggers the decoration update
+				try {
+					res.touch(monitor);
+				} catch (CoreException e) {
+					MercurialEclipsePlugin.logError(e);
+				}
+				return Status.OK_STATUS;
+			}
+		};
+		job.schedule();
 	}
 }

@@ -33,52 +33,67 @@ import org.eclipse.swt.widgets.TableItem;
 import com.vectrace.MercurialEclipse.MercurialEclipsePlugin;
 import com.vectrace.MercurialEclipse.exception.HgException;
 import com.vectrace.MercurialEclipse.model.ChangeSet;
+import com.vectrace.MercurialEclipse.model.HgRoot;
 import com.vectrace.MercurialEclipse.team.cache.LocalChangesetCache;
 
 /**
- *
  * @author Jerome Negre <jerome+hg@jnegre.org>
  */
 public class ChangesetTable extends Composite {
 
-	private final static Font PARENT_FONT = JFaceResources.getFontRegistry()
-			.getBold(JFaceResources.DIALOG_FONT);
+	/** single selection, border, scroll */
+	private static final int DEFAULT_STYLE = SWT.SINGLE | SWT.BORDER | SWT.FULL_SELECTION | SWT.V_SCROLL | SWT.H_SCROLL;
+
+	private final static Font PARENT_FONT = JFaceResources.getFontRegistry().getBold(JFaceResources.DIALOG_FONT);
 
 	private final Table table;
 	private int[] parents;
-	private final IResource resource;
+	private IResource resource;
 
-	private ChangeSet[] changesets = new ChangeSet[0];
+	private ChangeSet[] changesets;
 	private int logBatchSize;
-	private boolean autoFetch = true;
+	private boolean autoFetch;
 
-	private boolean bottomNotFetched = true;
+	private boolean bottomNotFetched;
+
+	private final HgRoot hgRoot;
 
 	public ChangesetTable(Composite parent, IResource resource) {
-		this(parent, SWT.SINGLE | SWT.BORDER | SWT.FULL_SELECTION
-				| SWT.V_SCROLL | SWT.H_SCROLL, resource);
+		this(parent, DEFAULT_STYLE, resource, true);
 	}
 
-	public ChangesetTable(Composite parent, IResource resource,
-			boolean autoFetch) {
-		this(parent, SWT.SINGLE | SWT.BORDER | SWT.FULL_SELECTION
-				| SWT.V_SCROLL | SWT.H_SCROLL, resource);
-		this.autoFetch = autoFetch;
+	public ChangesetTable(Composite parent, HgRoot hgRoot) {
+		this(parent, DEFAULT_STYLE, null, hgRoot, true);
 	}
 
-	public ChangesetTable(Composite parent, int tableStyle, IResource resource,
-			boolean autoFetch) {
-		this(parent, tableStyle, resource);
-		this.autoFetch = autoFetch;
+	public ChangesetTable(Composite parent, int tableStyle, IResource resource, boolean autoFetch) {
+		this(parent, tableStyle, resource, null, autoFetch);
+	}
+
+	public ChangesetTable(Composite parent, int tableStyle, HgRoot hgRoot, boolean autoFetch) {
+		this(parent, tableStyle, null, hgRoot, autoFetch);
 	}
 
 	/**
-	 *
+	 * @param parent non null swt parent widget
+	 * @param tableStyle SWT style bits
+	 * @param resource a resource to show changesets for, mutually exclusive with the hgRoot argument
+	 * @param hgRoot a hg root to show changesets for, , mutually exclusive with the resource argument
+	 * @param autoFetch true to fetch extra changesets info on scroll as needed
 	 */
-	public ChangesetTable(Composite parent, int tableStyle, IResource resource) {
+	protected ChangesetTable(Composite parent, int tableStyle, IResource resource, HgRoot hgRoot, boolean autoFetch) {
 		super(parent, SWT.NONE);
-		this.logBatchSize = LocalChangesetCache.getInstance().getLogBatchSize();
+		this.hgRoot = hgRoot;
 		this.resource = resource;
+		this.autoFetch = autoFetch;
+		changesets = new ChangeSet[0];
+		bottomNotFetched = true;
+		this.logBatchSize = LocalChangesetCache.getInstance().getLogBatchSize();
+		// limit log to allow "smooth" scrolling (not too small and not too big)
+		// - but only if not set in preferences
+		if (logBatchSize <= 0) {
+			logBatchSize = 200;
+		}
 		this.setLayout(new GridLayout());
 		this.setLayoutData(new GridData());
 
@@ -90,9 +105,14 @@ public class ChangesetTable extends Composite {
 		data.minimumHeight = 50;
 		table.setLayoutData(data);
 
-		String[] titles = { Messages.getString("ChangesetTable.column.rev"), Messages.getString("ChangesetTable.column.global"), Messages.getString("ChangesetTable.column.date"), Messages.getString("ChangesetTable.column.author"), Messages.getString("ChangesetTable.column.branch"), //$NON-NLS-1$ //$NON-NLS-2$ //$NON-NLS-3$ //$NON-NLS-4$ //$NON-NLS-5$
+		String[] titles = { Messages.getString("ChangesetTable.column.rev"),
+				Messages.getString("ChangesetTable.column.global"),
+				Messages.getString("ChangesetTable.column.date"),
+				Messages.getString("ChangesetTable.column.author"),
+				Messages.getString("ChangesetTable.column.branch"),
+				"Tags",
 				Messages.getString("ChangesetTable.column.summary") }; //$NON-NLS-1$
-		int[] widths = { 50, 150, 150, 100, 100, 300 };
+		int[] widths = { 40, 80, 100, 80, 70, 70, 300 };
 		for (int i = 0; i < titles.length; i++) {
 			TableColumn column = new TableColumn(table, SWT.NONE);
 			column.setText(titles[i]);
@@ -134,28 +154,47 @@ public class ChangesetTable extends Composite {
 	 * @throws HgException
 	 */
 	private void updateTable(int startRev) throws HgException {
-		if (resource != null && table.isEnabled() && autoFetch) {
-			if (startRev - logBatchSize > 0 || bottomNotFetched) {
-				LocalChangesetCache.getInstance().fetchRevisions(
-						resource, true, logBatchSize, startRev, false);
-			}
-			SortedSet<ChangeSet> set = LocalChangesetCache.getInstance()
-					.getOrFetchChangeSets(resource);
-
-			// only fetch rev 0:0+logbatchsize once
-			if (set == null || set.size() == 0 || set.first().getChangesetIndex() == 0) {
-				bottomNotFetched = false;
-				if(set == null) {
-					return;
-				}
-			}
-
-			SortedSet<ChangeSet> reverseOrderSet = new TreeSet<ChangeSet>(
-					Collections.reverseOrder());
-			reverseOrderSet.addAll(set);
-			setChangesets(reverseOrderSet.toArray(new ChangeSet[reverseOrderSet
-					.size()]));
+		if (!isAutoFetchEnabled()) {
+			return;
 		}
+		LocalChangesetCache cache = LocalChangesetCache.getInstance();
+		if (startRev - logBatchSize > 0 || bottomNotFetched) {
+			if(resource != null) {
+				cache.fetchRevisions(resource, true, logBatchSize, startRev, false);
+			} else {
+				cache.fetchRevisions(hgRoot, true, logBatchSize, startRev, false);
+			}
+		}
+		SortedSet<ChangeSet> set;
+		if(resource != null) {
+			set = cache.getOrFetchChangeSets(resource);
+		} else {
+			set = cache.getOrFetchChangeSets(hgRoot);
+		}
+
+		// only fetch rev 0:0+logbatchsize once
+		if (set == null || set.size() == 0 || set.first().getChangesetIndex() == 0) {
+			bottomNotFetched = false;
+			if (set == null) {
+				return;
+			}
+		}
+
+		/*
+		 * TODO filter changesets to only display the so far requested revs.
+		 * else, if the cache is already filled, we display all, which is a huge
+		 * UI performance bottleneck.
+		 */
+		SortedSet<ChangeSet> reverseOrderSet = new TreeSet<ChangeSet>(Collections.reverseOrder());
+		reverseOrderSet.addAll(set);
+		setChangesets(reverseOrderSet.toArray(new ChangeSet[reverseOrderSet.size()]));
+	}
+
+	/**
+	 * @return true if it is allowed to start fetching the data
+	 */
+	private boolean isAutoFetchEnabled() {
+		return autoFetch && (resource != null || hgRoot != null) && table.isEnabled();
 	}
 
 	public void setChangesets(ChangeSet[] sets) {
@@ -172,7 +211,9 @@ public class ChangesetTable extends Composite {
 			row.setText(2, rev.getDateString());
 			row.setText(3, rev.getUser());
 			row.setText(4, rev.getBranch());
-			row.setText(5, rev.getSummary());
+			String tagsString = rev.getTagsString();
+			row.setText(5, tagsString == null? "" : tagsString);
+			row.setText(6, rev.getSummary());
 			row.setData(rev);
 		}
 		table.setItemCount(sets.length);
@@ -237,26 +278,24 @@ public class ChangesetTable extends Composite {
 		}
 	}
 
-	/**
-	 * @return the changesets
-	 */
 	public ChangeSet[] getChangesets() {
 		return changesets;
 	}
 
-	/**
-	 * @param autoFetch
-	 *            the autoFetch to set
-	 */
 	public void setAutoFetch(boolean autoFetch) {
 		this.autoFetch = autoFetch;
 	}
 
-	/**
-	 * @return the autoFetch
-	 */
 	public boolean isAutoFetch() {
 		return autoFetch;
+	}
+
+	public IResource getResource() {
+		return resource;
+	}
+
+	public void setResource(IResource resource) {
+		this.resource = resource;
 	}
 
 }

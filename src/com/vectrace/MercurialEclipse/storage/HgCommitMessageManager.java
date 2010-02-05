@@ -8,6 +8,7 @@
  * Contributors:
  *     Zingo Andersen           - Save/Load commit messages using a xml file
  *     Adam Berkes (Intland)    - Fix encoding
+ *     Andrei Loskutov (Intland) - bug fixes
  *******************************************************************************/
 package com.vectrace.MercurialEclipse.storage;
 
@@ -33,6 +34,7 @@ import javax.xml.transform.sax.SAXTransformerFactory;
 import javax.xml.transform.sax.TransformerHandler;
 import javax.xml.transform.stream.StreamResult;
 
+import org.eclipse.core.resources.IProject;
 import org.xml.sax.Attributes;
 import org.xml.sax.InputSource;
 import org.xml.sax.SAXException;
@@ -40,8 +42,11 @@ import org.xml.sax.helpers.AttributesImpl;
 import org.xml.sax.helpers.DefaultHandler;
 
 import com.vectrace.MercurialEclipse.MercurialEclipsePlugin;
+import com.vectrace.MercurialEclipse.commands.HgClients;
 import com.vectrace.MercurialEclipse.exception.HgException;
+import com.vectrace.MercurialEclipse.model.HgRoot;
 import com.vectrace.MercurialEclipse.preferences.MercurialPreferenceConstants;
+import com.vectrace.MercurialEclipse.team.MercurialTeamProvider;
 import com.vectrace.MercurialEclipse.team.MercurialUtilities;
 
 /**
@@ -223,9 +228,7 @@ public class HgCommitMessageManager extends DefaultHandler {
 	 * the list of all Attributes declared for the Current Element in the XML File.
 	 */
 	@Override
-	public void startElement(String uri, String localName, String qname,
-			Attributes attr)
-	{
+	public void startElement(String uri, String localName, String qname, Attributes attr) {
 		/* Clear char string */
 		tmpMessage = ""; //$NON-NLS-1$
 	}
@@ -251,5 +254,22 @@ public class HgCommitMessageManager extends DefaultHandler {
 	public void characters(char[] ch, int start, int length) {
 		/* Collect the char string together this will be called for every special char */
 		tmpMessage = tmpMessage + new String(ch, start, length);
+	}
+
+	public static String getDefaultCommitName(IProject project) {
+		// TODO see issue 10150: get the name from project properties, not from repo
+		// but for now it will at least work for projects with one repo
+		HgRoot hgRoot = MercurialTeamProvider.getHgRoot(project);
+		HgRepositoryLocation repoLocation = MercurialEclipsePlugin.getRepoManager()
+				.getDefaultRepoLocation(hgRoot);
+		if(repoLocation == null || repoLocation.getUser() == null){
+			return HgClients.getDefaultUserName();
+		}
+		return repoLocation.getUser();
+	}
+
+	public static String getDefaultCommitName(HgRoot root) {
+		// TODO see issue 10150: get the name from project/root properties, not from repo
+		return HgClients.getDefaultUserName();
 	}
 }

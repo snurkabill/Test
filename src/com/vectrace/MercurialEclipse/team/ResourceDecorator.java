@@ -40,6 +40,7 @@ import org.eclipse.ui.themes.ITheme;
 import org.eclipse.ui.themes.IThemeManager;
 
 import com.vectrace.MercurialEclipse.MercurialEclipsePlugin;
+import com.vectrace.MercurialEclipse.commands.HgStatusClient;
 import com.vectrace.MercurialEclipse.exception.HgException;
 import com.vectrace.MercurialEclipse.model.Branch;
 import com.vectrace.MercurialEclipse.model.ChangeSet;
@@ -320,11 +321,14 @@ public class ResourceDecorator extends LabelProvider implements ILightweightLabe
 
 	private void addChangesetInfo(IDecoration d, IResource resource, IProject project, StringBuilder prefix) throws CoreException {
 		// label info for incoming changesets
-		ChangeSet newestIncomingChangeSet;
+		ChangeSet newestIncomingChangeSet = null;
 		if(showIncomingChangeset) {
-			newestIncomingChangeSet = INCOMING_CACHE.getNewestChangeSet(resource);
-		} else {
-			newestIncomingChangeSet = null;
+			try {
+				newestIncomingChangeSet = INCOMING_CACHE.getNewestChangeSet(resource);
+			} catch (HgException e) {
+				// if an error occurs we want the rest of the decoration to succeed nonetheless
+				MercurialEclipsePlugin.logError(e);
+			}
 		}
 
 		if (newestIncomingChangeSet != null) {
@@ -401,8 +405,8 @@ public class ResourceDecorator extends LabelProvider implements ILightweightLabe
 		} else {
 			suffix.append(" ["); //$NON-NLS-1$
 			String hex = changeSet.getNodeShort();
-			String tags = changeSet.getTag();
-			String merging = project.getPersistentProperty(ResourceProperties.MERGING);
+			String tags = changeSet.getTagsString();
+			String merging = HgStatusClient.getMergeChangesetId(project);
 
 			// rev info
 			suffix.append(changeSet.getChangesetIndex()).append(':').append(hex);
