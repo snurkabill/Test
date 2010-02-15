@@ -33,7 +33,7 @@ import com.vectrace.MercurialEclipse.history.ChangeSetComparator;
 import com.vectrace.MercurialEclipse.menu.PushHandler;
 import com.vectrace.MercurialEclipse.model.ChangeSet;
 import com.vectrace.MercurialEclipse.model.HgRoot;
-import com.vectrace.MercurialEclipse.storage.HgRepositoryLocation;
+import com.vectrace.MercurialEclipse.model.IHgRepositoryLocation;
 import com.vectrace.MercurialEclipse.synchronize.MercurialSynchronizeParticipant;
 import com.vectrace.MercurialEclipse.synchronize.Messages;
 import com.vectrace.MercurialEclipse.synchronize.cs.ChangesetGroup;
@@ -175,8 +175,15 @@ public class PushPullSynchronizeOperation extends SynchronizeModelOperation {
 
 		@Override
 		protected IStatus run(IProgressMonitor moni) {
-			HgRepositoryLocation location = participant.getRepositoryLocation();
+			IHgRepositoryLocation location = participant.getRepositoryLocation();
 			if(location == null){
+				return Status.OK_STATUS;
+			}
+			// re-validate the location as it might have changed credentials...
+			try {
+				location = MercurialEclipsePlugin.getRepoManager().getRepoLocation(location.getLocation());
+			} catch (HgException e1) {
+				MercurialEclipsePlugin.logError(e1);
 				return Status.OK_STATUS;
 			}
 			if(opMonitor.isCanceled() || moni.isCanceled()){

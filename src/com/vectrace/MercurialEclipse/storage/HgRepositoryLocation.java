@@ -19,18 +19,18 @@ import java.io.File;
 import java.net.URI;
 import java.net.URISyntaxException;
 
-import org.eclipse.core.runtime.IProgressMonitor;
 import org.eclipse.jface.resource.ImageDescriptor;
+import org.eclipse.ui.model.IWorkbenchAdapter;
 
 import com.vectrace.MercurialEclipse.MercurialEclipsePlugin;
 import com.vectrace.MercurialEclipse.exception.HgException;
-import com.vectrace.MercurialEclipse.repository.model.AllRootsElement;
+import com.vectrace.MercurialEclipse.model.IHgRepositoryLocation;
 
 /**
  * A class abstracting a Mercurial repository location which may be either local
  * or remote.
  */
-public class HgRepositoryLocation extends AllRootsElement implements Comparable<HgRepositoryLocation> {
+public class HgRepositoryLocation implements  Comparable<IHgRepositoryLocation>, IHgRepositoryLocation {
 
 	private static final String PASSWORD_MASK = "***";
 
@@ -38,7 +38,8 @@ public class HgRepositoryLocation extends AllRootsElement implements Comparable<
 	protected String location;
 	private String user;
 	private String password;
-	private final boolean isPush;
+
+	private boolean isLocal;
 
 	/**
 	 * hg repository which is represented by a bundle file (on local disk)
@@ -47,30 +48,35 @@ public class HgRepositoryLocation extends AllRootsElement implements Comparable<
 
 		/**
 		 * @param location canonical representation of a bundle file path, never null
-		 * @param isPush
 		 */
-		public BundleRepository(File location, boolean isPush) {
-			super(null, isPush, null, null);
+		public BundleRepository(File location) {
+			super(null, null, null);
 			this.location = location.getAbsolutePath();
 		}
 
 		@Override
-		public URI getUri(boolean isSafe) throws HgException {
+		protected URI getUri(boolean isSafe) throws HgException {
 			return null;
+		}
+
+		@Override
+		public boolean isLocal() {
+			return true;
 		}
 	}
 
-	HgRepositoryLocation(String logicalName, boolean isPush, String user, String password){
+	private HgRepositoryLocation(String logicalName, String user, String password){
+		super();
 		this.logicalName = logicalName;
-		this.isPush = isPush;
 		this.user = user;
 		this.password = password;
 	}
 
-	HgRepositoryLocation(String logicalName, boolean isPush, String location, String user, String password) throws HgException {
-		this(logicalName, isPush, user, password);
+	HgRepositoryLocation(String logicalName, String location, String user, String password) throws HgException {
+		this(logicalName, user, password);
 		URI uri = HgRepositoryLocationParser.parseLocationToURI(location, user, password);
 		if(uri != null) {
+			isLocal = uri.getScheme() == null || uri.getScheme().equalsIgnoreCase("file");
 			try {
 				this.location = new URI(uri.getScheme(),
 						null,
@@ -87,12 +93,13 @@ public class HgRepositoryLocation extends AllRootsElement implements Comparable<
 		}
 	}
 
-	HgRepositoryLocation(String logicalName, boolean isPush, URI uri) throws HgException {
-		this(logicalName, isPush, HgRepositoryLocationParser.getUserNameFromURI(uri),
+	HgRepositoryLocation(String logicalName, URI uri) throws HgException {
+		this(logicalName, HgRepositoryLocationParser.getUserNameFromURI(uri),
 				HgRepositoryLocationParser.getPasswordFromURI(uri));
 		if (uri == null) {
 			throw new HgException("Given URI cannot be null");
 		}
+		isLocal = uri.getScheme() == null || uri.getScheme().equalsIgnoreCase("file");
 		try {
 			this.location = new URI(uri.getScheme(),
 					null,
@@ -108,7 +115,7 @@ public class HgRepositoryLocation extends AllRootsElement implements Comparable<
 
 	static public boolean validateLocation(String validate) {
 		try {
-			HgRepositoryLocation location2 = HgRepositoryLocationParser.parseLocation(false, validate, null, null);
+			IHgRepositoryLocation location2 = HgRepositoryLocationParser.parseLocation(validate, null, null);
 			if(location2 == null){
 				return false;
 			}
@@ -120,7 +127,17 @@ public class HgRepositoryLocation extends AllRootsElement implements Comparable<
 		}
 	}
 
-	public int compareTo(HgRepositoryLocation loc) {
+	public int compareTo(File loc) {
+		if(getLocation() == null) {
+			return -1;
+		}
+		if(loc == null){
+			return 1;
+		}
+		return getLocation().compareTo(loc.getAbsolutePath());
+	}
+
+	public int compareTo(IHgRepositoryLocation loc) {
 		if(getLocation() == null) {
 			return -1;
 		}
@@ -134,8 +151,7 @@ public class HgRepositoryLocation extends AllRootsElement implements Comparable<
 	public int hashCode() {
 		final int prime = 31;
 		int result = 1;
-		result = prime * result
-				+ ((location == null) ? 0 : location.hashCode());
+		result = prime * result + ((location == null) ? 0 : location.hashCode());
 		return result;
 	}
 
@@ -144,15 +160,15 @@ public class HgRepositoryLocation extends AllRootsElement implements Comparable<
 		if (this == obj) {
 			return true;
 		}
-		if (!(obj instanceof HgRepositoryLocation)) {
+		if (!(obj instanceof IHgRepositoryLocation)) {
 			return false;
 		}
-		final HgRepositoryLocation other = (HgRepositoryLocation) obj;
+		final IHgRepositoryLocation other = (IHgRepositoryLocation) obj;
 		if (location == null) {
-			if (other.location != null) {
+			if (other.getLocation() != null) {
 				return false;
 			}
-		} else if (!location.equals(other.location)) {
+		} else if (!location.equals(other.getLocation())) {
 			return false;
 		}
 		return true;
@@ -181,67 +197,38 @@ public class HgRepositoryLocation extends AllRootsElement implements Comparable<
 	 * @return a valid URI of the repository or null if repository is local directory
 	 * @throws HgException unable to parse to URI or location is invalid.
 	 */
-	public URI getUri(boolean isSafe) throws HgException {
-		return HgRepositoryLocationParser.parseLocationToURI(getLocation(), getUser(), isSafe ? PASSWORD_MASK : getPassword());
+	protected URI getUri(boolean isSafe) throws HgException {
+		return HgRepositoryLocationParser.parseLocationToURI(getLocation(), getUser(),
+				isSafe ? PASSWORD_MASK : getPassword());
 	}
 
 	@Override
 	public String toString() {
-		if (logicalName!= null && logicalName.length()>0) {
-			return logicalName + " (" + location + ")";
-		}
 		return location;
 	}
 
-	@Override
-	public Object[] internalGetChildren(Object o, IProgressMonitor monitor) {
-		return new HgRepositoryLocation[0];
-	}
-
-	@Override
-	public ImageDescriptor getImageDescriptor(Object object) {
-		return super.getImageDescriptor(object);
+	public IHgRepositoryLocation[] getChildren(Object o) {
+		return MercurialEclipsePlugin.getRepoManager().getAllRepoLocationRoots(this).toArray(
+				new IHgRepositoryLocation[0]);
 	}
 
 	public String getLocation() {
 		return location;
 	}
 
-	/**
-	 * @return a location with password removed that is safe to display on screen
-	 */
-	public String getDisplayLocation() {
-		try {
-			URI uri = getUri(true);
-			if (uri != null) {
-				return uri.toString();
-			}
-		} catch (HgException ex) {
-			// This shouldn't happen at this point
-			throw new RuntimeException(ex);
-		}
-		return getLocation();
-	}
-
 	public String getLogicalName() {
 		return logicalName;
 	}
 
-	public boolean isPush() {
-		return isPush;
-	}
-
-	public boolean isEmpty() {
-		return (getLocation() == null || getLocation().length() == 0);
-	}
-
 	@SuppressWarnings("unchecked")
-	@Override
 	public Object getAdapter(Class adapter) {
-		if(adapter == HgRepositoryLocation.class){
+		if(adapter == IHgRepositoryLocation.class){
 			return this;
 		}
-		return super.getAdapter(adapter);
+		if (adapter == IWorkbenchAdapter.class) {
+			return this;
+		}
+		return null;
 	}
 
 	public void setPassword(String password) {
@@ -254,5 +241,21 @@ public class HgRepositoryLocation extends AllRootsElement implements Comparable<
 
 	public void setLogicalName(String logicalName) {
 		this.logicalName = logicalName;
+	}
+
+	public String getLabel(Object o) {
+		return o.toString();
+	}
+
+	public Object getParent(Object o) {
+		return null;
+	}
+
+	public ImageDescriptor getImageDescriptor(Object object) {
+		return MercurialEclipsePlugin.getImageDescriptor("cview16/repository_rep.gif");
+	}
+
+	public boolean isLocal() {
+		return isLocal;
 	}
 }

@@ -18,19 +18,24 @@ package com.vectrace.MercurialEclipse.team;
 import java.io.File;
 import java.nio.charset.Charset;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.List;
 import java.util.Map;
+import java.util.SortedSet;
+import java.util.TreeSet;
 import java.util.concurrent.ConcurrentHashMap;
 
 import org.eclipse.core.resources.IProject;
 import org.eclipse.core.resources.IResource;
 import org.eclipse.core.resources.IResourceRuleFactory;
+import org.eclipse.core.resources.IWorkspaceRoot;
 import org.eclipse.core.resources.ResourcesPlugin;
 import org.eclipse.core.resources.team.IMoveDeleteHook;
 import org.eclipse.core.resources.team.ResourceRuleFactory;
 import org.eclipse.core.runtime.Assert;
 import org.eclipse.core.runtime.CoreException;
 import org.eclipse.core.runtime.ListenerList;
+import org.eclipse.core.runtime.NullProgressMonitor;
 import org.eclipse.team.core.RepositoryProvider;
 import org.eclipse.team.core.history.IFileHistoryProvider;
 import org.eclipse.ui.IPropertyListener;
@@ -75,6 +80,17 @@ public class MercurialTeamProvider extends RepositoryProvider {
 		super();
 	}
 
+	public static SortedSet<HgRoot> getKnownHgRoots(){
+		SortedSet<HgRoot> roots = new TreeSet<HgRoot>();
+		Collection<HgRoot[]> values = HG_ROOTS.values();
+		for (HgRoot[] hgRoots : values) {
+			for (HgRoot hgRoot : hgRoots) {
+				roots.add(hgRoot);
+			}
+		}
+		return roots;
+	}
+
 	public static List<IProject> getKnownHgProjects(){
 		List<IProject> projects = new ArrayList<IProject>();
 		IProject[] iProjects = ResourcesPlugin.getWorkspace().getRoot().getProjects();
@@ -117,10 +133,15 @@ public class MercurialTeamProvider extends RepositoryProvider {
 		HgRoot hgRoot = getAndStoreHgRoot(project);
 		HG_ROOTS.put(project, new HgRoot[] { hgRoot });
 		// try to find .hg directory to set it as private member
-		IResource hgDir = project.findMember(".hg"); //$NON-NLS-1$
-		if (hgDir != null && hgDir.exists()) {
-			hgDir.setTeamPrivateMember(true);
-			hgDir.setDerived(true);
+		IResource hgDir = project.getFolder(".hg"); //$NON-NLS-1$
+		if (hgDir != null) {
+			if(!hgDir.exists()){
+				hgDir.refreshLocal(IResource.DEPTH_ZERO, new NullProgressMonitor());
+			}
+			if(hgDir.exists()) {
+				hgDir.setTeamPrivateMember(true);
+				hgDir.setDerived(true);
+			}
 		}
 		if(!MercurialStatusCache.getInstance().isStatusKnown(project)) {
 			new RefreshStatusJob("Initializing hg cache for: " + hgRoot.getName(),  hgRoot).schedule(200);
@@ -213,6 +234,9 @@ public class MercurialTeamProvider extends RepositoryProvider {
 	 *             if an error occurred (e.g. no root could be found)
 	 */
 	public static HgRoot getHgRoot(IResource resource) throws HgException {
+		if(resource == null || resource instanceof IWorkspaceRoot){
+			return null;
+		}
 		if(resource instanceof HgRootContainer){
 			HgRootContainer rootContainer = (HgRootContainer) resource;
 			return rootContainer.getHgRoot();
@@ -250,7 +274,7 @@ public class MercurialTeamProvider extends RepositoryProvider {
 	 * hg root can't be found
 	 */
 	public static HgRoot hasHgRoot(IResource resource) {
-		if(resource == null){
+		if(resource == null || resource instanceof IWorkspaceRoot){
 			return null;
 		}
 		IProject project = resource.getProject();

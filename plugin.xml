@@ -302,6 +302,9 @@
         <command id="com.vectrace.MercurialEclipse.menu.SyncHandler"
                  categoryId="com.vectrace.MercurialEclipse.commandCategory"
                  name="%synchronize"/>
+        <command id="com.vectrace.MercurialEclipse.menu.SyncHandler2"
+                 categoryId="com.vectrace.MercurialEclipse.commandCategory"
+                 name="%synchronizeWith"/>
         <command id="com.vectrace.MercurialEclipse.menu.RefreshStatusHandler"
                  categoryId="com.vectrace.MercurialEclipse.commandCategory"
                  name="%refreshStatus"/>
@@ -453,6 +456,14 @@
 
         <!-- SyncHandler -->
         <handler commandId="com.vectrace.MercurialEclipse.menu.SyncHandler"
+                 class="com.vectrace.MercurialEclipse.menu.SyncHandler">
+            <enabledWhen>
+                <and>
+                    <count value="+"/>
+                </and>
+            </enabledWhen>
+        </handler>
+        <handler commandId="com.vectrace.MercurialEclipse.menu.SyncHandler2"
                  class="com.vectrace.MercurialEclipse.menu.SyncHandler">
             <enabledWhen>
                 <and>
@@ -692,8 +703,24 @@
                         </and>
                     </visibleWhen>
                 </command>
+                
                 <command
                       commandId="com.vectrace.MercurialEclipse.menu.SyncHandler"
+                      icon="icons/actions/synch.gif">
+                   <visibleWhen>
+                      <and>
+                         <reference
+                               definitionId="com.vectrace.MercurialEclipse.def.mercurial">
+                         </reference>
+                         <reference
+                               definitionId="com.vectrace.MercurialEclipse.def.project">
+                         </reference>
+                      </and>
+                   </visibleWhen>
+                </command>
+                
+                <command
+                      commandId="com.vectrace.MercurialEclipse.menu.SyncHandler2"
                       icon="icons/actions/synch.gif">
                    <visibleWhen>
                       <and>
@@ -1021,6 +1048,15 @@
                enablesFor="1"
                id="com.vectrace.MercurialEclipse.team.ActionChangeLog">
            </action>
+           <action
+                 class="com.vectrace.MercurialEclipse.team.ActionAdd"
+                 definitionId="com.vectrace.MercurialEclipse.menu.AddHandler"
+                 enablesFor="+"
+                 icon="icons/add.gif"
+                 id="com.vectrace.MercurialEclipse.team.ActionAdd"
+                 label="%add"
+                 menubarPath="team.main/group5">
+           </action>
 
            <action
                label="%actionLabel.revert"
@@ -1037,15 +1073,6 @@
               icon="icons/actions/commit.gif"
               menubarPath="team.main/group1"
               label="%actionLabel.commit">
-           </action>
-           <action
-                 class="com.vectrace.MercurialEclipse.team.ActionAdd"
-                 definitionId="com.vectrace.MercurialEclipse.menu.AddHandler"
-                 enablesFor="+"
-                 icon="icons/add.gif"
-                 id="com.vectrace.MercurialEclipse.team.ActionAdd"
-                 label="%add"
-                 menubarPath="team.main/group1">
            </action>
       </objectContribution>
 
@@ -1447,7 +1474,7 @@
             icon="icons/mercury_Hg.png"
             id="com.vectrace.MercurialEclipse.repositoryProperties"
             name="Hg Repository"
-            objectClass="com.vectrace.MercurialEclipse.storage.HgRepositoryLocation">
+            objectClass="com.vectrace.MercurialEclipse.model.IHgRepositoryLocation">
       </page>
    </extension>
    

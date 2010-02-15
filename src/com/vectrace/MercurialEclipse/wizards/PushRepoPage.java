@@ -22,7 +22,8 @@ import com.vectrace.MercurialEclipse.MercurialEclipsePlugin;
 import com.vectrace.MercurialEclipse.commands.HgPathsClient;
 import com.vectrace.MercurialEclipse.exception.HgException;
 import com.vectrace.MercurialEclipse.model.HgRoot;
-import com.vectrace.MercurialEclipse.storage.HgRepositoryLocation;
+import com.vectrace.MercurialEclipse.model.IHgRepositoryLocation;
+import com.vectrace.MercurialEclipse.storage.HgRepositoryLocationManager;
 
 /**
  * @author bastian
@@ -56,7 +57,7 @@ public class PushRepoPage extends PushPullPage {
 					&& getUrlCombo().getText() != null) {
 				OutgoingPage outgoingPage = (OutgoingPage) getNextPage();
 				outgoingPage.setHgRoot(hgRoot);
-				HgRepositoryLocation loc = MercurialEclipsePlugin
+				IHgRepositoryLocation loc = MercurialEclipsePlugin
 						.getRepoManager().getRepoLocation(urlCombo.getText(),
 								getUserCombo().getText(),
 								getPasswordText()
@@ -75,15 +76,12 @@ public class PushRepoPage extends PushPullPage {
 	}
 
 	@Override
-	protected Set<HgRepositoryLocation> setDefaultLocation() {
-		Set<HgRepositoryLocation> repos = super.setDefaultLocation();
-		if (repos == null) {
-			return null;
-		}
-		HgRepositoryLocation defaultLocation = MercurialEclipsePlugin.getRepoManager()
-				.getDefaultRepoLocation(hgRoot);
+	protected IHgRepositoryLocation getRepoFromRoot(){
+		HgRepositoryLocationManager mgr = MercurialEclipsePlugin.getRepoManager();
+		IHgRepositoryLocation defaultLocation = mgr.getDefaultRepoLocation(getHgRoot());
+		Set<IHgRepositoryLocation> repos = mgr.getAllRepoLocations(getHgRoot());
 		if (defaultLocation == null) {
-			for (HgRepositoryLocation repo : repos) {
+			for (IHgRepositoryLocation repo : repos) {
 				if (HgPathsClient.DEFAULT_PUSH.equals(repo.getLogicalName())
 						|| HgPathsClient.DEFAULT.equals(repo.getLogicalName())) {
 					defaultLocation = repo;
@@ -91,20 +89,6 @@ public class PushRepoPage extends PushPullPage {
 				}
 			}
 		}
-
-		if (defaultLocation != null) {
-			getUrlCombo().setText(defaultLocation.getLocation());
-
-			String user = defaultLocation.getUser();
-			if (user != null && user.length() != 0) {
-				getUserCombo().setText(user);
-			}
-			String password = defaultLocation.getPassword();
-			if (password != null && password.length() != 0) {
-				getPasswordText().setText(password);
-			}
-		}
-		return repos;
+		return defaultLocation;
 	}
-
 }

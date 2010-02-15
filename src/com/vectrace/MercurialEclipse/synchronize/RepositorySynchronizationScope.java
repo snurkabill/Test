@@ -30,7 +30,7 @@ import org.eclipse.team.internal.core.mapping.AbstractResourceMappingScope;
 import org.eclipse.team.internal.ui.Utils;
 
 import com.vectrace.MercurialEclipse.MercurialEclipsePlugin;
-import com.vectrace.MercurialEclipse.storage.HgRepositoryLocation;
+import com.vectrace.MercurialEclipse.model.IHgRepositoryLocation;
 import com.vectrace.MercurialEclipse.synchronize.cs.HgChangeSetModelProvider;
 
 /**
@@ -38,17 +38,17 @@ import com.vectrace.MercurialEclipse.synchronize.cs.HgChangeSetModelProvider;
  */
 public class RepositorySynchronizationScope extends AbstractResourceMappingScope implements ISynchronizationScope {
 
-	private final IResource[] roots;
+	private final IProject[] roots;
 	private final ListenerList listeners;
-	private final HgRepositoryLocation repo;
+	private final IHgRepositoryLocation repo;
 	private MercurialSynchronizeSubscriber subscriber;
 
-	public RepositorySynchronizationScope(HgRepositoryLocation repo, IResource[] roots) {
+	public RepositorySynchronizationScope(IHgRepositoryLocation repo, IProject[] roots) {
 		Assert.isNotNull(repo);
 		this.repo = repo;
 		this.roots = roots != null ? roots :
 			MercurialEclipsePlugin.getRepoManager().getAllRepoLocationProjects(repo)
-				.toArray(new IResource[0]);
+				.toArray(new IProject[0]);
 		listeners = new ListenerList(ListenerList.IDENTITY);
 	}
 
@@ -136,14 +136,14 @@ public class RepositorySynchronizationScope extends AbstractResourceMappingScope
 
 	public IProject[] getProjects() {
 		Set<IProject> projects = new HashSet<IProject>();
-		for (IResource res : roots) {
-			projects.add(res.getProject());
+		for (IProject res : roots) {
+			projects.add(res);
 		}
 		return projects.toArray(new IProject[projects.size()]);
 	}
 
 	@Override
-	public IResource[] getRoots() {
+	public IProject[] getRoots() {
 		return roots;
 	}
 
@@ -189,7 +189,7 @@ public class RepositorySynchronizationScope extends AbstractResourceMappingScope
 		listeners.remove(listener);
 	}
 
-	public HgRepositoryLocation getRepositoryLocation() {
+	public IHgRepositoryLocation getRepositoryLocation() {
 		return repo;
 	}
 
