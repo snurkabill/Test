@@ -34,8 +34,11 @@ import org.eclipse.core.resources.team.IMoveDeleteHook;
 import org.eclipse.core.resources.team.ResourceRuleFactory;
 import org.eclipse.core.runtime.Assert;
 import org.eclipse.core.runtime.CoreException;
+import org.eclipse.core.runtime.IProgressMonitor;
+import org.eclipse.core.runtime.IStatus;
 import org.eclipse.core.runtime.ListenerList;
-import org.eclipse.core.runtime.NullProgressMonitor;
+import org.eclipse.core.runtime.Status;
+import org.eclipse.core.runtime.jobs.Job;
 import org.eclipse.team.core.RepositoryProvider;
 import org.eclipse.team.core.history.IFileHistoryProvider;
 import org.eclipse.ui.IPropertyListener;
@@ -85,7 +88,9 @@ public class MercurialTeamProvider extends RepositoryProvider {
 		Collection<HgRoot[]> values = HG_ROOTS.values();
 		for (HgRoot[] hgRoots : values) {
 			for (HgRoot hgRoot : hgRoots) {
-				roots.add(hgRoot);
+				if(hgRoot != null) {
+					roots.add(hgRoot);
+				}
 			}
 		}
 		return roots;
@@ -133,12 +138,26 @@ public class MercurialTeamProvider extends RepositoryProvider {
 		HgRoot hgRoot = getAndStoreHgRoot(project);
 		HG_ROOTS.put(project, new HgRoot[] { hgRoot });
 		// try to find .hg directory to set it as private member
-		IResource hgDir = project.getFolder(".hg"); //$NON-NLS-1$
+		final IResource hgDir = project.getFolder(".hg"); //$NON-NLS-1$
 		if (hgDir != null) {
 			if(!hgDir.exists()){
-				hgDir.refreshLocal(IResource.DEPTH_ZERO, new NullProgressMonitor());
-			}
-			if(hgDir.exists()) {
+				Job refreshJob = new Job("Refreshing .hg folder") {
+					@Override
+					protected IStatus run(IProgressMonitor monitor) {
+						try {
+							hgDir.refreshLocal(IResource.DEPTH_ZERO, monitor);
+							if(hgDir.exists()) {
+								hgDir.setTeamPrivateMember(true);
+								hgDir.setDerived(true);
+							}
+						} catch (CoreException e) {
+							MercurialEclipsePlugin.logError(e);
+						}
+						return Status.OK_STATUS;
+					}
+				};
+				refreshJob.schedule();
+			} else {
 				hgDir.setTeamPrivateMember(true);
 				hgDir.setDerived(true);
 			}
@@ -152,7 +171,7 @@ public class MercurialTeamProvider extends RepositoryProvider {
 		IProject project = getProject();
 		Assert.isNotNull(project);
 		// cleanup
-		HG_ROOTS.put(project, new HgRoot[]{null});
+		HG_ROOTS.put(project, new HgRoot[1]);
 		BRANCH_MAP.remove(project);
 //		project.setPersistentProperty(ResourceProperties.HG_ROOT, null);
 		project.setSessionProperty(ResourceProperties.HG_BRANCH, null);
