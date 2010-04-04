@@ -1,15 +1,16 @@
 /*******************************************************************************
- * Copyright (c) 2005-2008 VecTrace (Zingo Andersen) and others.
+ * Copyright (c) 2005-2010 VecTrace (Zingo Andersen) and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
  * http://www.eclipse.org/legal/epl-v10.html
  *
  * Contributors:
- * Bastian Doetsch	implementation (with lots of stuff pulled up from HgCommand)
+ *     Bastian Doetsch           - implementation (with lots of stuff pulled up from HgCommand)
  *     Andrei Loskutov (Intland) - bug fixes
- *     Adam Berkes (Intland) - bug fixes/restructure
- *     Zsolt Koppany (Intland) - enhancements
+ *     Adam Berkes (Intland)     - bug fixes/restructure
+ *     Zsolt Koppany (Intland)   - enhancements
+ *     Philip Graf               - use default timeout from preferences
  *******************************************************************************/
 package com.vectrace.MercurialEclipse.commands;
 
@@ -42,20 +43,34 @@ import org.eclipse.core.runtime.jobs.Job;
 import org.eclipse.swt.widgets.Display;
 import org.eclipse.ui.PlatformUI;
 
+import com.vectrace.MercurialEclipse.MercurialEclipsePlugin;
 import com.vectrace.MercurialEclipse.exception.HgCoreException;
 import com.vectrace.MercurialEclipse.exception.HgException;
 import com.vectrace.MercurialEclipse.model.HgRoot;
+import com.vectrace.MercurialEclipse.preferences.MercurialPreferenceConstants;
 
 /**
  * @author bastian
  */
 public abstract class AbstractShellCommand extends AbstractClient {
 
-	public static final int DEFAULT_TIMEOUT = 360000;
-
 	private static final int BUFFER_SIZE = 32768;
 
-	public static final int MAX_PARAMS = 120;
+	/**
+	 * See http://msdn.microsoft.com/en-us/library/ms682425(VS.85).aspx The maximum command line
+	 * length for the CreateProcess function is 32767 characters. This limitation comes from the
+	 * UNICODE_STRING structure.
+	 * <p>
+	 * See also http://support.microsoft.com/kb/830473: On computers running Microsoft Windows XP or
+	 * later, the maximum length of the string that you can use at the command prompt is 8191
+	 * characters. On computers running Microsoft Windows 2000 or Windows NT 4.0, the maximum length
+	 * of the string that you can use at the command prompt is 2047 characters.
+	 * <p>
+	 * So here we simply allow maximal 100 file paths to be used in one command. Why 100? Why not?
+	 * TODO The right way would be to construct the command and then check if the full command line
+	 * size is >= 32767.
+	 */
+	public static final int MAX_PARAMS = 100;
 
 	static {
 		// see bug https://bugs.eclipse.org/bugs/show_bug.cgi?id=298795
@@ -220,6 +235,7 @@ public abstract class AbstractShellCommand extends AbstractClient {
 	private ProzessWrapper processWrapper;
 	private boolean showOnConsole;
 	private final boolean debugMode;
+	private final boolean isDebugging;
 	private final boolean debugExecTime;
 
 	private HgRoot hgRoot;
@@ -231,8 +247,10 @@ public abstract class AbstractShellCommand extends AbstractClient {
 		options = new ArrayList<String>();
 		files = new ArrayList<String>();
 		showOnConsole = true;
+		isDebugging = MercurialEclipsePlugin.getDefault().isDebugging();
 		debugMode = Boolean.valueOf(HgClients.getPreference(PREF_CONSOLE_DEBUG, "false")).booleanValue(); //$NON-NLS-1$
 		debugExecTime = Boolean.valueOf(HgClients.getPreference(PREF_CONSOLE_DEBUG_TIME, "false")).booleanValue(); //$NON-NLS-1$
+		timeoutConstant = MercurialPreferenceConstants.DEFAULT_TIMEOUT;
 	}
 
 	protected AbstractShellCommand(List<String> commands, File workingDir, boolean escapeFiles) {
@@ -264,10 +282,11 @@ public abstract class AbstractShellCommand extends AbstractClient {
 	}
 
 	public byte[] executeToBytes() throws HgException {
-		int timeout = DEFAULT_TIMEOUT;
-		if (timeoutConstant != null) {
-			timeout = HgClients.getTimeOut(timeoutConstant);
+		int timeout;
+		if (timeoutConstant == null) {
+			timeoutConstant = MercurialPreferenceConstants.DEFAULT_TIMEOUT;
 		}
+		timeout = HgClients.getTimeOut(timeoutConstant);
 		return executeToBytes(timeout);
 	}
 
@@ -370,7 +389,7 @@ public abstract class AbstractShellCommand extends AbstractClient {
 		env.put("LANGUAGE", "C"); //$NON-NLS-1$ //$NON-NLS-2$
 
 		// HGPLAIN normalizes output in Mercurial 1.5+
-		env.put("HGPLAIN","set by MercurialEclipse"); //$NON-NLS-1$ //$NON-NLS-2$
+		env.put("HGPLAIN", "set by MercurialEclipse"); //$NON-NLS-1$ //$NON-NLS-2$
 		Charset charset = setupEncoding(cmd);
 		if (charset != null) {
 			env.put("HGENCODING", charset.name()); //$NON-NLS-1$
@@ -430,18 +449,21 @@ public abstract class AbstractShellCommand extends AbstractClient {
 	}
 
 	protected void logConsoleCommandInvoked(final String commandInvoked) {
+		if(isDebugging){
+			System.out.println(commandInvoked);
+		}
 		if (showOnConsole) {
 			getConsole().commandInvoked(commandInvoked);
 		}
 	}
 
-	protected void logConsoleMessage(final String msg, final Throwable t) {
-		if (showOnConsole) {
-			getConsole().printMessage(msg, t);
-		}
-	}
-
 	private void logConsoleCompleted(final long timeInMillis, final String msg, final int exitCode, final HgException hgex) {
+		if(isDebugging){
+			System.out.println(msg);
+			if(hgex != null){
+				hgex.printStackTrace();
+			}
+		}
 		if (showOnConsole) {
 			getConsole().commandCompleted(exitCode, timeInMillis, msg, hgex);
 		}
@@ -492,7 +514,20 @@ public abstract class AbstractShellCommand extends AbstractClient {
 		return ""; //$NON-NLS-1$
 	}
 
-	public boolean executeToFile(File file, int timeout, boolean expectPositiveReturnValue) throws HgException {
+	/**
+	 * Executes a command and writes its output to a file.
+	 *
+	 * @param file
+	 *            The file to which the output is written.
+	 * @param expectPositiveReturnValue
+	 *            If set to {@code true}, an {@code HgException} will be thrown if the command's
+	 *            exit code is not zero.
+	 * @return Returns {@code true} iff the command was executed successfully.
+	 * @throws HgException
+	 *             Thrown when the command could not be executed successfully.
+	 */
+	public boolean executeToFile(File file, boolean expectPositiveReturnValue) throws HgException {
+		int timeout = HgClients.getTimeOut(MercurialPreferenceConstants.DEFAULT_TIMEOUT);
 		FileOutputStream fos = null;
 		try {
 			fos = new FileOutputStream(file, false);

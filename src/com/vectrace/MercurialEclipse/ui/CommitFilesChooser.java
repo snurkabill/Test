@@ -289,8 +289,7 @@ public class CommitFilesChooser extends Composite {
 				@Override
 				protected int doCompare(Viewer v, Object e1, Object e2) {
 					StructuredViewer v1 = (StructuredViewer) v;
-					ITableLabelProvider lp = ((ITableLabelProvider) v1
-							.getLabelProvider());
+					ITableLabelProvider lp = (ITableLabelProvider) v1.getLabelProvider();
 					String t1 = lp.getColumnText(e1, colIdx);
 					String t2 = lp.getColumnText(e2, colIdx);
 					if (t1 != null) {
@@ -446,7 +445,7 @@ public class CommitFilesChooser extends Composite {
 					selectedFile);
 			ResourceNode right = new RevisionNode(iStorage);
 			ResourceNode left = new ResourceNode(selectedFile);
-			CompareUtils.openEditor(left, right, true, false);
+			CompareUtils.openEditor(left, right, true, false, null);
 		}
 	}
 }

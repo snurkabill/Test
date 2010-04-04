@@ -47,6 +47,7 @@ import com.vectrace.MercurialEclipse.model.HgRoot;
 import com.vectrace.MercurialEclipse.model.IHgRepositoryLocation;
 import com.vectrace.MercurialEclipse.preferences.MercurialPreferenceConstants;
 import com.vectrace.MercurialEclipse.team.MercurialUtilities;
+import com.vectrace.MercurialEclipse.utils.StringUtils;
 
 /**
  * A manager for all Mercurial commit messages. The commit messages are save to a xml file when
@@ -63,11 +64,11 @@ public class HgCommitMessageManager {
 	/**
 	 * Prefix for the pref store for the hg root default commit name
 	 */
-	public final static String KEY_PREFIX_COMMIT_NAME = "commitName_"; //$NON-NLS-1$
+	public static final String KEY_PREFIX_COMMIT_NAME = "commitName_"; //$NON-NLS-1$
 
-	private final static String COMMIT_MESSAGE_FILE = "commit_messages.xml"; //$NON-NLS-1$
-	private final static String XML_TAG_COMMIT_MESSAGE = "commitmessage"; //$NON-NLS-1$
-	private final static String XML_TAG_COMMIT_MESSAGES = "commitmessages"; //$NON-NLS-1$
+	private static final String COMMIT_MESSAGE_FILE = "commit_messages.xml"; //$NON-NLS-1$
+	private static final String XML_TAG_COMMIT_MESSAGE = "commitmessage"; //$NON-NLS-1$
+	private static final String XML_TAG_COMMIT_MESSAGES = "commitmessages"; //$NON-NLS-1$
 
 	private final XmlHandler xmlHandler;
 
@@ -94,10 +95,10 @@ public class HgCommitMessageManager {
 	 * Make sure we don't have more commit messages than are allowed in the plugin prefs.
 	 */
 	private void restrictSavedCommitMessages() {
-		int prefs_commit_message_size_max = Integer.parseInt(MercurialUtilities.getPreference(
+		final int prefsCommitMessageSizeMax = Integer.parseInt(MercurialUtilities.getPreference(
 				MercurialPreferenceConstants.COMMIT_MESSAGE_BATCH_SIZE, "10")); //$NON-NLS-1$
 
-		while (commitMessages.size() > prefs_commit_message_size_max) {
+		while (commitMessages.size() > prefsCommitMessageSizeMax) {
 			commitMessages.remove(commitMessages.size() - 1);
 		}
 	}
@@ -193,12 +194,12 @@ public class HgCommitMessageManager {
 
 			int size = commitMessages.size();
 
-			int prefs_commit_message_size_max = Integer.parseInt(MercurialUtilities.getPreference(
+			final int prefsCommitMessageSizeMax = Integer.parseInt(MercurialUtilities.getPreference(
 					MercurialPreferenceConstants.COMMIT_MESSAGE_BATCH_SIZE, "10")); //$NON-NLS-1$
 
 			/* Do not save more then the prefs size */
-			if (size > prefs_commit_message_size_max) {
-				size = prefs_commit_message_size_max;
+			if (size > prefsCommitMessageSizeMax) {
+				size = prefsCommitMessageSizeMax;
 			}
 
 			for (int i = 0; i < size; i++) {
@@ -231,18 +232,21 @@ public class HgCommitMessageManager {
 		// first the stored commit name
 		IPreferenceStore store = MercurialEclipsePlugin.getDefault().getPreferenceStore();
 		String commitName = store.getString(getKey(hgRoot));
-		if (commitName != null && commitName.length() != 0) {
+		if (!StringUtils.isEmpty(commitName)) {
 			return commitName;
 		}
 
-		String defaultUserName = MercurialUtilities.getDefaultUserName();
+		String defaultUserName = hgRoot.getUser();
+		if(StringUtils.isEmpty(defaultUserName)){
+			defaultUserName = MercurialUtilities.getDefaultUserName();
+		}
 
 		/*
 		 * dependent on the preference, use configured Mercurial name or repository
 		 * username (in some corporate environments this seems to be necessary)
 		 */
-		if (MercurialUtilities.getPreference(
-				MercurialPreferenceConstants.PREF_USE_MERCURIAL_USERNAME, "true").equals("true")) {
+		if ("true".equals(MercurialUtilities.getPreference(
+				MercurialPreferenceConstants.PREF_USE_MERCURIAL_USERNAME, "true"))) {
 			return defaultUserName;
 		}
 
@@ -250,7 +254,7 @@ public class HgCommitMessageManager {
 				.getDefaultRepoLocation(hgRoot);
 		if (repoLocation != null) {
 			String user = repoLocation.getUser();
-			if (user != null && user.trim().length() > 0) {
+			if (!StringUtils.isEmpty(user)) {
 				return user;
 			}
 		}
@@ -269,7 +273,7 @@ public class HgCommitMessageManager {
 	/**
 	 * SAX Handler methods class to handle XML parsing
 	 */
-	private static class XmlHandler extends DefaultHandler {
+	private static final class XmlHandler extends DefaultHandler {
 
 		private final HgCommitMessageManager mgr;
 		private String tmpMessage;

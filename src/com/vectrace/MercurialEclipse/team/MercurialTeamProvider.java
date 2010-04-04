@@ -55,6 +55,7 @@ import com.vectrace.MercurialEclipse.history.MercurialHistoryProvider;
 import com.vectrace.MercurialEclipse.model.Branch;
 import com.vectrace.MercurialEclipse.model.HgRoot;
 import com.vectrace.MercurialEclipse.model.HgRootContainer;
+import com.vectrace.MercurialEclipse.team.cache.HgRootRule;
 import com.vectrace.MercurialEclipse.team.cache.MercurialStatusCache;
 import com.vectrace.MercurialEclipse.team.cache.RefreshStatusJob;
 import com.vectrace.MercurialEclipse.utils.ResourceUtils;
@@ -75,9 +76,9 @@ public class MercurialTeamProvider extends RepositoryProvider {
 	/** key is hg root, value is the *current* branch */
 	private static final Map<HgRoot, String> BRANCH_MAP = new ConcurrentHashMap<HgRoot, String>();
 
-	private MercurialHistoryProvider FileHistoryProvider;
+	private MercurialHistoryProvider fileHistoryProvider;
 
-	private static final ListenerList branchListeners = new ListenerList(ListenerList.IDENTITY);
+	private static final ListenerList BRANCH_LISTENERS = new ListenerList(ListenerList.IDENTITY);
 
 	/** @see #getRuleFactory() */
 	private IResourceRuleFactory resourceRuleFactory;
@@ -143,33 +144,66 @@ public class MercurialTeamProvider extends RepositoryProvider {
 		// try to find .hg directory to set it as private member
 		final IResource hgDir = project.getFolder(".hg"); //$NON-NLS-1$
 		if (hgDir != null) {
-			if(!hgDir.exists()){
-				Job refreshJob = new Job("Refreshing .hg folder") {
-					@Override
-					protected IStatus run(IProgressMonitor monitor) {
-						try {
-							hgDir.refreshLocal(IResource.DEPTH_ZERO, monitor);
-							if(hgDir.exists()) {
-								hgDir.setTeamPrivateMember(true);
-								hgDir.setDerived(true);
-							}
-						} catch (CoreException e) {
-							MercurialEclipsePlugin.logError(e);
-						}
-						return Status.OK_STATUS;
-					}
-				};
-				refreshJob.schedule();
-			} else {
-				hgDir.setTeamPrivateMember(true);
-				hgDir.setDerived(true);
-			}
+			setTeamPrivate(hgDir);
 		}
 		if(!MercurialStatusCache.getInstance().isStatusKnown(project)) {
 			new RefreshStatusJob("Initializing hg cache for: " + hgRoot.getName(), hgRoot).schedule(100);
 		}
+		if(MercurialEclipsePlugin.getRepoManager().getAllRepoLocations(hgRoot).isEmpty()){
+			loadRootRepos(hgRoot);
+		}
 	}
 
+	private void setTeamPrivate(final IResource hgDir) throws CoreException {
+		if(!hgDir.exists()){
+			Job refreshJob = new Job("Refreshing .hg folder") {
+				@Override
+				protected IStatus run(IProgressMonitor monitor) {
+					try {
+						hgDir.refreshLocal(IResource.DEPTH_ZERO, monitor);
+						if(hgDir.exists()) {
+							hgDir.setTeamPrivateMember(true);
+							hgDir.setDerived(true);
+						}
+					} catch (CoreException e) {
+						MercurialEclipsePlugin.logError(e);
+					}
+					return Status.OK_STATUS;
+				}
+			};
+			refreshJob.schedule();
+		} else {
+			hgDir.setTeamPrivateMember(true);
+			hgDir.setDerived(true);
+		}
+	}
+
+	/**
+	 * @param hgRoot non null
+	 */
+	private void loadRootRepos(final HgRoot hgRoot) {
+		Job job = new Job("Reading root repositories") {
+			@Override
+			protected IStatus run(IProgressMonitor monitor) {
+				try {
+					MercurialEclipsePlugin.getRepoManager().loadRepos(hgRoot);
+				} catch (HgException e) {
+					MercurialEclipsePlugin.logError(e);
+					return e.getStatus();
+				}
+				return Status.OK_STATUS;
+			}
+
+			@Override
+			public boolean shouldSchedule() {
+				return MercurialEclipsePlugin.getRepoManager().getAllRepoLocations(hgRoot)
+				.isEmpty();
+			}
+		};
+		job.setSystem(true);
+		job.setRule(new HgRootRule(hgRoot));
+		job.schedule(100);
+	}
 	public void deconfigure() throws CoreException {
 		IProject project = getProject();
 		Assert.isNotNull(project);
@@ -194,11 +228,11 @@ public class MercurialTeamProvider extends RepositoryProvider {
 	}
 
 	public static void addBranchListener(IPropertyListener listener){
-		branchListeners.add(listener);
+		BRANCH_LISTENERS.add(listener);
 	}
 
 	public static void removeBranchListener(IPropertyListener listener){
-		branchListeners.remove(listener);
+		BRANCH_LISTENERS.remove(listener);
 	}
 
 	/**
@@ -207,7 +241,7 @@ public class MercurialTeamProvider extends RepositoryProvider {
 	 *
 	 * @param resource
 	 *            the resource to get the hg root for, not null
-	 * @return the canonical file path of the hg root
+	 * @return the canonical file path of the hg root, never null
 	 * @throws HgException
 	 */
 	private static HgRoot getAndStoreHgRoot(IResource resource) throws HgException {
@@ -275,7 +309,7 @@ public class MercurialTeamProvider extends RepositoryProvider {
 				return contains(rule);
 			}
 			public boolean contains(ISchedulingRule rule) {
-				return rule instanceof CharsetRule && cs.equals(((CharsetRule)rule).cs);
+				return rule instanceof CharsetRule && cs.equals(((CharsetRule) rule).cs);
 			}
 		}
 		job.setRule(new CharsetRule(defaultCharset));
@@ -423,7 +457,7 @@ public class MercurialTeamProvider extends RepositoryProvider {
 			BRANCH_MAP.remove(hgRoot);
 		}
 		if(branch != null && !Branch.same(branch, oldBranch)){
-			Object[] listeners = branchListeners.getListeners();
+			Object[] listeners = BRANCH_LISTENERS.getListeners();
 			for (int i = 0; i < listeners.length; i++) {
 				IPropertyListener listener = (IPropertyListener) listeners[i];
 				listener.propertyChanged(hgRoot, 0);
@@ -443,10 +477,10 @@ public class MercurialTeamProvider extends RepositoryProvider {
 
 	@Override
 	public IFileHistoryProvider getFileHistoryProvider() {
-		if (FileHistoryProvider == null) {
-			FileHistoryProvider = new MercurialHistoryProvider();
+		if (fileHistoryProvider == null) {
+			fileHistoryProvider = new MercurialHistoryProvider();
 		}
-		return FileHistoryProvider;
+		return fileHistoryProvider;
 	}
 
 	@Override

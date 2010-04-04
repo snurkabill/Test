@@ -189,7 +189,7 @@ public class HgProjectPropertyPage extends PropertyPage {
 		int idx = -1;
 		int defIndex = idx;
 		for (final IHgRepositoryLocation repo : allRepos) {
-			idx ++;
+			idx++;
 			allReposCombo.add(repo.getLocation());
 			if(defLoc != null && defLoc.equals(repo)){
 				defIndex = idx;
@@ -216,7 +216,8 @@ public class HgProjectPropertyPage extends PropertyPage {
 			mgr.setDefaultRepository(hgRoot, data);
 		}
 		String commitName = commitText.getText().trim();
-		if(commitName.length() != 0) {
+		String defaultCommitName = HgCommitMessageManager.getDefaultCommitName(hgRoot);
+		if(!defaultCommitName.equals(commitName)) {
 			HgCommitMessageManager.setDefaultCommitName(hgRoot, commitName);
 		}
 		return super.performOk();
