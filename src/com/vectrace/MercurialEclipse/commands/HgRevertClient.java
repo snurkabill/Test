@@ -20,6 +20,7 @@ import com.vectrace.MercurialEclipse.model.ChangeSet;
 import com.vectrace.MercurialEclipse.model.HgRoot;
 import com.vectrace.MercurialEclipse.preferences.MercurialPreferenceConstants;
 import com.vectrace.MercurialEclipse.team.Messages;
+import com.vectrace.MercurialEclipse.team.cache.MercurialStatusCache;
 
 /**
  * @author Andrei
@@ -52,5 +53,20 @@ public class HgRevertClient extends AbstractClient {
 			command.executeToString();
 		}
 		monitor.worked(1);
+
+		MercurialStatusCache.getInstance().setMergeViewDialogShown(false);
+	}
+
+	public static void performRevertAll(IProgressMonitor monitor, HgRoot hgRoot) throws HgException {
+		monitor.subTask(Messages.getString("ActionRevert.reverting") + " " + hgRoot.getName() + "..."); //$NON-NLS-1$ //$NON-NLS-2$
+
+		HgCommand command = new HgCommand("revert", hgRoot, true); //$NON-NLS-1$
+		command.setExecutionRule(new AbstractShellCommand.ExclusiveExecutionRule(hgRoot));
+		command.setUsePreferenceTimeout(MercurialPreferenceConstants.COMMIT_TIMEOUT);
+		command.addOptions("--all");
+		command.addOptions("--no-backup");
+		command.executeToString();
+
+		MercurialStatusCache.getInstance().setMergeViewDialogShown(false);
 	}
 }

@@ -13,7 +13,9 @@ import java.lang.reflect.InvocationTargetException;
 
 import org.eclipse.compare.CompareConfiguration;
 import org.eclipse.compare.CompareEditorInput;
+import org.eclipse.compare.CompareNavigator;
 import org.eclipse.compare.ICompareNavigator;
+import org.eclipse.compare.INavigatable;
 import org.eclipse.compare.ResourceNode;
 import org.eclipse.compare.structuremergeviewer.Differencer;
 import org.eclipse.core.resources.IFile;
@@ -31,6 +33,7 @@ import com.vectrace.MercurialEclipse.commands.HgParentClient;
 import com.vectrace.MercurialEclipse.exception.HgException;
 import com.vectrace.MercurialEclipse.model.ChangeSet;
 import com.vectrace.MercurialEclipse.model.FileFromChangeSet;
+import com.vectrace.MercurialEclipse.synchronize.cs.ChangesetGroup;
 import com.vectrace.MercurialEclipse.team.MercurialRevisionStorage;
 import com.vectrace.MercurialEclipse.team.MercurialTeamProvider;
 
@@ -60,10 +63,10 @@ public class HgCompareEditorInput extends CompareEditorInput {
 		this.ancestor = findParentNodeIfExists(resource, left, right);
 		this.right = right;
 		setTitle(resource.getName());
-		configuration.setLeftLabel(left.getName());
+		configuration.setLeftLabel(getLabel(left));
 		// if left isn't a RevisionNode, then it must be the one on the filesystem
 		configuration.setLeftEditable(!(left instanceof RevisionNode));
-		configuration.setRightLabel(right.getName());
+		configuration.setRightLabel(getLabel(right));
 		configuration.setRightEditable(false);
 	}
 
@@ -128,13 +131,20 @@ public class HgCompareEditorInput extends CompareEditorInput {
 		this.right = right;
 		this.resource = leftResource;
 		setTitle(left.getName());
-		configuration.setLeftLabel(left.getName());
+		configuration.setLeftLabel(getLabel(left));
 		configuration.setLeftEditable(localEditable);
 		if(ancestor != null) {
-			configuration.setAncestorLabel(ancestor.getName());
+			configuration.setAncestorLabel(getLabel(ancestor));
 		}
-		configuration.setRightLabel(right.getName());
+		configuration.setRightLabel(getLabel(right));
 		configuration.setRightEditable(false);
+	}
+
+	private static String getLabel(ResourceNode node) {
+		if (node instanceof RevisionNode) {
+			return ((RevisionNode) node).getLabel();
+		}
+		return node.getName();
 	}
 
 	@Override
@@ -180,26 +190,28 @@ public class HgCompareEditorInput extends CompareEditorInput {
 	 */
 	@Override
 	public synchronized ICompareNavigator getNavigator() {
-		ICompareNavigator navigator = super.getNavigator();
-		if (syncConfig != null && isSelectedInSynchronizeView()) {
-			ICompareNavigator nav = (ICompareNavigator) syncConfig
-					.getProperty(SynchronizePageConfiguration.P_NAVIGATOR);
+		CompareNavigator navigator = (CompareNavigator) super.getNavigator();
+		if (syncConfig != null) {
+			CompareNavigator nav = (CompareNavigator) syncConfig.getProperty(
+					SynchronizePageConfiguration.P_NAVIGATOR);
+
 			return new SyncNavigatorWrapper(navigator, nav);
 		}
 		return navigator;
 	}
 
-	private class SyncNavigatorWrapper implements ICompareNavigator {
+	private class SyncNavigatorWrapper extends CompareNavigator {
 
-		private final ICompareNavigator textDfiffDelegate;
-		private final ICompareNavigator syncViewDelegate;
+		private final CompareNavigator textDfiffDelegate;
+		private final CompareNavigator syncViewDelegate;
 
-		public SyncNavigatorWrapper(ICompareNavigator textDfiffDelegate,
-				ICompareNavigator syncViewDelegate) {
+		public SyncNavigatorWrapper(CompareNavigator textDfiffDelegate,
+				CompareNavigator syncViewDelegate) {
 			this.textDfiffDelegate = textDfiffDelegate;
 			this.syncViewDelegate = syncViewDelegate;
 		}
 
+		@Override
 		public boolean selectChange(boolean next) {
 			boolean endReached = textDfiffDelegate.selectChange(next);
 			if(endReached && syncViewDelegate != null && isSelectedInSynchronizeView()){
@@ -209,6 +221,16 @@ public class HgCompareEditorInput extends CompareEditorInput {
 			return endReached;
 		}
 
+		@Override
+		// This method won't be used by our implementation
+		protected INavigatable[] getNavigatables() {
+			return new INavigatable[0];
+		}
+
+		@Override
+		public boolean hasChange(boolean next) {
+			return (textDfiffDelegate.hasChange(next) || syncViewDelegate.hasChange(next));
+		}
 	}
 
 	private boolean isSelectedInSynchronizeView() {
@@ -221,9 +243,9 @@ public class HgCompareEditorInput extends CompareEditorInput {
 		}
 		IStructuredSelection ss = (IStructuredSelection) s;
 		Object element = ss.getFirstElement();
-		if (element instanceof FileFromChangeSet) {
-			FileFromChangeSet sime = (FileFromChangeSet) element;
-			return resource.equals(sime.getFile());
+		if (element instanceof FileFromChangeSet
+				|| element instanceof ChangesetGroup) {
+			return true;
 		}
 		return false;
 	}
@@ -274,6 +296,8 @@ public class HgCompareEditorInput extends CompareEditorInput {
 		}
 		return true;
 	}
+
+
 
 
 }

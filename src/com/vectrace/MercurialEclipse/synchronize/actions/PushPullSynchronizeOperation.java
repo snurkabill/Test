@@ -194,13 +194,13 @@ public class PushPullSynchronizeOperation extends SynchronizeModelOperation {
 					boolean rebase = false;
 					boolean force = false;
 					boolean timeout = true;
-					HgPushPullClient.pull(hgRoot, changeSet, location, update, rebase, force, timeout);
+					HgPushPullClient.pull(hgRoot, changeSet, location, update, rebase, force, timeout, false);
 					// pull client does the refresh automatically, no extra job required here
 				} else {
 					HgPushPullClient.push(hgRoot, location, false, changeSet.getChangeset(), Integer.MAX_VALUE);
 					new RefreshRootJob(hgRoot, RefreshRootJob.OUTGOING).schedule();
 				}
-			} catch (HgException ex) {
+			} catch (final HgException ex) {
 				MercurialEclipsePlugin.logError(ex);
 				if(!isPull){
 					// try to recover: open the default dialog, where user can change some
@@ -208,7 +208,12 @@ public class PushPullSynchronizeOperation extends SynchronizeModelOperation {
 					MercurialEclipsePlugin.getStandardDisplay().asyncExec(new Runnable() {
 						public void run() {
 							try {
-								new PushHandler().run(hgRoot);
+								PushHandler handler = new PushHandler();
+
+								handler.setInitialMessage(Messages
+										.getString("PushPullSynchronizeOperation.PushFailed")
+										+ ex.getConciseMessage());
+								handler.run(hgRoot);
 							} catch (Exception e) {
 								MercurialEclipsePlugin.logError(e);
 							}

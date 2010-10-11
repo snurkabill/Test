@@ -30,6 +30,8 @@ import com.vectrace.MercurialEclipse.views.MergeView;
 
 /**
  * @author bastian
+ *
+ * The operation doesn't fail if a rebase conflict occurs.
  */
 public class RebaseOperation extends HgOperation {
 
@@ -40,11 +42,19 @@ public class RebaseOperation extends HgOperation {
 	private final boolean collapse;
 	private final boolean abort;
 	private final boolean cont;
-	private final boolean keepBranches;
+	private boolean keepBranches;
+	private boolean keep;
+	private final String user;
 
 	public RebaseOperation(IRunnableContext context, HgRoot hgRoot,
 			int sourceRev, int destRev, int baseRev, boolean collapse,
-			boolean abort, boolean cont, boolean keepBranches) {
+			boolean abort, boolean cont) {
+		this(context, hgRoot, sourceRev, destRev, baseRev, collapse, abort, cont, false, null);
+	}
+
+	protected RebaseOperation(IRunnableContext context, HgRoot hgRoot,
+			int sourceRev, int destRev, int baseRev, boolean collapse,
+			boolean abort, boolean cont, boolean keepBranches, String user) {
 		super(context);
 		this.hgRoot = hgRoot;
 		this.sourceRev = sourceRev;
@@ -54,13 +64,22 @@ public class RebaseOperation extends HgOperation {
 		this.abort = abort;
 		this.cont = cont;
 		this.keepBranches = keepBranches;
+		this.user = user;
+	}
+
+	public void setKeep(boolean keep) {
+		this.keep = keep;
+	}
+
+	public void setKeepBranches(boolean keepBranches) {
+		this.keepBranches = keepBranches;
 	}
 
 	@Override
 	public void run(IProgressMonitor monitor) throws InvocationTargetException,
 			InterruptedException {
 		monitor.beginTask(getActionDescription(), 2);
-		HgException ex = null;
+		boolean rebaseConflict = false;
 		try {
 			monitor.worked(1);
 			monitor.subTask(Messages.getString("RebaseOperation.calling")); //$NON-NLS-1$
@@ -68,19 +87,24 @@ public class RebaseOperation extends HgOperation {
 				.getBoolean(MercurialPreferenceConstants.PREF_USE_EXTERNAL_MERGE);
 			result = HgRebaseClient.rebase(hgRoot,
 					sourceRev,
-					baseRev, destRev, collapse, cont, abort, keepBranches, useExternalMergeTool);
+					baseRev, destRev, collapse, cont, abort, keepBranches, keep, useExternalMergeTool, user);
 			monitor.worked(1);
 
 		} catch (HgException e) {
-			ex = e;
-			throw new InvocationTargetException(e, e.getLocalizedMessage());
+			rebaseConflict = HgRebaseClient.isRebaseConflict(e);
+
+			if(rebaseConflict) {
+				result = e.getMessage();
+			} else {
+				throw new InvocationTargetException(e, e.getLocalizedMessage());
+			}
 		} finally {
 			RefreshWorkspaceStatusJob job = new RefreshWorkspaceStatusJob(hgRoot,
 					RefreshRootJob.ALL);
 			job.schedule();
 			job.join();
 			monitor.done();
-			if(ex != null) {
+			if(rebaseConflict) {
 				showMergeView();
 			}
 		}
@@ -96,8 +120,7 @@ public class RebaseOperation extends HgOperation {
 				try {
 					view = (MergeView) MercurialEclipsePlugin.getActivePage()
 							.showView(MergeView.ID);
-					view.clearView();
-					view.setCurrentRoot(hgRoot);
+					view.refresh(hgRoot);
 				} catch (PartInitException e1) {
 					MercurialEclipsePlugin.logError(e1);
 				}
@@ -111,4 +134,19 @@ public class RebaseOperation extends HgOperation {
 		return Messages.getString("RebaseOperation.rebasing"); //$NON-NLS-1$
 	}
 
+	/**
+	 * Factory method to create a continue rebase operation
+	 */
+	public static RebaseOperation createContinue(IRunnableContext context, HgRoot root, String user)
+	{
+		return new RebaseOperation(context, root, -1, -1, -1, false, false, true, false, user);
+	}
+
+	/**
+	 * Factory method to create a abort rebase operation
+	 */
+	public static RebaseOperation createAbort(IRunnableContext context, HgRoot root)
+	{
+		return new RebaseOperation(context, root, -1, -1, -1, false, true, false);
+	}
 }

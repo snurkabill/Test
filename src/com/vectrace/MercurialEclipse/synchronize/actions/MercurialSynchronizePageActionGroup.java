@@ -10,8 +10,11 @@
  *     Andrei Loskutov (Intland) - bug fixes
  *     Zsolt Koppany (Intland)
  *     Adam Berkes (Intland) - modifications
+ *     Ilya Ivanov (Intland) - modifications
  ******************************************************************************/
 package com.vectrace.MercurialEclipse.synchronize.actions;
+
+import java.util.ArrayList;
 
 import org.eclipse.jface.action.Action;
 import org.eclipse.jface.action.ActionContributionItem;
@@ -19,9 +22,15 @@ import org.eclipse.jface.action.IAction;
 import org.eclipse.jface.action.IContributionItem;
 import org.eclipse.jface.action.IMenuManager;
 import org.eclipse.jface.action.IToolBarManager;
+import org.eclipse.jface.action.MenuManager;
 import org.eclipse.jface.action.Separator;
+import org.eclipse.jface.preference.IPreferenceStore;
+import org.eclipse.jface.util.IPropertyChangeListener;
+import org.eclipse.jface.util.PropertyChangeEvent;
 import org.eclipse.jface.viewers.AbstractTreeViewer;
+import org.eclipse.jface.viewers.ISelection;
 import org.eclipse.jface.viewers.IStructuredSelection;
+import org.eclipse.jface.viewers.StructuredSelection;
 import org.eclipse.jface.viewers.Viewer;
 import org.eclipse.team.internal.ui.synchronize.SynchronizePageConfiguration;
 import org.eclipse.team.internal.ui.synchronize.actions.OpenInCompareAction;
@@ -30,17 +39,28 @@ import org.eclipse.team.ui.synchronize.ModelSynchronizeParticipantActionGroup;
 import org.eclipse.ui.IActionBars;
 
 import com.vectrace.MercurialEclipse.MercurialEclipsePlugin;
+import com.vectrace.MercurialEclipse.model.ChangeSet;
+import com.vectrace.MercurialEclipse.model.FileFromChangeSet;
+import com.vectrace.MercurialEclipse.model.HgRoot;
+import com.vectrace.MercurialEclipse.model.WorkingChangeSet;
+import com.vectrace.MercurialEclipse.model.ChangeSet.Direction;
+import com.vectrace.MercurialEclipse.synchronize.Messages;
+import com.vectrace.MercurialEclipse.synchronize.PresentationMode;
+import com.vectrace.MercurialEclipse.synchronize.cs.ChangesetGroup;
+import com.vectrace.MercurialEclipse.synchronize.cs.HgChangeSetActionProvider;
 
 @SuppressWarnings("restriction")
 public class MercurialSynchronizePageActionGroup extends ModelSynchronizeParticipantActionGroup {
-
 	private static final String HG_COMMIT_GROUP = "hg.commit";
+	private static final String HG_PUSH_PULL_GROUP = "hg.push.pull";
+
 	// see org.eclipse.ui.IWorkbenchCommandConstants.EDIT_DELETE which was introduced in 3.5
 	// see https://bugs.eclipse.org/bugs/show_bug.cgi?id=54581
 	// TODO replace with the constant as soon as we drop Eclipse 3.4 support
 	public static final String EDIT_DELETE = "org.eclipse.ui.edit.delete";
 	private final IAction expandAction;
 	private OpenAction openAction;
+	private ArrayList<PresentationModeAction> presentationModeActions;
 
 	public MercurialSynchronizePageActionGroup() {
 		super();
@@ -55,7 +75,6 @@ public class MercurialSynchronizePageActionGroup extends ModelSynchronizePartici
 			}
 		};
 	}
-
 
 	@Override
 	public void initialize(ISynchronizePageConfiguration configuration) {
@@ -80,53 +99,203 @@ public class MercurialSynchronizePageActionGroup extends ModelSynchronizePartici
 						configuration, getVisibleRootsSelectionProvider()));
 
 		appendToGroup(ISynchronizePageConfiguration.P_CONTEXT_MENU,
-				HG_COMMIT_GROUP,
-				new AddAction("Add...",
-						configuration, getVisibleRootsSelectionProvider()));
-
-		appendToGroup(ISynchronizePageConfiguration.P_CONTEXT_MENU,
-				HG_COMMIT_GROUP,
-				new CommitSynchronizeAction("Commit...",
-						configuration, getVisibleRootsSelectionProvider()));
-
-		appendToGroup(ISynchronizePageConfiguration.P_CONTEXT_MENU,
-				HG_COMMIT_GROUP,
-				new RevertSynchronizeAction("Revert...",
-						configuration, getVisibleRootsSelectionProvider()));
-
-		appendToGroup(ISynchronizePageConfiguration.P_CONTEXT_MENU,
-				ISynchronizePageConfiguration.OBJECT_CONTRIBUTIONS_GROUP,
+				HG_PUSH_PULL_GROUP,
 				new PushPullSynchronizeAction("Push",
 						configuration, getVisibleRootsSelectionProvider(), false, false));
 
 		appendToGroup(ISynchronizePageConfiguration.P_CONTEXT_MENU,
-				ISynchronizePageConfiguration.OBJECT_CONTRIBUTIONS_GROUP,
+				HG_PUSH_PULL_GROUP,
 				new PushPullSynchronizeAction("Pull and Update",
 						configuration, getVisibleRootsSelectionProvider(), true, true));
 
 		appendToGroup(ISynchronizePageConfiguration.P_CONTEXT_MENU,
-				ISynchronizePageConfiguration.OBJECT_CONTRIBUTIONS_GROUP,
+				HG_PUSH_PULL_GROUP,
 				new PushPullSynchronizeAction("Pull",
 						configuration, getVisibleRootsSelectionProvider(), true, false));
 
+		presentationModeActions = new ArrayList<PresentationModeAction>();
+
+		for (PresentationMode mode : PresentationMode.values()) {
+			presentationModeActions.add(new PresentationModeAction(mode, MercurialEclipsePlugin
+					.getDefault().getPreferenceStore()));
+		}
 	}
 
 	@Override
 	public void fillContextMenu(IMenuManager menu) {
-		if(menu.find(DeleteAction.HG_DELETE_GROUP) == null){
+		if (menu.find(DeleteAction.HG_DELETE_GROUP) == null) {
 			menu.insertBefore(ISynchronizePageConfiguration.NAVIGATE_GROUP, new Separator(
 					DeleteAction.HG_DELETE_GROUP));
 		}
-		if(menu.find(HG_COMMIT_GROUP) == null){
+		if (menu.find(HG_COMMIT_GROUP) == null) {
 			menu.insertBefore(DeleteAction.HG_DELETE_GROUP, new Separator(HG_COMMIT_GROUP));
 		}
+		if (menu.find(HG_PUSH_PULL_GROUP) == null) {
+			menu.insertAfter(ISynchronizePageConfiguration.NAVIGATE_GROUP, new Separator(HG_PUSH_PULL_GROUP));
+		}
+
+		addUndoMenu(menu);
+		addMergeViewStyleAction(menu);
+
+		if (isSelectionUncommited()) {
+			menu.insertAfter(
+					HG_COMMIT_GROUP,
+					new AddAction("Add...",
+							getConfiguration(), getVisibleRootsSelectionProvider()));
+
+			menu.insertAfter(
+					HG_COMMIT_GROUP,
+					new CommitSynchronizeAction("Commit...",
+							getConfiguration(), getVisibleRootsSelectionProvider()));
+
+			menu.insertAfter(
+					HG_COMMIT_GROUP,
+					new RevertSynchronizeAction("Revert...",
+							getConfiguration(), getVisibleRootsSelectionProvider()));
+
+			menu.insertAfter(
+					HG_COMMIT_GROUP,
+					new ResolveSynchronizeAction("Mark as Resolved",
+							getConfiguration(), getVisibleRootsSelectionProvider()));
+		} else if (!isSelectionOutgoing()) {
+			menu.insertAfter(
+					HG_COMMIT_GROUP,
+					new ResolveSynchronizeAction("Mark as Resolved",
+							getConfiguration(), getVisibleRootsSelectionProvider()));
+		}
+
 		super.fillContextMenu(menu);
 //		menu.remove("org.eclipse.team.ui.synchronizeLast");
 		replaceCompareAndMoveDeleteAction(menu);
 	}
 
+	private boolean isSelectionUncommited() {
+		Object[] selectedObjects = getSelectedObjects();
+
+		if (selectedObjects == null) {
+			return false;
+		}
+
+		for (Object object : selectedObjects) {
+			if (object instanceof WorkingChangeSet) {
+				continue;
+			} else if (object instanceof FileFromChangeSet) {
+				FileFromChangeSet file = (FileFromChangeSet) object;
+				if (!(file.getChangeset() instanceof WorkingChangeSet)) {
+					return false;
+				}
+			} else {
+				return false;
+			}
+		}
+
+		return true;
+	}
+
+	private boolean isSelectionOutgoing() {
+		Object[] selectedObjects = getSelectedObjects();
+
+		if (selectedObjects == null) {
+			return false;
+		}
+
+		for (Object object : selectedObjects) {
+			if (object instanceof ChangesetGroup) {
+				ChangesetGroup csGroup = (ChangesetGroup) object;
+				if (csGroup.getDirection() != Direction.OUTGOING) {
+					return false;
+				}
+			} else if (object instanceof ChangeSet) {
+				ChangeSet cs = (ChangeSet) object;
+				if (cs.getDirection() != Direction.OUTGOING) {
+					return false;
+				}
+			} else if (object instanceof FileFromChangeSet) {
+				FileFromChangeSet file = (FileFromChangeSet) object;
+				if (file.getChangeset().getDirection() != Direction.OUTGOING) {
+					return false;
+				}
+			} else {
+				return false;
+			}
+		}
+
+		return true;
+	}
+
+	private void addUndoMenu(IMenuManager menu) {
+		MenuManager submenu = new MenuManager("Undo",
+				MercurialEclipsePlugin.getImageDescriptor("undo_edit.gif"), null);
+
+		menu.insertBefore(ISynchronizePageConfiguration.NAVIGATE_GROUP, submenu);
+
+		ISelection selection = getContext().getSelection();
+
+		if (!(selection instanceof StructuredSelection)) {
+			return;
+		}
+
+		StructuredSelection stSelection = (StructuredSelection) selection;
+		if (stSelection.size() != 1) {
+			return;
+		}
+
+		Object object = stSelection.iterator().next();
+		if (object instanceof WorkingChangeSet) {
+			return;
+		}
+
+		if (object instanceof ChangesetGroup) {
+			ChangesetGroup csGroup = ((ChangesetGroup) object);
+			if (csGroup.getChangesets().isEmpty() || csGroup.getDirection() != Direction.OUTGOING) {
+				return;
+			}
+
+			HgRoot hgRoot = csGroup.getChangesets().iterator().next().getHgRoot();
+			menu.insertBefore(ISynchronizePageConfiguration.NAVIGATE_GROUP,
+					new RollbackSynchronizeAction("Rollback", getConfiguration(), hgRoot, null));
+		} else if (object instanceof ChangeSet) {
+			ChangeSet changeSet = (ChangeSet) object;
+
+			if (changeSet.getDirection() != Direction.OUTGOING) {
+				return;
+			}
+
+			HgRoot hgRoot = changeSet.getHgRoot();
+			submenu.add(new BackoutSynchronizeAction("Backout...", getConfiguration(), hgRoot, changeSet));
+			submenu.add(new StripSynchronizeAction("Strip...", getConfiguration(), hgRoot, changeSet));
+		}
+	}
+
+	private void addMergeViewStyleAction(IMenuManager menu) {
+		Object[] selectedObjects = getSelectedObjects();
+
+		if (selectedObjects == null || selectedObjects.length != 1
+				|| !(selectedObjects[0] instanceof ChangeSet)) {
+			return;
+		}
+
+		ChangeSet cs = (ChangeSet) selectedObjects[0];
+
+		if (cs.isMerge() && !(cs instanceof WorkingChangeSet)) {
+			menu.insertBefore(ISynchronizePageConfiguration.NAVIGATE_GROUP,
+					new ToggleMergeStyleAction(cs));
+		}
+	}
+
+	private Object[] getSelectedObjects() {
+		ISelection selection = getContext().getSelection();
+		if (!(selection instanceof StructuredSelection)) {
+			return null;
+		}
+
+		StructuredSelection stSelection = (StructuredSelection) selection;
+		return stSelection.toArray();
+	}
+
 	/**
 	 * Replaces default "OpenInCompareAction" action with our custom, moves delete action
+	 *
 	 * @see OpenInCompareAction
 	 * @see ModelSynchronizeParticipantActionGroup
 	 * @see HgChangeSetActionProvider
@@ -167,5 +336,85 @@ public class MercurialSynchronizePageActionGroup extends ModelSynchronizePartici
 		super.fillActionBars(actionBars);
 		IToolBarManager manager = actionBars.getToolBarManager();
 		appendToGroup(manager, ISynchronizePageConfiguration.NAVIGATE_GROUP, expandAction);
+
+		IMenuManager menu = actionBars.getMenuManager();
+		IContributionItem group = findGroup(menu, ISynchronizePageConfiguration.LAYOUT_GROUP);
+		if (menu != null && group != null) {
+			MenuManager layout = new MenuManager(Messages
+					.getString("MercurialSynchronizePageActionGroup.PresentationMode"));
+			menu.appendToGroup(group.getId(), layout);
+
+			for (PresentationModeAction action : presentationModeActions) {
+				layout.add(action);
+			}
+		}
+	}
+
+	/**
+	 * @see org.eclipse.team.ui.synchronize.ModelSynchronizeParticipantActionGroup#dispose()
+	 */
+	@Override
+	public void dispose() {
+		for (PresentationModeAction action : presentationModeActions) {
+			action.dispose();
+		}
+		super.dispose();
+	}
+
+	// inner types
+
+	private static class PresentationModeAction extends Action implements IPropertyChangeListener {
+		private final PresentationMode mode;
+		private final IPreferenceStore configuration;
+
+		protected PresentationModeAction(PresentationMode mode,
+				IPreferenceStore configuration) {
+			super(mode.toString(), IAction.AS_RADIO_BUTTON);
+
+			this.mode = mode;
+			this.configuration = configuration;
+
+			update();
+			configuration.addPropertyChangeListener(this);
+		}
+
+		public void dispose() {
+			configuration.removePropertyChangeListener(this);
+		}
+
+		@Override
+		public void run() {
+			mode.set();
+		}
+
+		public void update() {
+			setChecked(mode.isSet());
+		}
+
+		public void propertyChange(PropertyChangeEvent event) {
+			if (event.getProperty().equals(PresentationMode.PREFERENCE_KEY)) {
+				update();
+			}
+		}
+	}
+
+	private static class ToggleMergeStyleAction extends Action {
+		private final ChangeSet changeset;
+
+		public ToggleMergeStyleAction(ChangeSet cs) {
+			super("Show changes merged in", IAction.AS_CHECK_BOX);
+
+			if (!cs.isMerge() || cs instanceof WorkingChangeSet) {
+				throw new IllegalArgumentException();
+			}
+
+			changeset = cs;
+			setChecked(cs.isShowFirstParentChanges());
+		}
+
+		@Override
+		public void run() {
+			changeset.setShowFirstParentChanges(!changeset.isShowFirstParentChanges());
+		}
 	}
 }

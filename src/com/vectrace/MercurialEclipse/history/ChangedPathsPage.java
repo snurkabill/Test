@@ -220,7 +220,7 @@ public class ChangedPathsPage {
 		if (changePathsViewer != null) {
 			changePathsViewer.getControl().dispose();
 		}
-		if (diffTextViewer != null) {
+		if (diffTextViewer != null && diffTextViewer.getControl() != null) {
 			diffTextViewer.getControl().dispose();
 		}
 	}
@@ -290,24 +290,31 @@ public class ChangedPathsPage {
 		IDocument document = diffTextViewer.getDocument();
 		int nrOfLines = document.getNumberOfLines();
 		Display display = diffTextViewer.getControl().getDisplay();
-		for (int i = 0; i < nrOfLines && !monitor.isCanceled(); i++) {
-			if(nrOfLines > 100 && i%100 == 0){
-				while(display.readAndDispatch()){
-					if(monitor.isCanceled()){
-						// give user the chance to break the job
-						return;
+
+		try {
+			diffTextViewer.getControl().setRedraw(false);
+			for (int i = 0; i < nrOfLines && !monitor.isCanceled(); i++) {
+				if(nrOfLines > 100 && i%100 == 0){
+					while(display.readAndDispatch()){
+						if(monitor.isCanceled()){
+							// give user the chance to break the job
+							return;
+						}
 					}
 				}
+				try {
+					IRegion lineInformation = document.getLineInformation(i);
+					int offset = lineInformation.getOffset();
+					int length = lineInformation.getLength();
+					Color lineColor = getDiffLineColor(document.get( offset, length));
+					diffTextViewer.setTextColor(lineColor, offset, length, true);
+				} catch (BadLocationException e) {
+					MercurialEclipsePlugin.logError(e);
+				}
 			}
-			try {
-				IRegion lineInformation = document.getLineInformation(i);
-				int offset = lineInformation.getOffset();
-				int length = lineInformation.getLength();
-				Color lineColor = getDiffLineColor(document.get( offset, length));
-				diffTextViewer.setTextColor(lineColor, offset, length, true);
-			} catch (BadLocationException e) {
-				MercurialEclipsePlugin.logError(e);
-			}
+		}
+		finally {
+			diffTextViewer.getControl().setRedraw(true);
 		}
 	}
 
@@ -591,7 +598,8 @@ public class ChangedPathsPage {
 		protected IStatus run(IProgressMonitor monitor) {
 			try {
 				String diff = HgPatchClient.getDiff(hgRoot, entry, secondEntry);
-				if(!monitor.isCanceled() && !diffTextViewer.getControl().isDisposed()) {
+				if (!monitor.isCanceled() && diffTextViewer.getControl() != null
+						&& !diffTextViewer.getControl().isDisposed()) {
 					getHistoryPage().scheduleInPage(new UpdateDiffViewerJob(diff));
 				}
 			} catch (HgException e) {
@@ -618,7 +626,7 @@ public class ChangedPathsPage {
 
 		@Override
 		public IStatus runInUIThread(IProgressMonitor monitor) {
-			if(diffTextViewer.getControl().isDisposed()){
+			if (diffTextViewer.getControl() == null || diffTextViewer.getControl().isDisposed()) {
 				return Status.CANCEL_STATUS;
 			}
 			diffTextViewer.setDocument(new Document(diff));

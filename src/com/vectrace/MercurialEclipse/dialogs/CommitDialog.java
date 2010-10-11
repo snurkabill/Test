@@ -22,6 +22,7 @@ import java.util.Map;
 import java.util.Set;
 
 import org.eclipse.core.resources.IResource;
+import org.eclipse.core.runtime.Assert;
 import org.eclipse.core.runtime.CoreException;
 import org.eclipse.core.runtime.IPath;
 import org.eclipse.core.runtime.IProgressMonitor;
@@ -132,21 +133,14 @@ public class CommitDialog extends TitleAreaDialog {
 	protected Options options;
 
 	public static class Options {
-		public boolean showDiff;
-		public boolean showAmend;
-		public boolean showCloseBranch;
-		public boolean showRevert;
-		public boolean filesSelectable;
-		public String defaultCommitMessage;
-
-		public Options() {
-			defaultCommitMessage = DEFAULT_COMMIT_MESSAGE;
-			filesSelectable = true;
-			showCloseBranch = true;
-			showDiff = true;
-			showAmend = true;
-			showRevert = true;
-		}
+		public boolean showDiff = true;
+		public boolean showAmend = true;
+		public boolean showCloseBranch = true;
+		public boolean showRevert = true;
+		public boolean filesSelectable = true;
+		public String defaultCommitMessage = DEFAULT_COMMIT_MESSAGE;
+		public boolean showCommitMessage = true;
+		public boolean allowEmptyCommit = false;
 	}
 
 	/**
@@ -157,6 +151,9 @@ public class CommitDialog extends TitleAreaDialog {
 	 */
 	public CommitDialog(Shell shell, HgRoot hgRoot, List<IResource> resources) {
 		super(shell);
+
+		Assert.isNotNull(hgRoot);
+
 		this.root = hgRoot;
 		setShellStyle(getShellStyle() | SWT.RESIZE | SWT.TITLE);
 		options = new Options();
@@ -221,18 +218,27 @@ public class CommitDialog extends TitleAreaDialog {
 						inResources == null ? null : inResources.toArray(new IResource[0]));
 		setCommitMessage(initialCommitMessage);
 
-		commitTextBox.getTextWidget().setFocus();
-		commitTextBox.getTextWidget().selectAll();
+		if (commitTextBox != null) {
+			commitTextBox.getTextWidget().setFocus();
+			commitTextBox.getTextWidget().selectAll();
+		}
+
 		return control;
 	}
 
-	private void validateCommitMessage(final String message) {
+	private void validateControls() {
+		final String message = commitTextBox.getDocument().get();
 		if (StringUtils.isEmpty(message) || DEFAULT_COMMIT_MESSAGE.equals(message)) {
-			setErrorMessage(Messages.getString("CommitDialog.message")); // ";
+
+			setErrorMessage(Messages.getString("CommitDialog.commitMessageRequired")); // ";
+			getButton(IDialogConstants.OK_ID).setEnabled(false);
+		} else if (commitFilesList.getCheckedResources().size() == 0
+				&& !options.allowEmptyCommit && commitFilesList.isSelectable()) {
+			setErrorMessage(Messages.getString("CommitDialog.noResourcesSelected")); // ";
 			getButton(IDialogConstants.OK_ID).setEnabled(false);
 		} else {
 			setErrorMessage(null); // ";
-			setMessage(Messages.getString("CommitDialog.message")); // ";
+			setMessage(Messages.getString("CommitDialog.readyToCommit")); // ";
 			getButton(IDialogConstants.OK_ID).setEnabled(true);
 		}
 	}
@@ -297,6 +303,12 @@ public class CommitDialog extends TitleAreaDialog {
 		CommitFilesChooser chooser = new CommitFilesChooser(container, areFilesSelectable(), inResources,
 				true, true, false);
 
+		chooser.addStateListener(new Listener() {
+			public void handleEvent(Event event) {
+				validateControls();
+			}
+		});
+
 		IResource[] mylynTaskResources = MylynFacadeFactory.getMylynFacade()
 				.getCurrentTaskResources();
 		if (mylynTaskResources != null) {
@@ -322,6 +334,10 @@ public class CommitDialog extends TitleAreaDialog {
 	}
 
 	private void createCommitTextBox(Composite container) {
+		if(!options.showCommitMessage){
+			return;
+		}
+
 		setMessage(Messages.getString("CommitDialog.commitTextLabel.text"));
 
 		commitTextBox = new SourceViewer(container, null, SWT.V_SCROLL | SWT.MULTI | SWT.BORDER
@@ -350,12 +366,16 @@ public class CommitDialog extends TitleAreaDialog {
 
 		commitTextBox.addTextListener(new ITextListener() {
 			public void textChanged(TextEvent event) {
-				validateCommitMessage(commitTextBox.getDocument().get());
+				validateControls();
 			}
 		});
 	}
 
 	private void createOldCommitCombo(Composite container) {
+		if(!options.showCommitMessage){
+			return;
+		}
+
 		final String[] oldCommits = MercurialEclipsePlugin.getCommitMessageManager()
 				.getCommitMessages();
 		if (oldCommits.length > 0) {
@@ -429,9 +449,8 @@ public class CommitDialog extends TitleAreaDialog {
 					setErrorMessage(Messages.getString("CommitDialog.noChangesetToAmend"));
 					return;
 				}
-				String[] parents = currentChangeset.getParents();
-				if(parents != null && parents.length == 2 && !StringUtils.isEmpty(parents[0])
-						&& !StringUtils.isEmpty(parents[1])){
+
+				if(currentChangeset.isMerge()) {
 					setErrorMessage(Messages.getString("CommitDialog.noAmendForMerge"));
 					return;
 				}
@@ -580,7 +599,10 @@ public class CommitDialog extends TitleAreaDialog {
 			msg = options.defaultCommitMessage;
 		}
 		commitTextDocument.set(msg);
-		commitTextBox.setSelectedRange(0, msg.length());
+
+		if (commitTextBox != null) {
+			commitTextBox.setSelectedRange(0, msg.length());
+		}
 	}
 
 	public String getUser() {
@@ -606,7 +628,7 @@ public class CommitDialog extends TitleAreaDialog {
 		monitor.setVisible(false);
 
 		// set old commit message
-		IDocument msg = commitTextBox.getDocument();
+		IDocument msg = commitTextDocument;
 		if ("".equals(msg.get()) || msg.get().equals(DEFAULT_COMMIT_MESSAGE)) {
 			msg.set(currentChangeset.getComment());
 		}

@@ -23,8 +23,8 @@ import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
-import java.util.Map.Entry;
 import java.util.Set;
+import java.util.Map.Entry;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArraySet;
 import java.util.regex.Pattern;
@@ -60,11 +60,13 @@ import com.vectrace.MercurialEclipse.commands.HgResolveClient;
 import com.vectrace.MercurialEclipse.commands.HgStatusClient;
 import com.vectrace.MercurialEclipse.commands.HgSubreposClient;
 import com.vectrace.MercurialEclipse.exception.HgException;
+import com.vectrace.MercurialEclipse.model.FileStatus;
 import com.vectrace.MercurialEclipse.model.FlaggedAdaptable;
 import com.vectrace.MercurialEclipse.model.HgRoot;
 import com.vectrace.MercurialEclipse.preferences.MercurialPreferenceConstants;
 import com.vectrace.MercurialEclipse.team.MercurialTeamProvider;
 import com.vectrace.MercurialEclipse.team.MercurialUtilities;
+import com.vectrace.MercurialEclipse.team.ResourceProperties;
 import com.vectrace.MercurialEclipse.utils.Bits;
 import com.vectrace.MercurialEclipse.utils.ResourceUtils;
 
@@ -509,13 +511,27 @@ public final class MercurialStatusCache extends AbstractCache implements IResour
 		return false;
 	}
 
+	/**
+	 * @see #BIT_CLEAN
+	 */
 	public boolean isClean(IResource resource) {
+		return isStatus(resource, BIT_CLEAN);
+	}
+
+	/**
+	 * @see #BIT_CONFLICT
+	 */
+	public boolean isConflict(IResource resource) {
+		return isStatus(resource, BIT_CONFLICT);
+	}
+
+	private boolean isStatus(IResource resource, int flag) {
 		Assert.isNotNull(resource);
 		Integer status = getStatus(resource);
 		if(status == null){
 			return false;
 		}
-		return Bits.contains(status.intValue(), BIT_CLEAN);
+		return Bits.contains(status.intValue(), flag);
 	}
 
 	/**
@@ -697,7 +713,6 @@ public final class MercurialStatusCache extends AbstractCache implements IResour
 				String[] lines = NEWLINE.split(output);
 				changed.addAll(parseStatus(repo, pathMap, lines, false));
 
-				boolean mergeInProgress = mergeNode != null && mergeNode.length() > 0;
 				MercurialTeamProvider.setCurrentBranch(branch, repo);
 
 				// Set the merge status of the root itself
@@ -713,9 +728,7 @@ public final class MercurialStatusCache extends AbstractCache implements IResour
 					}
 				}
 
-				if(mergeInProgress) {
-					changed.addAll(checkForConflict(repo));
-				}
+				changed.addAll(checkForConflict(repo));
 
 				monitor.worked(1);
 				if(monitor.isCanceled()){
@@ -872,9 +885,7 @@ public final class MercurialStatusCache extends AbstractCache implements IResour
 	}
 
 	private Set<IResource> checkForConflict(final IProject project) throws HgException {
-		if (!isMergeInProgress(project)) {
-			return Collections.emptySet();
-		}
+
 		List<FlaggedAdaptable> status = HgResolveClient.list(project);
 		Set<IResource> changed = new HashSet<IResource>();
 		Set<IResource> members = getLocalMembers(project);
@@ -1001,6 +1012,42 @@ public final class MercurialStatusCache extends AbstractCache implements IResour
 		return changed;
 	}
 
+	/**
+	 * Parse status output. Future: merge with above method?
+	 *
+	 * @param status
+	 *            Status output
+	 * @param hgRoot
+	 *            The root to use for the {@link FileStatus}
+	 * @return A non-null list.
+	 */
+	public static List<FileStatus> parseStatus(String status, HgRoot hgRoot) {
+		List<FileStatus> list = new ArrayList<FileStatus>();
+
+		for (String line : NEWLINE.split(status)) {
+			if (line.length() <= 2 || line.charAt(1) != ' ') {
+				continue;
+			}
+
+			char c = line.charAt(0);
+			FileStatus.Action action;
+
+			if (c == CHAR_ADDED) {
+				action = FileStatus.Action.ADDED;
+			} else if (c == CHAR_REMOVED) {
+				action = FileStatus.Action.REMOVED;
+			} else if (c == CHAR_MODIFIED) {
+				action = FileStatus.Action.MODIFIED;
+			} else {
+				continue;
+			}
+
+			list.add(new FileStatus(action, line.substring(2), hgRoot));
+		}
+
+		return list;
+	}
+
 	private IResource findMember(Map<IProject, IPath> pathMap, IPath hgRootPath, String repoRelPath) {
 		// determine absolute path
 		IPath path = hgRootPath.append(repoRelPath);
@@ -1119,7 +1166,7 @@ public final class MercurialStatusCache extends AbstractCache implements IResour
 		return true;
 	}
 
-	private int getBit(char status) {
+	private static int getBit(char status) {
 		switch (status) {
 		case CHAR_MISSING:
 			return BIT_MISSING;
@@ -1186,7 +1233,16 @@ public final class MercurialStatusCache extends AbstractCache implements IResour
 				}
 			}
 		}
-		updateJob.schedule(100);
+		updateJob.schedule();
+
+		// Can't execute update asynchronously, because other classes (at least MercurialSynchronizeSubscriber) suppose
+		// that MercurialStatusCache provides fresh status information
+		// TODO some different optimization needed instead of using Job
+		try {
+			updateJob.join();
+		} catch (InterruptedException e) {
+			MercurialEclipsePlugin.logError(e);
+		}
 	}
 
 	/**
@@ -1496,5 +1552,25 @@ public final class MercurialStatusCache extends AbstractCache implements IResour
 
 	public boolean isSubrepoSupportEnabled() {
 		return enableSubrepos;
+	}
+
+	public boolean isMergeViewDialogShown()
+	{
+		try {
+			return ResourcesPlugin.getWorkspace().getRoot().getSessionProperty(ResourceProperties.MERGE_COMMIT_OFFERED) != null;
+		} catch (CoreException e) {
+			MercurialEclipsePlugin.logError(e);
+			return true;
+		}
+	}
+
+	public void setMergeViewDialogShown(boolean shown)
+	{
+		try {
+			ResourcesPlugin.getWorkspace().getRoot().setSessionProperty(
+					ResourceProperties.MERGE_COMMIT_OFFERED, shown ? "true" : null);
+		} catch (CoreException e) {
+			MercurialEclipsePlugin.logError(e);
+		}
 	}
 }

@@ -64,7 +64,7 @@ public class AddBranchWizard extends HgWizard {
 				String[] dirtyFiles = HgStatusClient.getDirtyFiles(hgRoot);
 				if(dirtyFiles.length > 0){
 					String message = "There are uncommitted changes in the repository.\n";
-					message += "If you continue and commit, the canges will go into the new branch!\n";
+					message += "If you continue and commit, the changes will go into the new branch!\n";
 					message += "Continue with creating the branch?\n";
 					boolean ok = MessageDialog.openConfirm(getShell(), "Add Branch", message);
 					if(!ok){
@@ -91,6 +91,7 @@ public class AddBranchWizard extends HgWizard {
 					options.showAmend = false;
 					options.showCloseBranch = false;
 					options.showRevert = false;
+					options.allowEmptyCommit = true;
 					commitHandler.setOptions(options);
 					commitHandler.run(projectList);
 					monitor.worked(1);

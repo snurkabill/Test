@@ -19,8 +19,6 @@ import java.util.Set;
 import org.eclipse.core.resources.IFile;
 import org.eclipse.core.resources.IProject;
 import org.eclipse.core.resources.IResource;
-import org.eclipse.core.resources.IWorkspaceRoot;
-import org.eclipse.core.resources.ResourcesPlugin;
 import org.eclipse.core.runtime.CoreException;
 import org.eclipse.jface.action.Action;
 import org.eclipse.jface.action.IMenuListener;
@@ -56,16 +54,16 @@ import com.vectrace.MercurialEclipse.MercurialEclipsePlugin;
 import com.vectrace.MercurialEclipse.commands.HgResolveClient;
 import com.vectrace.MercurialEclipse.commands.extensions.HgRebaseClient;
 import com.vectrace.MercurialEclipse.exception.HgException;
+import com.vectrace.MercurialEclipse.menu.AbortRebaseHandler;
 import com.vectrace.MercurialEclipse.menu.CommitMergeHandler;
+import com.vectrace.MercurialEclipse.menu.ContinueRebaseHandler;
+import com.vectrace.MercurialEclipse.menu.RunnableHandler;
 import com.vectrace.MercurialEclipse.menu.UpdateHandler;
 import com.vectrace.MercurialEclipse.model.FlaggedAdaptable;
 import com.vectrace.MercurialEclipse.model.HgRoot;
 import com.vectrace.MercurialEclipse.team.CompareAction;
 import com.vectrace.MercurialEclipse.team.MercurialTeamProvider;
-import com.vectrace.MercurialEclipse.team.ResourceProperties;
 import com.vectrace.MercurialEclipse.team.cache.MercurialStatusCache;
-import com.vectrace.MercurialEclipse.team.cache.RefreshRootJob;
-import com.vectrace.MercurialEclipse.team.cache.RefreshWorkspaceStatusJob;
 import com.vectrace.MercurialEclipse.utils.ResourceUtils;
 
 public class MergeView extends ViewPart implements ISelectionListener, Observer {
@@ -77,11 +75,13 @@ public class MergeView extends ViewPart implements ISelectionListener, Observer 
 
 	private Action abortAction;
 
+	private Action completeAction;
+
 	private Action markResolvedAction;
 
 	private Action markUnresolvedAction;
 
-	private HgRoot hgRoot;
+	protected HgRoot hgRoot;
 
 	@Override
 	public void createPartControl(final Composite parent) {
@@ -122,16 +122,37 @@ public class MergeView extends ViewPart implements ISelectionListener, Observer 
 	private void createToolBar() {
 		IToolBarManager mgr = getViewSite().getActionBars().getToolBarManager();
 
+		completeAction = new Action(Messages.getString("MergeView.complete")) { //$NON-NLS-1$
+			@Override
+			public void run() {
+				if (areAllResolved()) {
+					attemptToCommit();
+					refresh(hgRoot);
+				}
+			}
+		};
+		completeAction.setEnabled(false);
+		completeAction.setImageDescriptor(MercurialEclipsePlugin.getImageDescriptor("actions/commit.gif"));
+		mgr.add(completeAction);
+
 		abortAction = new Action(Messages.getString("MergeView.abort")) { //$NON-NLS-1$
 			@Override
 			public void run() {
 				try {
-					UpdateHandler update = new UpdateHandler();
-					update.setCleanEnabled(true);
-					update.setRevision(".");
-					update.setShell(table.getShell());
-					update.run(hgRoot);
-				} catch (HgException e) {
+					RunnableHandler runnable;
+					if (HgRebaseClient.isRebasing(hgRoot)) {
+						runnable = new AbortRebaseHandler();
+					} else {
+						UpdateHandler update = new UpdateHandler();
+						update.setCleanEnabled(true);
+						update.setRevision(".");
+						runnable = update;
+					}
+
+					runnable.setShell(table.getShell());
+					runnable.run(hgRoot);
+					refresh(hgRoot);
+				} catch (CoreException e) {
 					MercurialEclipsePlugin.logError(e);
 					statusLabel.setText(e.getLocalizedMessage());
 				}
@@ -224,6 +245,7 @@ public class MergeView extends ViewPart implements ISelectionListener, Observer 
 				menuMgr1.add(markResolvedAction);
 				menuMgr1.add(markUnresolvedAction);
 				menuMgr1.add(new Separator());
+				menuMgr1.add(completeAction);
 				menuMgr1.add(abortAction);
 			}
 		});
@@ -232,13 +254,7 @@ public class MergeView extends ViewPart implements ISelectionListener, Observer 
 	}
 
 	private void populateView(boolean attemptToCommit) throws HgException {
-
-		String mergeNodeId = MercurialStatusCache.getInstance().getMergeChangesetId(hgRoot);
-		if(mergeNodeId != null) {
-			statusLabel.setText("Merging " + hgRoot.getName() + " with " + mergeNodeId);
-		} else {
-			statusLabel.setText("Merging " + hgRoot.getName());
-		}
+		boolean bAllResolved = true;
 		List<FlaggedAdaptable> status = null;
 		status = HgResolveClient.list(hgRoot);
 		table.removeAll();
@@ -250,68 +266,93 @@ public class MergeView extends ViewPart implements ISelectionListener, Observer 
 			row.setData(flagged);
 			if (flagged.getFlag() == MercurialStatusCache.CHAR_UNRESOLVED) {
 				row.setFont(JFaceResources.getFontRegistry().getBold(JFaceResources.DEFAULT_FONT));
+				bAllResolved = false;
 			}
 		}
 		abortAction.setEnabled(true);
+		completeAction.setEnabled(true);
 		markResolvedAction.setEnabled(true);
 		markUnresolvedAction.setEnabled(true);
 
-		if(attemptToCommit) {
-			if(HgRebaseClient.isRebasing(hgRoot)) {
-				attemptToCommitRebase();
+		// Update the status label
+		{
+			boolean merging = !HgRebaseClient.isRebasing(hgRoot);
+			String label;
+
+			if (bAllResolved) {
+				if (merging) {
+					label = hgRoot.getName() + Messages.getString("MergeView.PleaseCommitMerge")
+							+ " " + MercurialStatusCache.getInstance().getMergeChangesetId(hgRoot);
+				} else {
+					label = hgRoot.getName() + Messages.getString("MergeView.PleaseCommitRebase");
+				}
 			} else {
-				attemptToCommitMerge();
-			}
-		}
-	}
-
-	private void attemptToCommitRebase() {
-		// try to continue rebase if no conflicts are found
-		if (areAllResolved()) {
-			try {
-				HgRebaseClient.continueRebase(hgRoot);
-			} catch (HgException e) {
-				MercurialEclipsePlugin.logError(e);
-			} finally {
-				RefreshWorkspaceStatusJob job = new RefreshWorkspaceStatusJob(hgRoot, RefreshRootJob.ALL);
-				job.schedule();
-			}
-		}
-	}
-
-	private void attemptToCommitMerge() {
-		try {
-			String mergeNode = MercurialStatusCache.getInstance().getMergeChangesetId(hgRoot);
-
-			// offer commit of merge exactly once if no conflicts
-			// are found
-			boolean allResolved = areAllResolved();
-			if (allResolved) {
-				String message = hgRoot.getName()
-						+ Messages.getString("MergeView.PleaseCommitMerge") + " " + mergeNode;
-				statusLabel.setText(message);
-
-				IWorkspaceRoot wsRoot = ResourcesPlugin.getWorkspace().getRoot();
-				if (wsRoot.getSessionProperty(ResourceProperties.MERGE_COMMIT_OFFERED) == null) {
-					new CommitMergeHandler().commitMergeWithCommitDialog(hgRoot, getSite().getShell());
-					ResourcesPlugin.getWorkspace().getRoot().setSessionProperty(ResourceProperties.MERGE_COMMIT_OFFERED, "true");
+				if (merging) {
+					String mergeNodeId = MercurialStatusCache.getInstance().getMergeChangesetId(
+							hgRoot);
+					if (mergeNodeId != null) {
+						label = "Merging " + hgRoot.getName() + " with " + mergeNodeId;
+					} else {
+						label = "Merging " + hgRoot.getName();
+					}
+				} else {
+					label = "Rebasing";
 				}
 			}
+
+			statusLabel.setText(label);
+		}
+
+		// Show commit dialog
+		if (attemptToCommit && !MercurialStatusCache.getInstance().isMergeViewDialogShown()
+				&& areAllResolved()) {
+			/*
+			 * Offer commit of merge or rebase exactly once if no conflicts are found. Uses {@link
+			 * ResourceProperties#MERGE_COMMIT_OFFERED} to avoid showing the user the commit dialog
+			 * repeatedly. This flag should be cleared when any of the following operations occur:
+			 * commit, rebase, revert.
+			 */
+			MercurialStatusCache.getInstance().setMergeViewDialogShown(true);
+			attemptToCommit();
+		}
+	}
+
+	private void attemptToCommit() {
+		try {
+			boolean merging = !HgRebaseClient.isRebasing(hgRoot);
+
+			MercurialStatusCache.getInstance().setMergeViewDialogShown(true);
+			RunnableHandler handler = merging ? new CommitMergeHandler()
+					: new ContinueRebaseHandler();
+
+			handler.setShell(getSite().getShell());
+			handler.run(hgRoot);
 		} catch (CoreException e) {
 			MercurialEclipsePlugin.logError(e);
 		}
 	}
 
-	public void clearView() {
-		statusLabel.setText(""); //$NON-NLS-1$
+	protected void clearView() {
+		statusLabel.setText("");
 		table.removeAll();
 		abortAction.setEnabled(false);
+		completeAction.setEnabled(false);
 		markResolvedAction.setEnabled(false);
 		markUnresolvedAction.setEnabled(false);
 		hgRoot = null;
 	}
 
-	public void setCurrentRoot(HgRoot newRoot) {
+	public void refresh(HgRoot newRoot) {
+		clearView();
+		setCurrentRoot(newRoot);
+	}
+
+	/**
+	 * Refresh the view with for the given hg root.
+	 *
+	 * @param newRoot The new selection
+	 */
+	protected void setCurrentRoot(HgRoot newRoot) {
 		if(newRoot == null) {
 			clearView();
 			return;
@@ -330,8 +371,6 @@ public class MergeView extends ViewPart implements ISelectionListener, Observer 
 			}
 		}
 	}
-
-
 
 	private boolean areAllResolved() {
 		boolean allResolved = true;
@@ -389,11 +428,8 @@ public class MergeView extends ViewPart implements ISelectionListener, Observer 
 		// if the intersection contains common projects, we need update the view
 		if(!projects.isEmpty()) {
 			Display.getDefault().asyncExec(new Runnable() {
-
 				public void run() {
-					HgRoot backup = hgRoot;
-					clearView();
-					setCurrentRoot(backup);
+					refresh(hgRoot);
 				}
 			});
 		}

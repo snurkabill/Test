@@ -41,6 +41,9 @@ public final class MercurialPreferenceConstants {
 	public static final String PREF_DECORATE_WITH_COLORS = "hg.labeldecorator.colors"; //$NON-NLS-1$
 	public static final String PREF_AUTO_SHARE_PROJECTS = "hg.autoshare"; //$NON-NLS-1$
 
+	public static final String PREF_SYNC_ONLY_CURRENT_BRANCH = "hg.syncOnlyCurrentBranch"; //$NON-NLS-1$
+	public static final String PREF_SYNC_PRESENTATION_MODE = "hg.syncPresentationMode";  //$NON-NLS-1$
+
 	public static final String PREF_ENABLE_SUBREPO_SUPPORT = "enableSubrepoSupport"; //$NON-NLS-1$
 
 	/** do not limit graphical log data to show pretty revision graphs in the history view */
@@ -98,7 +101,7 @@ public final class MercurialPreferenceConstants {
 	public static final int LAYOUT_VERTICAL = 2;
 	public static final String PREF_HISTORY_MERGE_CHANGESET_BACKGROUND = "hg.history.mergeChangesetsBackground";
 	public static final String PREF_HISTORY_MERGE_CHANGESET_FOREGROUND = "hg.history.mergeChangesetsForeground";
-	public static final String PREF_HISTORY_MERGE_CHANGESET_FONT = "hg.history.mergeChangesetsFont";
 	public static final String PREF_USE_MERCURIAL_USERNAME = "hg.useMercurialUsernameForCommit";
 	public static final String PREF_DEFAULT_REBASE_KEEP_BRANCHES = "hg.defaulRebaseKeepBranches";
+	public static final String PREF_DEFAULT_TRANSPLANT_FROM_LOCAL_BRANCHES = "hg.defaulTransplantFromLocal";
 }

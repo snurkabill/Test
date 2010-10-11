@@ -39,6 +39,7 @@ import org.eclipse.jface.viewers.LabelProviderChangedEvent;
 import org.eclipse.jface.viewers.SelectionChangedEvent;
 import org.eclipse.jface.viewers.StructuredViewer;
 import org.eclipse.jface.viewers.Viewer;
+import org.eclipse.jface.viewers.ViewerComparator;
 import org.eclipse.swt.SWT;
 import org.eclipse.swt.events.MouseAdapter;
 import org.eclipse.swt.events.MouseEvent;
@@ -135,6 +136,7 @@ public class CommitFilesChooser extends Composite {
 			}
 		});
 		viewer.setLabelProvider(labelProvider);
+		viewer.setComparator(new ViewerComparator());
 		viewer.addFilter(committableFilesFilter);
 		if (!showUntracked) {
 			viewer.addFilter(untrackedFilesFilter);
@@ -446,5 +448,9 @@ public class CommitFilesChooser extends Composite {
 			ResourceNode left = new ResourceNode(selectedFile);
 			CompareUtils.openEditor(left, right, true, false, null);
 		}
+	}
+
+	public boolean isSelectable() {
+		return selectable;
 	}
 }

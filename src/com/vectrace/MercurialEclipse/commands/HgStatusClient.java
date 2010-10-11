@@ -15,27 +15,24 @@
 package com.vectrace.MercurialEclipse.commands;
 
 import java.io.File;
+import java.io.IOException;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-import org.eclipse.core.resources.IProject;
 import org.eclipse.core.resources.IResource;
-import org.eclipse.core.runtime.CoreException;
 import org.eclipse.core.runtime.IPath;
 import org.eclipse.core.runtime.Path;
 
 import com.vectrace.MercurialEclipse.HgRevision;
-import com.vectrace.MercurialEclipse.MercurialEclipsePlugin;
 import com.vectrace.MercurialEclipse.exception.HgException;
 import com.vectrace.MercurialEclipse.model.Branch;
+import com.vectrace.MercurialEclipse.model.ChangeSet;
 import com.vectrace.MercurialEclipse.model.HgRoot;
 import com.vectrace.MercurialEclipse.preferences.MercurialPreferenceConstants;
-import com.vectrace.MercurialEclipse.team.ResourceProperties;
 import com.vectrace.MercurialEclipse.team.cache.MercurialStatusCache;
-import com.vectrace.MercurialEclipse.utils.ResourceUtils;
 
 public class HgStatusClient extends AbstractClient {
 
@@ -46,10 +43,17 @@ public class HgStatusClient extends AbstractClient {
 	// b63617c1e3460bd87eb51d2b8841b37fff1834d6+ default
 	// OR b63617c1e3460bd87eb51d2b8841b37fff1834d6 hallo branch
 	// + after the id is the "dirty" flag - if some files are not committed yet
+	//
+	// As well in Mercurial 1.6.0 during some rebases the following output:
+	//    filtering src/nexj/core/admin/platform/websphere/WebSphereInstaller.java through
+	//    filtering src/nexj/core/meta/j2ee/ibmconfig/cells/defaultCell/applications/defaultApp/deployments/defaultApp/deployment.xml through
+	//    filtering src/nexj/core/meta/sys/system.chtypes through
+	//    02bfc05967b86ba65a0cb990178638e4c491c865+d35923c18f8f564c6205e722119d88c6daa3f56d+ default
+	// These leading lines are ignored.
 
 	//             group 1                         group 2                             group 3
 	// (first parent, optional dirty flag)(merge parent, optional dirty flag) space (branch name)
-	private static final Pattern ID_MERGE_AND_BRANCH_PATTERN = Pattern.compile("^([0-9a-z]+\\+?)([0-9a-z]+)?\\+?\\s+(.+)$", Pattern.MULTILINE); //$NON-NLS-1$
+	private static final Pattern ID_MERGE_AND_BRANCH_PATTERN = Pattern.compile("^(?:filtering\\s.+\\sthrough\\s*$\\s*^)*([0-9a-z]+\\+?)([0-9a-z]+)?\\+?\\s+(.+)$", Pattern.MULTILINE); //$NON-NLS-1$
 
 	public static String getStatus(HgRoot root) throws HgException {
 		AbstractShellCommand command = new HgCommand("status", root, true); //$NON-NLS-1$
@@ -284,5 +288,34 @@ public class HgStatusClient extends AbstractClient {
 			}
 		}
 		return null;
+	}
+
+	/**
+	 * Execute 'hg status --rev cs --rev csparent', with bundle overlay if applicable
+	 *
+	 * @param cs
+	 *            The changeset to use
+	 * @return Status output
+	 * @throws HgException
+	 */
+	public static String getStatusForChangeset(ChangeSet cs) throws HgException {
+		HgCommand command = new HgCommand("status", cs.getHgRoot(), true); //$NON-NLS-1$
+
+		if (cs.getBundleFile() != null) {
+			try {
+				command.setBundleOverlay(cs.getBundleFile());
+			} catch (IOException e) {
+				throw new HgException("Couldn't set bundle overlay", e);
+			}
+		}
+
+		// modified, added, removed, deleted
+		command.addOptions("-mard"); //$NON-NLS-1$
+		command.addOptions("--rev", cs.getParentRevision(0).getChangeset());
+		command.addOptions("--rev", cs.getRevision().getChangeset());
+
+		command.setUsePreferenceTimeout(MercurialPreferenceConstants.STATUS_TIMEOUT);
+
+		return command.executeToString();
 	}
 }

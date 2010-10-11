@@ -45,13 +45,12 @@ public class RebaseWizard extends HgWizard {
 			destRev = rebasePage.getSelectedDestIndex();
 		}
 		boolean collapse = rebasePage.isCollapseRevSelected();
-		boolean abort = rebasePage.isAbortSelected();
-		boolean cont = rebasePage.isContinueRevSelected();
-		boolean keepBranches = rebasePage.isKeepBranchesSelected();
 
-		RebaseOperation op = new RebaseOperation(getContainer(), hgRoot,
-				srcRev, destRev, baseRev, collapse,
-				abort, cont, keepBranches);
+		RebaseOperation op = new RebaseOperation(getContainer(), hgRoot, srcRev, destRev, baseRev,
+				collapse, false, false);
+		op.setKeepBranches(rebasePage.isKeepBranchesSelected());
+		op.setKeep(rebasePage.isKeepSelected());
+
 		try {
 			getContainer().run(true, false, op);
 			if (op.getResult().length() != 0) {

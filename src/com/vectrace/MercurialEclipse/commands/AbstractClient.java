@@ -31,6 +31,7 @@ import com.vectrace.MercurialEclipse.exception.HgException;
 import com.vectrace.MercurialEclipse.model.HgRoot;
 import com.vectrace.MercurialEclipse.model.IHgRepositoryLocation;
 import com.vectrace.MercurialEclipse.team.cache.MercurialRootCache;
+import com.vectrace.MercurialEclipse.preferences.MercurialPreferenceConstants;
 import com.vectrace.MercurialEclipse.utils.ResourceUtils;
 
 /**
@@ -240,5 +241,15 @@ public abstract class AbstractClient {
 			host.append(':').append(proxy.getPort());
 		}
 		return host.toString();
+	}
+
+	protected static void addMergeToolPreference(AbstractShellCommand command) {
+		boolean useExternalMergeTool = Boolean.valueOf(
+				HgClients.getPreference(MercurialPreferenceConstants.PREF_USE_EXTERNAL_MERGE,
+						"false")).booleanValue(); //$NON-NLS-1$
+
+		if (!useExternalMergeTool) {
+			command.addOptions("--config", "ui.merge=internal:fail"); //$NON-NLS-1$ //$NON-NLS-2$
+		}
 	}
 }

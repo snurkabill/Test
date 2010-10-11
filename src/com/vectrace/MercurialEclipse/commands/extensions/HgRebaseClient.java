@@ -18,6 +18,9 @@ import com.vectrace.MercurialEclipse.commands.HgCommand;
 import com.vectrace.MercurialEclipse.exception.HgException;
 import com.vectrace.MercurialEclipse.model.HgRoot;
 import com.vectrace.MercurialEclipse.preferences.MercurialPreferenceConstants;
+import com.vectrace.MercurialEclipse.team.cache.MercurialStatusCache;
+import com.vectrace.MercurialEclipse.team.cache.RefreshRootJob;
+import com.vectrace.MercurialEclipse.team.cache.RefreshWorkspaceStatusJob;
 
 /**
  * @author bastian
@@ -26,7 +29,9 @@ import com.vectrace.MercurialEclipse.preferences.MercurialPreferenceConstants;
 public class HgRebaseClient extends AbstractClient {
 
 	/**
-	 * Calls hg rebase
+	 * Calls hg rebase.
+	 * <p>
+	 * Doesn't support supplying custom commit messages for collapse and continued collapse.
 	 *
 	 * @param hgRoot
 	 *            a hg root that is to be rebased.
@@ -43,13 +48,15 @@ public class HgRebaseClient extends AbstractClient {
 	 * @param abort
 	 *            true, if --abort is to be used
 	 * @param keepBranches
+	 * @param useExternalMergeTool
+	 * @param user
+	 *            The user to use for collapse and continued collapse. May be null
 	 * @return the output of the command
 	 * @throws HgException
 	 */
-	public static String rebase(HgRoot hgRoot, int sourceRev, int baseRev,
-			int destRev, boolean collapse, boolean cont, boolean abort, boolean keepBranches,
-			boolean useExternalMergeTool)
-			throws HgException {
+	public static String rebase(HgRoot hgRoot, int sourceRev, int baseRev, int destRev,
+			boolean collapse, boolean cont, boolean abort, boolean keepBranches, boolean keep,
+			boolean useExternalMergeTool, String user) throws HgException {
 		AbstractShellCommand c = new HgCommand("rebase", hgRoot, false);//$NON-NLS-1$
 		c.setExecutionRule(new AbstractShellCommand.ExclusiveExecutionRule(hgRoot));
 		c.setUsePreferenceTimeout(MercurialPreferenceConstants.PULL_TIMEOUT);
@@ -58,8 +65,18 @@ public class HgRebaseClient extends AbstractClient {
 			// need this option, though, as we still want the Mercurial merge to
 			// take place.
 			c.addOptions("--config", "ui.merge=simplemerge"); //$NON-NLS-1$ //$NON-NLS-2$
+
+			// Do not invoke external editor for commit message
+			// Future: Allow user to specify this
+			c.addOptions("--config", "ui.editor=echo"); //$NON-NLS-1$ //$NON-NLS-2$
+			// Future: Delete this block and use  addMergeToolPreference(command);
 		}
 		c.addOptions("--config", "extensions.hgext.rebase="); //$NON-NLS-1$ //$NON-NLS-2$
+
+		// User is only applicable for collapse and continued collapse invocations
+		if (user != null) {
+			c.addOptions("--config", "ui.username=" + user); //$NON-NLS-1$ //$NON-NLS-2$
+		}
 
 		if (!cont && !abort) {
 			if (sourceRev >= 0 && baseRev <= 0) {
@@ -86,13 +103,37 @@ public class HgRebaseClient extends AbstractClient {
 			c.addOptions("--abort"); //$NON-NLS-1$
 		}
 
-		if(keepBranches) {
-			c.addOptions("--keepbranches");
+		if (keepBranches) {
+			c.addOptions("--keepbranches"); //$NON-NLS-1$
 		}
+		if (keep) {
+			c.addOptions("--keep"); //$NON-NLS-1$
+		}
+
+		MercurialStatusCache.getInstance().setMergeViewDialogShown(false);
+
 		return c.executeToString();
 	}
 
-	/** Check to see if we are in the middle of a rebase. <br/>
+	/**
+	 * Invoke hg rebase --abort. Note: Refreshes the workspace.
+	 *
+	 * @param hgRoot
+	 *            The hg root to use
+	 * @return The result message
+	 * @throws HgException
+	 *             On error
+	 */
+	public static String abortRebase(HgRoot hgRoot) throws HgException {
+		try {
+			return rebase(hgRoot, -1, -1, -1, false, false, true, false, false, false, null);
+		} finally {
+			new RefreshWorkspaceStatusJob(hgRoot, RefreshRootJob.ALL).schedule();
+		}
+	}
+
+	/**
+	 * Check to see if we are in the middle of a rebase. <br/>
 	 * Assume the presence of the <code>/.hg/rebasestate</code> file means that we are
 	 *
 	 * @param hgRoot
@@ -103,11 +144,29 @@ public class HgRebaseClient extends AbstractClient {
 	}
 
 	/**
-	 * @param hgRoot
-	 * @return
-	 * @throws HgException
+	 * Determine if the given exception indicates a rebase conflict occurred.
+	 * <p>
+	 * Warning: Will this work on non-English locales?
+	 * <p>
+	 * Warning: Will hg output change?
+	 *
+	 * @param e
+	 *            The exception to check
+	 * @return True if the exception indicates a conflict occurred
 	 */
-	public static String continueRebase(HgRoot hgRoot) throws HgException {
-		return rebase(hgRoot, -1, -1, -1, false, true, false, false, false);
+	public static boolean isRebaseConflict(HgException e) {
+		String message = e.getMessage();
+
+		// Conflicts are expected:
+		// /bin/sh: simplemerge: command not found
+		// merging file1.txt
+		// merging file1.txt
+		// merging file1.txt failed!
+		// abort: fix unresolved conflicts with hg resolve then run hg rebase --continue.
+		// Command line: /home/john/runtime-New_configuration/hgtest2/hg -y
+		// rebase --config ui.merge=simplemerge --config ui.editor=echo --config
+		// extensions.hgext.rebase= --config ui.username=john --base 8 --dest 5, error
+		// code: 255
+		return (message != null && message.contains("fix unresolved conflicts with hg resolve then run hg rebase --continue"));
 	}
 }

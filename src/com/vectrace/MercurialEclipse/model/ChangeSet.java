@@ -21,6 +21,7 @@ import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Calendar;
 import java.util.Collections;
 import java.util.Date;
 import java.util.HashSet;
@@ -31,10 +32,14 @@ import org.eclipse.compare.structuremergeviewer.Differencer;
 import org.eclipse.core.resources.IFile;
 import org.eclipse.core.resources.IResource;
 import org.eclipse.core.runtime.IPath;
+import org.eclipse.core.runtime.ListenerList;
 import org.eclipse.team.internal.core.subscribers.CheckedInChangeSet;
 
 import com.vectrace.MercurialEclipse.HgRevision;
+import com.vectrace.MercurialEclipse.MercurialEclipsePlugin;
+import com.vectrace.MercurialEclipse.commands.HgStatusClient;
 import com.vectrace.MercurialEclipse.model.FileStatus.Action;
+import com.vectrace.MercurialEclipse.team.cache.MercurialStatusCache;
 import com.vectrace.MercurialEclipse.utils.ChangeSetUtils;
 import com.vectrace.MercurialEclipse.utils.ResourceUtils;
 import com.vectrace.MercurialEclipse.utils.StringUtils;
@@ -63,7 +68,6 @@ public class ChangeSet extends CheckedInChangeSet implements Comparable<ChangeSe
 	private String tagsStr;
 	private List<FileStatus> changedFiles;
 	private String description;
-	private String ageDate;
 	private String nodeShort;
 	private String[] parents;
 	private Date realDate;
@@ -73,6 +77,15 @@ public class ChangeSet extends CheckedInChangeSet implements Comparable<ChangeSe
 	private final HgRoot hgRoot;
 	Set<IFile> files;
 	private Tag[] tags;
+	private boolean showFirstParentChanges;
+
+	/**
+	 * Lazy loaded list of files changed. Only applicable to merge changesets when {@link #showFirstParentChanges} is true.
+	 * @see #getChangesetFiles()
+	 */
+	private List<FileStatus> firstParentChangedFiles;
+
+	private ListenerList listenerList;
 
 	/**
 	 * A more or less dummy changeset containing only index and global id. Such changeset is useful
@@ -181,13 +194,7 @@ public class ChangeSet extends CheckedInChangeSet implements Comparable<ChangeSe
 			return this;
 		}
 
-		// what is ageDate? Can it be derived from date and now()
-		public Builder ageDate(String ageDate) {
-			this.cs.ageDate = ageDate;
-			return this;
-		}
-
-		// nodeShort should be first X of changeset, this is superflous
+		// nodeShort should be first X of changeset, this is superfluous
 		public Builder nodeShort(String nodeShort) {
 			this.cs.nodeShort = nodeShort;
 			return this;
@@ -367,7 +374,30 @@ public class ChangeSet extends CheckedInChangeSet implements Comparable<ChangeSe
 	 * @return the ageDate
 	 */
 	public String getAgeDate() {
-		return ageDate;
+		return constructAge(getRealDate());
+	}
+
+	private String constructAge(Date creationDate) {
+		Calendar now = Calendar.getInstance();
+		Calendar created = Calendar.getInstance();
+		created.setTime(creationDate);
+		if (!created.before(now)) {
+			return "0 seconds ago";
+		}
+
+		if (now.get(Calendar.YEAR) - created.get(Calendar.YEAR) > 0) {
+			return now.get(Calendar.YEAR) - created.get(Calendar.YEAR) + " years ago";
+		} else if (now.get(Calendar.MONTH) - created.get(Calendar.MONTH) > 0) {
+			return now.get(Calendar.MONTH) - created.get(Calendar.MONTH) + " months ago";
+		} else if (now.get(Calendar.DAY_OF_MONTH) - created.get(Calendar.DAY_OF_MONTH) > 0) {
+			return now.get(Calendar.DAY_OF_MONTH) - created.get(Calendar.DAY_OF_MONTH) + " days ago";
+		} else if (now.get(Calendar.HOUR_OF_DAY) - created.get(Calendar.HOUR_OF_DAY) > 0) {
+			return now.get(Calendar.HOUR_OF_DAY) - created.get(Calendar.HOUR_OF_DAY) + " hours ago";
+		} else if (now.get(Calendar.MINUTE) - created.get(Calendar.MINUTE) > 0) {
+			return now.get(Calendar.MINUTE) - created.get(Calendar.MINUTE) + " minutes ago";
+		} else {
+			return "less than a minute ago";
+		}
 	}
 
 	/**
@@ -453,6 +483,14 @@ public class ChangeSet extends CheckedInChangeSet implements Comparable<ChangeSe
 		return parents;
 	}
 
+	public HgRevision getParentRevision(int ordinal) {
+		if (parents != null && 0 <= ordinal && ordinal < parents.length) {
+			return HgRevision.parse(parents[ordinal]);
+		}
+
+		return null;
+	}
+
 	private void setParents(String[] parents) {
 		// filter null parents (hg uses -1 to signify a null parent)
 		if (parents != null) {
@@ -465,6 +503,38 @@ public class ChangeSet extends CheckedInChangeSet implements Comparable<ChangeSe
 			}
 			this.parents = temp.toArray(new String[temp.size()]);
 		}
+	}
+
+	/**
+	 * @return True if this is a merge changeset.
+	 */
+	public boolean isMerge() {
+		return parents != null && 1 < parents.length && !StringUtils.isEmpty(parents[0])
+				&& !StringUtils.isEmpty(parents[1]);
+	}
+
+	public boolean isShowFirstParentChanges() {
+		return showFirstParentChanges;
+	}
+
+	public void setShowFirstParentChanges(boolean showFirstParentChanges) {
+		this.showFirstParentChanges = showFirstParentChanges;
+		fireChanged();
+	}
+
+	private List<FileStatus> getFirstParentChangedFiles() {
+		if (firstParentChangedFiles == null) {
+			// Query for this data. Takes 300 - 500ms for me.
+			// Note: For non-merge changesets this should return identical to changedFiles.
+			try {
+				firstParentChangedFiles = MercurialStatusCache.parseStatus(HgStatusClient.getStatusForChangeset(this), getHgRoot());
+			} catch (Throwable t) {
+				firstParentChangedFiles = EMPTY_STATUS;
+				MercurialEclipsePlugin.logError("Failed to get changeset files changed wrt first parent", t);
+			}
+		}
+
+		return firstParentChangedFiles;
 	}
 
 	private void setDescription(String description) {
@@ -532,11 +602,9 @@ public class ChangeSet extends CheckedInChangeSet implements Comparable<ChangeSe
 
 	public FileFromChangeSet[] getChangesetFiles() {
 		List<FileFromChangeSet> fcs = new ArrayList<FileFromChangeSet>();
-		if (getChangedFiles().isEmpty()) {
-			return fcs.toArray(new FileFromChangeSet[0]);
-		}
 
-		for (FileStatus fileStatus : changedFiles) {
+		for (FileStatus fileStatus : (isShowFirstParentChanges() ? getFirstParentChangedFiles()
+				: getChangedFiles())) {
 			int kind = 0;
 			switch (fileStatus.getAction()) {
 			case ADDED:
@@ -620,4 +688,29 @@ public class ChangeSet extends CheckedInChangeSet implements Comparable<ChangeSe
 		// not supported
 	}
 
+	private void fireChanged() {
+		if (listenerList != null) {
+			for (Object listener : listenerList.getListeners()) {
+				((Listener)listener).changeSetChanged(this);
+			}
+		}
+	}
+
+	public void addListener(Listener listener) {
+		if (listenerList == null) {
+			listenerList = new ListenerList();
+		}
+
+		listenerList.add(listener);
+	}
+
+	public void removeListener(Listener listener) {
+		if (listenerList != null) {
+			listenerList.remove(listener);
+		}
+	}
+
+	public interface Listener {
+		public void changeSetChanged(ChangeSet cs);
+	}
 }
