@@ -8,7 +8,7 @@
  * Contributors:
  *     Subclipse project committers - initial API and implementation
  *     Bastian Doetsch				- Adaption to Mercurial
- *     Andrei Loskutov (Intland) - bug fixes
+ *     Andrei Loskutov              - bug fixes
  *******************************************************************************/
 package com.vectrace.MercurialEclipse.synchronize.actions;
 
@@ -21,10 +21,12 @@ import org.eclipse.team.ui.synchronize.SynchronizeModelAction;
 import org.eclipse.team.ui.synchronize.SynchronizeModelOperation;
 
 import com.vectrace.MercurialEclipse.MercurialEclipsePlugin;
+import com.vectrace.MercurialEclipse.model.Branch;
 import com.vectrace.MercurialEclipse.model.ChangeSet;
 import com.vectrace.MercurialEclipse.model.WorkingChangeSet;
 import com.vectrace.MercurialEclipse.model.ChangeSet.Direction;
 import com.vectrace.MercurialEclipse.synchronize.cs.ChangesetGroup;
+import com.vectrace.MercurialEclipse.team.MercurialTeamProvider;
 
 /**
  * Get action that appears in the synchronize view. It's main purpose is to
@@ -82,14 +84,19 @@ public class PushPullSynchronizeAction extends SynchronizeModelAction {
 			ChangesetGroup group = (ChangesetGroup) object;
 			return isMatching(group.getDirection()) && !group.getChangesets().isEmpty();
 		}
-		if(object instanceof ChangeSet){
+		if (object instanceof ChangeSet) {
 			ChangeSet changeSet = (ChangeSet) object;
-			return !(changeSet instanceof WorkingChangeSet) && isMatching(changeSet.getDirection());
+			return !(changeSet instanceof WorkingChangeSet) && isMatching(changeSet.getDirection())
+					&& (!update || !isPull || isMatchingBranch(changeSet));
 		}
 		return false;
 	}
 
-	private boolean isMatching(Direction d){
+	private boolean isMatching(Direction d) {
 		return (d == Direction.INCOMING && isPull) || (d == Direction.OUTGOING && !isPull);
+	}
+
+	private boolean isMatchingBranch(ChangeSet cs) {
+		return Branch.same(MercurialTeamProvider.getCurrentBranch(cs.getHgRoot()), cs.getBranch());
 	}
 }

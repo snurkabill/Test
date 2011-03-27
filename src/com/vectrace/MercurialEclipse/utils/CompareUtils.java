@@ -7,7 +7,7 @@
  *
  * Contributors:
  *     Bastian Doetsch  implementation
- *     Andrei Loskutov (Intland) - bugfixes
+ *     Andrei Loskutov - bugfixes
  *******************************************************************************/
 package com.vectrace.MercurialEclipse.utils;
 
@@ -17,15 +17,21 @@ import org.eclipse.compare.CompareUI;
 import org.eclipse.compare.ResourceNode;
 import org.eclipse.compare.internal.CompareEditor;
 import org.eclipse.core.resources.IFile;
+import org.eclipse.core.resources.IResource;
 import org.eclipse.core.runtime.Assert;
 import org.eclipse.core.runtime.IProgressMonitor;
 import org.eclipse.core.runtime.IStatus;
 import org.eclipse.core.runtime.Status;
 import org.eclipse.jface.window.Window;
 import org.eclipse.swt.widgets.Display;
+import org.eclipse.team.core.TeamException;
+import org.eclipse.team.core.synchronize.SyncInfo;
+import org.eclipse.team.core.variants.IResourceVariant;
+import org.eclipse.team.core.variants.IResourceVariantComparator;
 import org.eclipse.team.internal.ui.IPreferenceIds;
 import org.eclipse.team.internal.ui.TeamUIPlugin;
 import org.eclipse.team.ui.synchronize.ISynchronizePageConfiguration;
+import org.eclipse.team.ui.synchronize.SyncInfoCompareInput;
 import org.eclipse.ui.IEditorPart;
 import org.eclipse.ui.IEditorReference;
 import org.eclipse.ui.IReusableEditor;
@@ -33,10 +39,16 @@ import org.eclipse.ui.IWorkbenchPage;
 import org.eclipse.ui.progress.UIJob;
 
 import com.vectrace.MercurialEclipse.MercurialEclipsePlugin;
+import com.vectrace.MercurialEclipse.commands.HgLogClient;
+import com.vectrace.MercurialEclipse.commands.HgParentClient;
 import com.vectrace.MercurialEclipse.compare.HgCompareEditorInput;
 import com.vectrace.MercurialEclipse.compare.RevisionNode;
+import com.vectrace.MercurialEclipse.exception.HgException;
 import com.vectrace.MercurialEclipse.model.ChangeSet;
+import com.vectrace.MercurialEclipse.synchronize.MercurialResourceVariant;
+import com.vectrace.MercurialEclipse.synchronize.MercurialResourceVariantComparator;
 import com.vectrace.MercurialEclipse.team.MercurialRevisionStorage;
+import com.vectrace.MercurialEclipse.team.MercurialTeamProvider;
 
 /**
  * This class helps to invoke the compare facilities of Eclipse.
@@ -45,58 +57,73 @@ import com.vectrace.MercurialEclipse.team.MercurialRevisionStorage;
 @SuppressWarnings("restriction")
 public final class CompareUtils {
 
+	public static final IResourceVariantComparator COMPARATOR = new MercurialResourceVariantComparator();
+
 	private CompareUtils() {
 		// hide constructor of utility class.
 	}
 
-	public static void openEditor(IFile file, ChangeSet changeset, boolean localEditable) {
+	public static void openEditor(IFile file, ChangeSet changeset) throws HgException {
 		int changesetIndex = changeset == null ? 0 : changeset.getChangesetIndex();
 		String changesetId = changeset == null ? null : changeset.getChangeset();
 
-		ResourceNode leftNode = null;
-		if (file != null) {
-			leftNode = new ResourceNode(file);
-		}
-		RevisionNode rightNode = getNode(new MercurialRevisionStorage(file, changesetIndex, changesetId, changeset));
-		openEditor(leftNode, rightNode, false, localEditable, null);
+		openEditor(file, new MercurialRevisionStorage(file, changesetIndex, changesetId, changeset), false, null);
 	}
 
-	public static void openEditor(MercurialRevisionStorage left, MercurialRevisionStorage right, boolean dialog, boolean localEditable) {
-		openEditor(left, right, dialog, localEditable, null);
+	public static void openEditor(MercurialRevisionStorage left, MercurialRevisionStorage right, boolean dialog) {
+		openEditor(left, right, dialog, null);
 	}
 
 	public static void openEditor(MercurialRevisionStorage left, MercurialRevisionStorage right,
-			boolean dialog, boolean localEditable, ISynchronizePageConfiguration configuration) {
-		ResourceNode leftNode;
-		ResourceNode rightNode;
-		if (right == null) {
+			boolean dialog, ISynchronizePageConfiguration configuration) {
+		if (right == null && left != null) {
 			// comparing with file-system
-			rightNode = getNode(left);
-			leftNode = new ResourceNode(rightNode.getResource());
+			try {
+				openEditor(left.getResource(), left, dialog, configuration);
+			} catch (HgException e) {
+				MercurialEclipsePlugin.logError(e);
+			}
 		} else {
-			leftNode = getNode(left);
-			rightNode = getNode(right);
+			ResourceNode leftNode = getNode(left);
+			ResourceNode rightNode = getNode(right);
+			openEditor(leftNode, rightNode, dialog, configuration);
 		}
-		openEditor(leftNode, rightNode, dialog, localEditable, configuration);
 	}
 
 	/**
+	 * Open a compare editor asynchronously
+	 *
 	 * @param configuration might be null
 	 */
 	public static void openEditor(final ResourceNode left, final ResourceNode right,
-			final boolean dialog, final boolean localEditable,
-			final ISynchronizePageConfiguration configuration) {
+			final boolean dialog, final ISynchronizePageConfiguration configuration) {
 		Assert.isNotNull(right);
 		if (dialog) {
-			openCompareDialog(left, right, localEditable);
-			return;
+			// TODO: is it intentional the config is ignored?
+			openCompareDialog(getCompareInput(left, right, null));
+		} else {
+			openEditor(getCompareInput(left, right, configuration));
 		}
+	}
 
-		final CompareEditorInput compareInput = getCompareInput(left, right, localEditable, configuration);
-		if (compareInput == null) {
-			return;
+	/**
+	 * Open a compare editor asynchronously
+	 *
+	 * @param configuration might be null
+	 * @throws HgException
+	 */
+	public static void openEditor(final IResource left, final MercurialRevisionStorage right,
+			final boolean dialog, final ISynchronizePageConfiguration configuration) throws HgException {
+		Assert.isNotNull(right);
+		if (dialog) {
+			// TODO: is it intentional the config is ignored?
+			openCompareDialog(getPrecomputedCompareInput(null, left, null, right));
+		} else {
+			openEditor(getPrecomputedCompareInput(configuration, left, null, right));
 		}
+	}
 
+	private static void openEditor(final CompareEditorInput compareInput) {
 		UIJob uiDiffJob = new UIJob("Preparing hg diff...") {
 			@Override
 			public IStatus runInUIThread(IProgressMonitor monitor) {
@@ -137,26 +164,12 @@ public final class CompareUtils {
 	}
 
 	/**
-	 * Opens a compare dialog and returns it. Unfortunately the dialog is
-	 * internal Eclipse API, so it might change in future Eclipse versions.
-	 *
-	 * @param left
-	 *            the left ResourceNode to determine the compare editor input
-	 * @param right
-	 *            the right ResourceNode to determine the compare editor input
-	 */
-	public static int openCompareDialog(ResourceNode left, ResourceNode right, boolean localEditable) {
-		CompareEditorInput compareInput = getCompareInput(left, right, localEditable);
-		return openCompareDialog(compareInput);
-	}
-
-	/**
 	 * Opens a compare dialog using the given input.
 	 *
 	 * @param compareInput
 	 * @return
 	 */
-	public static int openCompareDialog(final CompareEditorInput compareInput) {
+	private static int openCompareDialog(final CompareEditorInput compareInput) {
 		Runnable uiAction = new Runnable() {
 			public void run() {
 				CompareUI.openCompareDialog(compareInput);
@@ -166,25 +179,108 @@ public final class CompareUtils {
 		return Window.CANCEL;
 	}
 
-	public static CompareEditorInput getCompareInput(ResourceNode left, ResourceNode right,
-			boolean localEditable) {
-		return getCompareInput(left, right, localEditable, null);
-	}
-
 	/**
 	 * @param configuration might be null
 	 */
-	public static CompareEditorInput getCompareInput(ResourceNode left, ResourceNode right,
-			boolean localEditable, ISynchronizePageConfiguration configuration) {
+	private static CompareEditorInput getCompareInput(ResourceNode left, ResourceNode right,
+			ISynchronizePageConfiguration configuration) {
 		IFile resource = (IFile) right.getResource();
 		// switch left to right if left is null and put local to left
 		ResourceNode leftNode = left != null ? left : right;
 		ResourceNode rightNode = left != null ? right : new ResourceNode(resource);
 
-		return new HgCompareEditorInput(new CompareConfiguration(), resource, leftNode, rightNode, configuration);
+		return new HgCompareEditorInput(new CompareConfiguration(), resource, leftNode,
+				rightNode, findCommonAncestorIfExists(resource, left, right), configuration);
+	}
+
+	public static CompareEditorInput getPrecomputedCompareInput(IResource leftResource,
+			MercurialRevisionStorage ancestor, MercurialRevisionStorage right) throws HgException {
+		return getPrecomputedCompareInput(null, leftResource, ancestor, right);
+	}
+
+	private static CompareEditorInput getPrecomputedCompareInput(
+			ISynchronizePageConfiguration configuration, IResource leftResource,
+			MercurialRevisionStorage ancestor, MercurialRevisionStorage right) throws HgException {
+
+		IResourceVariant ancestorRV = getResourceVariant(ancestor);
+		IResourceVariant rightRV = getResourceVariant(right);
+
+		if (ancestorRV == null) {
+			// 2 way diff
+			ancestorRV = rightRV;
+		}
+
+		SyncInfo syncInfo = new SyncInfo(leftResource, ancestorRV, rightRV, COMPARATOR);
+
+		try {
+			syncInfo.init();
+		} catch(TeamException e) {
+			throw new HgException(e);
+		}
+
+		if (configuration == null) {
+			return new SyncInfoCompareInput(leftResource.getName(), syncInfo);
+		}
+
+		return new SyncInfoCompareInput(configuration, syncInfo);
+	}
+
+	private static IResourceVariant getResourceVariant(MercurialRevisionStorage storage) {
+		return storage == null ? null : new MercurialResourceVariant(storage);
 	}
 
 	private static RevisionNode getNode(MercurialRevisionStorage rev) {
 		return rev == null ? null : new RevisionNode(rev);
+	}
+
+	private static ResourceNode findCommonAncestorIfExists(IFile file, ResourceNode l, ResourceNode r) {
+		if (!(l instanceof RevisionNode && r instanceof RevisionNode)) {
+			return null;
+		}
+		RevisionNode lNode = (RevisionNode) l;
+		RevisionNode rNode = (RevisionNode) r;
+
+		try {
+			int commonAncestor = -1;
+			if(lNode.getChangeSet() != null && rNode.getChangeSet() != null){
+				try {
+					commonAncestor = HgParentClient.findCommonAncestor(
+							MercurialTeamProvider.getHgRoot(file),
+							lNode.getChangeSet(), rNode.getChangeSet());
+				} catch (HgException e) {
+					// continue
+				}
+			}
+
+			int lId = lNode.getRevision();
+			int rId = rNode.getRevision();
+
+			if(commonAncestor == -1){
+				try {
+					commonAncestor = HgParentClient.findCommonAncestor(
+							MercurialTeamProvider.getHgRoot(file),
+							Integer.toString(lId), Integer.toString(rId));
+				} catch (HgException e) {
+					// continue: no changeset in the local repo, se issue #10616
+				}
+			}
+
+			if (commonAncestor == lId) {
+				return null;
+			}
+			if (commonAncestor == rId) {
+				return null;
+			}
+			ChangeSet tip = HgLogClient.getTip(MercurialTeamProvider.getHgRoot(file));
+			boolean localKnown = tip.getChangesetIndex() >= commonAncestor;
+			if(!localKnown){
+				// no common ancestor
+				return null;
+			}
+			return new RevisionNode(new MercurialRevisionStorage(file, commonAncestor));
+		} catch (HgException e) {
+			MercurialEclipsePlugin.logError(e);
+			return null;
+		}
 	}
 }

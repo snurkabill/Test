@@ -9,21 +9,22 @@
  *     Jerome Negre              - initial
  *     Bastian Doetsch           - changes
  *     Brian Wallis              - getMergeStatus
- *     Andrei Loskutov (Intland) - bug fixes
+ *     Andrei Loskutov           - bug fixes
  *     Zsolt Koppany (Intland)	 - bug fixes
  *******************************************************************************/
 package com.vectrace.MercurialEclipse.commands;
 
+import java.io.BufferedReader;
 import java.io.File;
+import java.io.IOException;
+import java.io.StringReader;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-import org.eclipse.core.resources.IProject;
 import org.eclipse.core.resources.IResource;
-import org.eclipse.core.runtime.CoreException;
 import org.eclipse.core.runtime.IPath;
 import org.eclipse.core.runtime.Path;
 
@@ -31,11 +32,10 @@ import com.vectrace.MercurialEclipse.HgRevision;
 import com.vectrace.MercurialEclipse.MercurialEclipsePlugin;
 import com.vectrace.MercurialEclipse.exception.HgException;
 import com.vectrace.MercurialEclipse.model.Branch;
+import com.vectrace.MercurialEclipse.model.ChangeSet;
 import com.vectrace.MercurialEclipse.model.HgRoot;
 import com.vectrace.MercurialEclipse.preferences.MercurialPreferenceConstants;
-import com.vectrace.MercurialEclipse.team.ResourceProperties;
 import com.vectrace.MercurialEclipse.team.cache.MercurialStatusCache;
-import com.vectrace.MercurialEclipse.utils.ResourceUtils;
 
 public class HgStatusClient extends AbstractClient {
 
@@ -46,33 +46,33 @@ public class HgStatusClient extends AbstractClient {
 	// b63617c1e3460bd87eb51d2b8841b37fff1834d6+ default
 	// OR b63617c1e3460bd87eb51d2b8841b37fff1834d6 hallo branch
 	// + after the id is the "dirty" flag - if some files are not committed yet
+	//
+	// As well in Mercurial 1.6.0 during some rebases the following output:
+	//    filtering src/nexj/core/admin/platform/websphere/WebSphereInstaller.java through
+	//    filtering src/nexj/core/meta/j2ee/ibmconfig/cells/defaultCell/applications/defaultApp/deployments/defaultApp/deployment.xml through
+	//    filtering src/nexj/core/meta/sys/system.chtypes through
+	//    02bfc05967b86ba65a0cb990178638e4c491c865+d35923c18f8f564c6205e722119d88c6daa3f56d+ default
+	// These leading lines are ignored.
+	private static final Pattern ID_MERGE_AND_BRANCH_IGNORE_PATTERN = Pattern.compile("^filtering\\s.+\\sthrough\\s*$");
 
 	//             group 1                         group 2                             group 3
 	// (first parent, optional dirty flag)(merge parent, optional dirty flag) space (branch name)
-	private static final Pattern ID_MERGE_AND_BRANCH_PATTERN = Pattern.compile("^([0-9a-z]+\\+?)([0-9a-z]+)?\\+?\\s+(.+)$", Pattern.MULTILINE); //$NON-NLS-1$
-
-	public static String getStatus(HgRoot root) throws HgException {
-		AbstractShellCommand command = new HgCommand("status", root, true); //$NON-NLS-1$
-		// modified, added, removed, deleted, unknown, ignored, clean
-		command.addOptions("-marduic"); //$NON-NLS-1$
-		command.setUsePreferenceTimeout(MercurialPreferenceConstants.STATUS_TIMEOUT);
-		return command.executeToString();
-	}
+	private static final Pattern ID_MERGE_AND_BRANCH_PATTERN = Pattern.compile("^([0-9a-z]+\\+?)([0-9a-z]+)?\\+?\\s+(.+)$");
 
 	public static String getStatusWithoutIgnored(HgRoot root, IResource res) throws HgException {
-		AbstractShellCommand command = new HgCommand("status", root, true); //$NON-NLS-1$
+		AbstractShellCommand command = new HgCommand("status", "Calculating resource status", root, true); //$NON-NLS-1$
 
 		// modified, added, removed, deleted, unknown, ignored, clean
 		command.addOptions("-marduc"); //$NON-NLS-1$
 		command.setUsePreferenceTimeout(MercurialPreferenceConstants.STATUS_TIMEOUT);
 		if (res.getType() == IResource.FILE) {
-			command.addOptions(res.getLocation().toFile().getAbsolutePath());
+			command.addFiles(res);
 		}
 		return command.executeToString();
 	}
 
 	public static String getStatusWithoutIgnored(HgRoot root) throws HgException {
-		AbstractShellCommand command = new HgCommand("status", root, true); //$NON-NLS-1$
+		AbstractShellCommand command = new HgCommand("status", "Calculating resource status", root, true); //$NON-NLS-1$
 
 		// modified, added, removed, deleted, unknown, ignored, clean
 		command.addOptions("-marduc"); //$NON-NLS-1$
@@ -86,22 +86,14 @@ public class HgStatusClient extends AbstractClient {
 	 * files under the given root, which are untracked by hg
 	 */
 	public static String[] getUntrackedFiles(HgRoot hgRoot) throws HgException {
-		AbstractShellCommand command = new HgCommand("status", hgRoot, true); //$NON-NLS-1$
+		AbstractShellCommand command = new HgCommand("status", "Calculating untracked files", hgRoot, true); //$NON-NLS-1$
 		command.setUsePreferenceTimeout(MercurialPreferenceConstants.STATUS_TIMEOUT);
 		command.addOptions("-u", "-n"); //$NON-NLS-1$ //$NON-NLS-2$
 		return command.executeToString().split("\n"); //$NON-NLS-1$
 	}
 
-	public static boolean isDirty(List<? extends IResource> resources) throws HgException {
-		AbstractShellCommand command = new HgCommand("status", true); //$NON-NLS-1$
-		command.setUsePreferenceTimeout(MercurialPreferenceConstants.STATUS_TIMEOUT);
-		command.addOptions("-mard"); // modified, added, removed, deleted //$NON-NLS-1$
-		command.addFiles(resources);
-		return command.executeToBytes().length != 0;
-	}
-
 	public static boolean isDirty(HgRoot root) throws HgException {
-		AbstractShellCommand command = new HgCommand("status", root, true); //$NON-NLS-1$
+		AbstractShellCommand command = new HgCommand("status", "Calculating dirty state", root, true); //$NON-NLS-1$
 		command.setUsePreferenceTimeout(MercurialPreferenceConstants.STATUS_TIMEOUT);
 		command.addOptions("-mard"); // modified, added, removed, deleted //$NON-NLS-1$
 		return command.executeToBytes().length != 0;
@@ -113,13 +105,29 @@ public class HgStatusClient extends AbstractClient {
 	 * @throws HgException
 	 */
 	public static String[] getIdMergeAndBranch(HgRoot root) throws HgException {
-		AbstractShellCommand command = new HgCommand("id", root, true); //$NON-NLS-1$
+		AbstractShellCommand command = new HgCommand("id", "Identifying status", root, true); //$NON-NLS-1$
 		// Full global IDs + branch name
 		command.addOptions("-ib", "--debug"); //$NON-NLS-1$ //$NON-NLS-2$
 		command.setUsePreferenceTimeout(MercurialPreferenceConstants.STATUS_TIMEOUT);
-		String versionIds = command.executeToString().trim();
+		String versionIds = null;
+		BufferedReader br = new BufferedReader(new StringReader(command.executeToString().trim()));
 
-		Matcher m = ID_MERGE_AND_BRANCH_PATTERN.matcher(versionIds);
+		try {
+			while ((versionIds = br.readLine()) != null) {
+				if (!ID_MERGE_AND_BRANCH_IGNORE_PATTERN.matcher(versionIds).matches()) {
+					break;
+				}
+			}
+		} catch (IOException e) {
+			MercurialEclipsePlugin.logError(e);
+		} finally {
+			try {
+				br.close();
+			} catch (IOException ex) {
+			}
+		}
+
+		Matcher m = ID_MERGE_AND_BRANCH_PATTERN.matcher((versionIds == null) ? "" : versionIds);
 		String mergeId = null;
 		String branch = Branch.DEFAULT;
 		// current working directory id
@@ -136,7 +144,8 @@ public class HgStatusClient extends AbstractClient {
 	}
 
 	public static String getStatusWithoutIgnored(HgRoot root, List<IResource> files) throws HgException {
-		AbstractShellCommand command = new HgCommand("status", root, true); //$NON-NLS-1$
+		AbstractShellCommand command = new HgCommand("status", //$NON-NLS-1$
+				"Calculating status for " + files.size() + " resources", root, true);
 
 		command.setUsePreferenceTimeout(MercurialPreferenceConstants.STATUS_TIMEOUT);
 		// modified, added, removed, deleted, unknown, ignored, clean
@@ -149,7 +158,7 @@ public class HgStatusClient extends AbstractClient {
 	 * @return root relative paths of changed files, never null
 	 */
 	public static String[] getDirtyFiles(HgRoot root) throws HgException {
-		AbstractShellCommand command = new HgCommand("status", root, true); //$NON-NLS-1$
+		AbstractShellCommand command = new HgCommand("status", "Calculating dirty resources", root, true); //$NON-NLS-1$
 
 		command.setUsePreferenceTimeout(MercurialPreferenceConstants.STATUS_TIMEOUT);
 		command.addOptions("-mard"); //$NON-NLS-1$
@@ -229,12 +238,12 @@ public class HgStatusClient extends AbstractClient {
 	}
 
 	private static File getPossibleSourcePath(HgRoot root, File file, int firstRev, String secondRev) throws HgException{
-		AbstractShellCommand command = new HgCommand("status", root, true); //$NON-NLS-1$
+		AbstractShellCommand command = new HgCommand("status", "Finding resource status", root, true); //$NON-NLS-1$
 		command.setUsePreferenceTimeout(MercurialPreferenceConstants.STATUS_TIMEOUT);
 		command.addOptions("-arC"); //$NON-NLS-1$
 		command.addOptions("--rev"); //$NON-NLS-1$
 		command.addOptions(firstRev + ":" + secondRev); //$NON-NLS-1$
-		command.addFiles(file.getAbsolutePath());
+		command.addFile(file);
 		String result = command.executeToString();
 		if (result == null || result.length() == 0) {
 			return null;
@@ -262,65 +271,35 @@ public class HgStatusClient extends AbstractClient {
 		return null;
 	}
 
-	public static void clearMergeStatus(HgRoot hgRoot) throws CoreException {
-		Set<IProject> projects = ResourceUtils.getProjects(hgRoot);
-		for (IProject project : projects) {
-			clearMergeStatus(project);
-		}
-	}
-
-	public static void clearMergeStatus(IProject project) throws CoreException {
-		// clear merge status in Eclipse
-		project.setPersistentProperty(ResourceProperties.MERGING, null);
-		// triggers the decoration update
-		ResourceUtils.touch(project);
-	}
-
-	public static void setMergeStatus(HgRoot hgRoot, String mergeChangesetId) throws CoreException {
-		Set<IProject> projects = ResourceUtils.getProjects(hgRoot);
-		for (IProject project : projects) {
-			// clear merge status in Eclipse
-			setMergeStatus(project, mergeChangesetId);
-		}
-	}
-
-	public static void setMergeStatus(IProject project, String mergeChangesetId) throws CoreException {
-		// clear merge status in Eclipse
-		project.setPersistentProperty(ResourceProperties.MERGING, mergeChangesetId);
-		// triggers the decoration update
-		ResourceUtils.touch(project);
-	}
-
-	public static boolean isMergeInProgress(IResource res) {
-		return getMergeChangesetId(res.getProject()) != null;
-	}
-
-	public static boolean isMergeInProgress(HgRoot hgRoot) {
-		return getMergeChangesetId(hgRoot) != null;
-	}
-
 	/**
-	 * @param project non null
-	 * @return the version:short_changeset_id OR full_changeset_id string if the root is being merged, otherwise null
+	 * Execute 'hg status --rev cs --rev csparent', with bundle overlay if applicable
+	 *
+	 * @param cs
+	 *            The changeset to use
+	 * @return Status output
+	 * @throws HgException
 	 */
-	public static String getMergeChangesetId(IProject project) {
-		try {
-			return project.getPersistentProperty(ResourceProperties.MERGING);
-		} catch (CoreException e) {
-			MercurialEclipsePlugin.logError(e);
-		}
-		return null;
-	}
+	public static String getStatusForChangeset(ChangeSet cs) throws HgException {
+		HgCommand command = new HgCommand(
+				"status", //$NON-NLS-1$
+				"Calcuting resources changes in changeset " + cs.getChangeset(), cs.getHgRoot(),
+				true);
 
-	/**
-	 * @param hgRoot non null
-	 * @return the version:short_changeset_id OR full_changeset_id string if the root is being merged, otherwise null
-	 */
-	public static String getMergeChangesetId(HgRoot hgRoot) {
-		Set<IProject> projects = ResourceUtils.getProjects(hgRoot);
-		if(!projects.isEmpty()) {
-			return getMergeChangesetId(projects.iterator().next());
+		if (cs.getBundleFile() != null) {
+			try {
+				command.setBundleOverlay(cs.getBundleFile());
+			} catch (IOException e) {
+				throw new HgException("Couldn't set bundle overlay", e);
+			}
 		}
-		return null;
+
+		// modified, added, removed, deleted
+		command.addOptions("-mard"); //$NON-NLS-1$
+		command.addOptions("--rev", cs.getParentRevision(0).getChangeset());
+		command.addOptions("--rev", cs.getRevision().getChangeset());
+
+		command.setUsePreferenceTimeout(MercurialPreferenceConstants.STATUS_TIMEOUT);
+
+		return command.executeToString();
 	}
 }

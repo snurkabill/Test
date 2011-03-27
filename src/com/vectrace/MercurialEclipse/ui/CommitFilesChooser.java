@@ -7,8 +7,8 @@
  *
  * Contributors:
  * Administrator	implementation
- *     Andrei Loskutov (Intland) - bug fixes
- *     Zsolt Koppany (Intland)
+ *     Andrei Loskutov         - bug fixes
+ *     Zsolt Koppany (Intland) - bug fixes
  *******************************************************************************/
 package com.vectrace.MercurialEclipse.ui;
 
@@ -18,12 +18,11 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Set;
 
-import org.eclipse.compare.CompareEditorInput;
-import org.eclipse.compare.ResourceNode;
 import org.eclipse.core.resources.IFile;
 import org.eclipse.core.resources.IResource;
 import org.eclipse.core.runtime.IPath;
 import org.eclipse.core.runtime.ListenerList;
+import org.eclipse.jface.preference.IPreferenceStore;
 import org.eclipse.jface.viewers.ArrayContentProvider;
 import org.eclipse.jface.viewers.CheckStateChangedEvent;
 import org.eclipse.jface.viewers.CheckboxTableViewer;
@@ -39,6 +38,7 @@ import org.eclipse.jface.viewers.LabelProviderChangedEvent;
 import org.eclipse.jface.viewers.SelectionChangedEvent;
 import org.eclipse.jface.viewers.StructuredViewer;
 import org.eclipse.jface.viewers.Viewer;
+import org.eclipse.jface.viewers.ViewerComparator;
 import org.eclipse.swt.SWT;
 import org.eclipse.swt.events.MouseAdapter;
 import org.eclipse.swt.events.MouseEvent;
@@ -57,12 +57,12 @@ import org.eclipse.swt.widgets.TableItem;
 import com.vectrace.MercurialEclipse.MercurialEclipsePlugin;
 import com.vectrace.MercurialEclipse.TableColumnSorter;
 import com.vectrace.MercurialEclipse.commands.HgStatusClient;
-import com.vectrace.MercurialEclipse.compare.RevisionNode;
 import com.vectrace.MercurialEclipse.dialogs.CommitResource;
 import com.vectrace.MercurialEclipse.dialogs.CommitResourceLabelProvider;
 import com.vectrace.MercurialEclipse.dialogs.CommitResourceUtil;
 import com.vectrace.MercurialEclipse.exception.HgException;
 import com.vectrace.MercurialEclipse.model.HgRoot;
+import com.vectrace.MercurialEclipse.preferences.MercurialPreferenceConstants;
 import com.vectrace.MercurialEclipse.team.MercurialRevisionStorage;
 import com.vectrace.MercurialEclipse.team.MercurialTeamProvider;
 import com.vectrace.MercurialEclipse.team.cache.MercurialStatusCache;
@@ -135,6 +135,7 @@ public class CommitFilesChooser extends Composite {
 			}
 		});
 		viewer.setLabelProvider(labelProvider);
+		viewer.setComparator(new ViewerComparator());
 		viewer.addFilter(committableFilesFilter);
 		if (!showUntracked) {
 			viewer.addFilter(untrackedFilesFilter);
@@ -224,17 +225,6 @@ public class CommitFilesChooser extends Composite {
 				GridData.FILL_HORIZONTAL));
 	}
 
-	protected CompareEditorInput getCompareEditorInput() {
-		if (selectedFile == null) {
-			return null;
-		}
-		MercurialRevisionStorage iStorage = new MercurialRevisionStorage(
-				selectedFile);
-		ResourceNode right = new RevisionNode(iStorage);
-		ResourceNode left = new ResourceNode(selectedFile);
-		return CompareUtils.getCompareInput(left, right, false);
-	}
-
 	private void makeActions() {
 		getViewer().addDoubleClickListener(new IDoubleClickListener() {
 			public void doubleClick(DoubleClickEvent event) {
@@ -312,10 +302,15 @@ public class CommitFilesChooser extends Composite {
 		CommitResource[] commitResources = createCommitResources(resources);
 		getViewer().setInput(commitResources);
 
-		List<CommitResource> tracked = new CommitResourceUtil()
-				.filterForTracked(commitResources);
-		getViewer().setCheckedElements(tracked.toArray());
-		if (selectable && !showUntracked) {
+		IPreferenceStore store = MercurialEclipsePlugin.getDefault().getPreferenceStore();
+		boolean preSelectAll = store.getBoolean(MercurialPreferenceConstants.PREF_PRESELECT_UNTRACKED_IN_COMMIT_DIALOG);
+		if (preSelectAll) {
+			getViewer().setCheckedElements(commitResources);
+		} else {
+			List <CommitResource> tracked = CommitResourceUtil.filterForTracked(commitResources);
+			getViewer().setCheckedElements(tracked.toArray());
+		}
+		if (selectable && (!showUntracked || preSelectAll)) {
 			selectAllButton.setSelection(true);
 		}
 		// show clean file, if we are called on a single, not modified file
@@ -323,18 +318,16 @@ public class CommitFilesChooser extends Composite {
 		if (showClean && resources.size() == 1 && commitResources.length == 0) {
 			IResource resource = resources.get(0);
 			if (resource.getType() == IResource.FILE) {
-				try {
-					HgRoot hgRoot = MercurialTeamProvider.getHgRoot(resource);
-					File path = new File(hgRoot.toRelative(resource
-							.getLocation().toFile()));
-					CommitResource cr = new CommitResource(""
-							+ MercurialStatusCache.CHAR_CLEAN, resource, path);
-					CommitResource[] input = new CommitResource[] { cr };
-					getViewer().setInput(input);
-					getViewer().setCheckedElements(input);
-				} catch (HgException e) {
-					MercurialEclipsePlugin.logError(e);
+				HgRoot hgRoot = MercurialTeamProvider.getHgRoot(resource);
+				if(hgRoot == null) {
+					return;
 				}
+				File path = new File(hgRoot.toRelative(ResourceUtils.getFileHandle(resource)));
+				CommitResource cr = new CommitResource(MercurialStatusCache.BIT_CLEAN,
+						resource, path);
+				CommitResource[] input = new CommitResource[] { cr };
+				getViewer().setInput(input);
+				getViewer().setCheckedElements(input);
 			}
 		}
 	}
@@ -372,13 +365,7 @@ public class CommitFilesChooser extends Composite {
 	 * @param res
 	 */
 	private CommitResource[] createCommitResources(List<IResource> res) {
-		try {
-			return new CommitResourceUtil().getCommitResources(res
-					.toArray(new IResource[0]));
-		} catch (HgException e) {
-			MercurialEclipsePlugin.logError(e);
-		}
-		return new CommitResource[0];
+		return CommitResourceUtil.getCommitResources(res);
 	}
 
 	/**
@@ -393,7 +380,7 @@ public class CommitFilesChooser extends Composite {
 		if (allCommitResources == null) {
 			return;
 		}
-		List<CommitResource> selected = new CommitResourceUtil()
+		List<CommitResource> selected = CommitResourceUtil
 				.filterForResources(Arrays.asList(allCommitResources),
 						resources);
 		getViewer().setCheckedElements(selected.toArray());
@@ -441,11 +428,16 @@ public class CommitFilesChooser extends Composite {
 
 	private void showDiffForSelection() {
 		if (selectedFile != null) {
-			MercurialRevisionStorage iStorage = new MercurialRevisionStorage(
-					selectedFile);
-			ResourceNode right = new RevisionNode(iStorage);
-			ResourceNode left = new ResourceNode(selectedFile);
-			CompareUtils.openEditor(left, right, true, false, null);
+			MercurialRevisionStorage iStorage = new MercurialRevisionStorage(selectedFile);
+			try {
+				CompareUtils.openEditor(selectedFile, iStorage, true, null);
+			} catch (HgException e) {
+				MercurialEclipsePlugin.logError(e);
+			}
 		}
+	}
+
+	public boolean isSelectable() {
+		return selectable;
 	}
 }

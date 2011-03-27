@@ -6,7 +6,7 @@
  *
  * Contributors: Bastian Doetsch - implementation
  *     Zsolt Koppany (Intland)   - bug fixes
- *     Andrei Loskutov (Intland) - bug fixes
+ *     Andrei Loskutov           - bug fixes
  *     Philip Graf               - proxy support
  ******************************************************************************/
 
@@ -18,8 +18,8 @@ import java.io.IOException;
 import com.vectrace.MercurialEclipse.MercurialEclipsePlugin;
 import com.vectrace.MercurialEclipse.exception.HgException;
 import com.vectrace.MercurialEclipse.model.Branch;
-import com.vectrace.MercurialEclipse.model.ChangeSet.Direction;
 import com.vectrace.MercurialEclipse.model.HgRoot;
+import com.vectrace.MercurialEclipse.model.ChangeSet.Direction;
 import com.vectrace.MercurialEclipse.preferences.MercurialPreferenceConstants;
 import com.vectrace.MercurialEclipse.team.cache.RemoteData;
 import com.vectrace.MercurialEclipse.team.cache.RemoteKey;
@@ -39,7 +39,7 @@ public class HgIncomingClient extends AbstractParseChangesetClient {
 	 */
 	public static RemoteData getHgIncoming(RemoteKey key) throws HgException {
 		HgRoot hgRoot = key.getRoot();
-		HgCommand command = new HgCommand("incoming", hgRoot, false); //$NON-NLS-1$
+		HgCommand command = new HgCommand("incoming", "Calculating incoming changesets", hgRoot, false); //$NON-NLS-1$
 		command.setExecutionRule(new AbstractShellCommand.ExclusiveExecutionRule(hgRoot));
 		command.setUsePreferenceTimeout(MercurialPreferenceConstants.PULL_TIMEOUT);
 		String branch = key.getBranch();
@@ -48,9 +48,10 @@ public class HgIncomingClient extends AbstractParseChangesetClient {
 			return new RemoteData(key, Direction.INCOMING);
 		}
 
-		// see issue 10495, 11093: there can be many branch heads, so show all of them
-		// otherwise if "-r branch" is used, only branch head at "tip" is shown
-		// command.addOptions("-r", branch);
+		// see issue 10495, 11093: there can be many branch heads: "--rev branch" cannot be used
+		if (branch != null) {
+			command.addOptions("--branch", branch);
+		}
 
 		File bundleFile = null;
 		try {

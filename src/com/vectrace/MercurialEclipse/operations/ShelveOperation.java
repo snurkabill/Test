@@ -7,18 +7,18 @@
  *
  * Contributors:
  * bastian	implementation
- *     Andrei Loskutov (Intland) - bug fixes
+ *     Andrei Loskutov - bug fixes
  *******************************************************************************/
 package com.vectrace.MercurialEclipse.operations;
 
 import java.io.File;
 import java.lang.reflect.InvocationTargetException;
 import java.util.ArrayList;
-import java.util.HashSet;
-import java.util.Set;
+import java.util.Collections;
+import java.util.List;
 
+import org.eclipse.core.resources.IResource;
 import org.eclipse.core.runtime.CoreException;
-import org.eclipse.core.runtime.IPath;
 import org.eclipse.core.runtime.IProgressMonitor;
 import org.eclipse.ui.IWorkbenchPart;
 
@@ -53,7 +53,9 @@ public class ShelveOperation extends HgOperation {
 		return Messages.getString("ShelveOperation.shelvingChanges"); //$NON-NLS-1$
 	}
 
-	@Override
+	/**
+	 * @see org.eclipse.jface.operation.IRunnableWithProgress#run(org.eclipse.core.runtime.IProgressMonitor)
+	 */
 	public void run(IProgressMonitor monitor) throws InvocationTargetException,
 			InterruptedException {
 		File shelveDir = new File(hgRoot, ".hg" + File.separator //$NON-NLS-1$
@@ -91,8 +93,12 @@ public class ShelveOperation extends HgOperation {
 					throw new HgCoreException(Messages.getString("ShelveOperation.error.shelfNotEmpty")); //$NON-NLS-1$
 				}
 				// use empty resources to be able to shelve ALL files, also deleted/added
-				Set<IPath> resources = new HashSet<IPath>(); // getDirtyFiles(hgRoot);
-				HgPatchClient.exportPatch(hgRoot, resources, shelveFile, new ArrayList<String>(0));
+				List<IResource> resources = Collections.emptyList(); // getDirtyFiles(hgRoot);
+				List<String> options = new ArrayList<String>(1);
+
+				options.add("--git");
+
+				HgPatchClient.exportPatch(hgRoot, resources, shelveFile, options);
 				monitor.worked(1);
 				monitor.subTask(Messages.getString("ShelveOperation.determiningCurrentChangeset")); //$NON-NLS-1$
 				String currRev = HgIdentClient.getCurrentChangesetId(hgRoot);

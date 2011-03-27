@@ -7,7 +7,7 @@
  *
  * Contributors:
  *     Bastian Doetsch           - implementation
- *     Andrei Loskutov (Intland) - bug fixes
+ *     Andrei Loskutov           - bug fixes
  *******************************************************************************/
 package com.vectrace.MercurialEclipse.commands.extensions.forest;
 
@@ -20,8 +20,8 @@ import org.eclipse.core.runtime.CoreException;
 
 import com.vectrace.MercurialEclipse.MercurialEclipsePlugin;
 import com.vectrace.MercurialEclipse.commands.AbstractShellCommand;
-import com.vectrace.MercurialEclipse.commands.HgCommand;
 import com.vectrace.MercurialEclipse.commands.HgPushPullClient;
+import com.vectrace.MercurialEclipse.commands.RootlessHgCommand;
 import com.vectrace.MercurialEclipse.exception.HgException;
 import com.vectrace.MercurialEclipse.model.ChangeSet;
 import com.vectrace.MercurialEclipse.model.HgRoot;
@@ -33,9 +33,9 @@ import com.vectrace.MercurialEclipse.team.cache.RefreshWorkspaceStatusJob;
 public class HgFpushPullClient extends HgPushPullClient {
 
 	public static String fpush(File forestRoot, IHgRepositoryLocation repo,
-			String revision, int timeout, File snapFile) throws CoreException {
+			ChangeSet changeset, int timeout, File snapFile) throws CoreException {
 
-		AbstractShellCommand command = new HgCommand("fpush", forestRoot, true);
+		AbstractShellCommand command = new RootlessHgCommand("fpush", "Invoking fpush", forestRoot);
 		command.setUsePreferenceTimeout(MercurialPreferenceConstants.PUSH_TIMEOUT);
 		if (snapFile != null) {
 			try {
@@ -45,9 +45,7 @@ public class HgFpushPullClient extends HgPushPullClient {
 			}
 		}
 
-		if (revision != null && revision.length() > 0) {
-			command.addOptions("-r", revision.trim());
-		}
+		HgPushPullClient.applyChangeset(command, changeset);
 
 		URI uri = repo.getUri();
 		if (uri != null) {
@@ -70,14 +68,13 @@ public class HgFpushPullClient extends HgPushPullClient {
 		} else {
 			pullSource = repo.getLocation();
 		}
-		AbstractShellCommand command = new HgCommand("fpull", forestRoot, true);
+		AbstractShellCommand command = new RootlessHgCommand("fpull", "Invoking fpull", forestRoot);
 
 		if (update) {
 			command.addOptions("--update");
 		}
-		if (changeset != null) {
-			command.addOptions("--rev", changeset.getChangeset());
-		}
+
+		applyChangeset(command, changeset);
 
 		if (snapFile != null) {
 			try {

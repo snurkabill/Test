@@ -7,7 +7,7 @@
  *
  * Contributors:
  * 		Bastian Doetsch 			- implementation of remove
- *     	Andrei Loskutov (Intland) 	- bug fixes
+ *     	Andrei Loskutov         	- bug fixes
  *     	Zsolt Koppany (Intland)		- bug fixes
  *******************************************************************************/
 package com.vectrace.MercurialEclipse.commands;
@@ -25,25 +25,51 @@ import com.vectrace.MercurialEclipse.model.HgRoot;
 import com.vectrace.MercurialEclipse.model.Tag;
 
 public class HgTagClient extends AbstractClient {
-	private static final Pattern GET_TAGS_PATTERN = Pattern.compile("^(.+[^ ]) +([-0-9]+):([a-f0-9]+)( local)?$"); //$NON-NLS-1$
+	private static final Pattern GET_TAGS_PATTERN = Pattern.compile("^(.*) ([-0-9]+):([a-f0-9]+)( local)?$"); //$NON-NLS-1$
 
+	/**
+	 * Fetches all tags for given root. The tags do NOT have full changeset info
+	 * attached.
+	 * @param hgRoot non null
+	 * @return never null, might be empty array
+	 * @throws HgException
+	 */
 	public static Tag[] getTags(HgRoot hgRoot) throws HgException {
-		AbstractShellCommand command = new HgCommand("tags", hgRoot, false); //$NON-NLS-1$
+		AbstractShellCommand command = new HgCommand("tags", "Retrieving tags", hgRoot, false); //$NON-NLS-1$
 		command.addOptions("-v"); //$NON-NLS-1$
 		String[] lines = command.executeToString().split("\n"); //$NON-NLS-1$
 
-		Collection<Tag> tags = getTags(lines);
+		Collection<Tag> tags = getTags(hgRoot, lines);
 		Tag[] sortedTags = tags.toArray(new Tag[] {});
 		return sortedTags;
 	}
 
-	protected static Collection<Tag> getTags(String[] lines) throws HgException {
+	/**
+	 * @param hgRoot non null
+	 * @param withChangesets true to fetch corresponding changesets too
+	 * @return never null, might be empty array
+	 * @throws HgException
+	 */
+	public static Tag[] getTags(HgRoot hgRoot, boolean withChangesets) throws HgException {
+		Tag[] tags = getTags(hgRoot);
+		if(withChangesets) {
+			for (Tag tag : tags) {
+				// triggers changeset loading, if the local changeset cache
+				// doesn't contain the tag version
+				tag.getChangeSet();
+			}
+		}
+		return tags;
+	}
+
+	protected static Collection<Tag> getTags(HgRoot hgRoot, String[] lines) throws HgException {
 		List<Tag> tags = new ArrayList<Tag>();
 
 		for (String line : lines) {
 			Matcher m = GET_TAGS_PATTERN.matcher(line);
 			if (m.matches()) {
-				Tag tag = new Tag(m.group(1), Integer.parseInt(m.group(2)), m.group(3), m.group(4) != null);
+				String tagName = m.group(1).trim();
+				Tag tag = new Tag(hgRoot, tagName, Integer.parseInt(m.group(2)), m.group(3), m.group(4) != null);
 				tags.add(tag);
 			} else {
 				throw new HgException(Messages.getString("HgTagClient.parseException") + line + "'"); //$NON-NLS-1$ //$NON-NLS-2$
@@ -60,7 +86,8 @@ public class HgTagClient extends AbstractClient {
 	 * @throws HgException
 	 */
 	public static void addTag(HgRoot hgRoot, String name, String rev, String user, boolean local, boolean force) throws HgException {
-		HgCommand command = new HgCommand("tag", hgRoot, false); //$NON-NLS-1$
+		HgCommand command = new HgCommand(
+				"tag", "Tagging revision " + ((rev == null) ? "" : rev + " ") + "as " + name, hgRoot, false); //$NON-NLS-1$
 		if (local) {
 			command.addOptions("-l");
 		}
@@ -77,7 +104,7 @@ public class HgTagClient extends AbstractClient {
 	}
 
 	public static String removeTag(HgRoot hgRoot, Tag tag, String user) throws HgException {
-		HgCommand command = new HgCommand("tag", getWorkingDirectory(hgRoot), false); //$NON-NLS-1$
+		HgCommand command = new HgCommand("tag", "Removing tag " + tag, hgRoot, false); //$NON-NLS-1$
 		command.addUserName(user);
 		command.addOptions("--remove");
 		command.addOptions(tag.getName());

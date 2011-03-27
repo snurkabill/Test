@@ -7,7 +7,7 @@
  *
  * Contributors:
  * 		bastian	implementation
- * 		Andrei Loskutov (Intland) - bugfixes
+ * 		Andrei Loskutov - bugfixes
  *******************************************************************************/
 package com.vectrace.MercurialEclipse.commands;
 
@@ -16,6 +16,7 @@ import java.io.File;
 import com.vectrace.MercurialEclipse.exception.HgException;
 import com.vectrace.MercurialEclipse.model.IHgRepositoryLocation;
 import com.vectrace.MercurialEclipse.preferences.MercurialPreferenceConstants;
+import com.vectrace.MercurialEclipse.team.cache.MercurialRootCache;
 import com.vectrace.MercurialEclipse.utils.ResourceUtils;
 
 /**
@@ -28,8 +29,9 @@ public class HgInitClient extends AbstractClient {
 	 * @param file non null directory (which may not exist yet)
 	 */
 	public static String init(File file) throws HgException {
-		AbstractShellCommand command = new HgCommand("init", ResourceUtils
-				.getFirstExistingDirectory(file), false);
+		MercurialRootCache.getInstance().uncacheAllNegative();
+		AbstractShellCommand command = new RootlessHgCommand("init", "Initializing repository", ResourceUtils
+				.getFirstExistingDirectory(file));
 		command.addOptions(file.getAbsolutePath());
 		command.setUsePreferenceTimeout(MercurialPreferenceConstants.DEFAULT_TIMEOUT);
 		return command.executeToString();
@@ -40,7 +42,8 @@ public class HgInitClient extends AbstractClient {
 	 * @param repo non null repository (which may not exist yet)
 	 */
 	public static String init(IHgRepositoryLocation repo) throws HgException {
-		AbstractShellCommand command = new HgCommand("init", false);
+		MercurialRootCache.getInstance().uncacheAllNegative();
+		AbstractShellCommand command = new RootlessHgCommand("init", "Initializing repository");
 		if(repo.isLocal()) {
 			command.addOptions(repo.getLocation());
 		} else {

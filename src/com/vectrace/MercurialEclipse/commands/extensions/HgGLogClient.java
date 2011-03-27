@@ -6,7 +6,7 @@
  * http://www.eclipse.org/legal/epl-v10.html
  *
  * Contributors:
- *     Andrei Loskutov (Intland) - bug fixes
+ *     Andrei Loskutov       - bug fixes
  *     Adam Berkes (Intland) - bug fixes
  *******************************************************************************/
 package com.vectrace.MercurialEclipse.commands.extensions;
@@ -21,8 +21,8 @@ import com.vectrace.MercurialEclipse.commands.HgCommand;
 import com.vectrace.MercurialEclipse.commands.HgLogClient;
 import com.vectrace.MercurialEclipse.exception.HgException;
 import com.vectrace.MercurialEclipse.model.GChangeSet;
-import com.vectrace.MercurialEclipse.model.HgRoot;
 import com.vectrace.MercurialEclipse.model.GChangeSet.RowCount;
+import com.vectrace.MercurialEclipse.model.HgRoot;
 import com.vectrace.MercurialEclipse.preferences.MercurialPreferenceConstants;
 import com.vectrace.MercurialEclipse.utils.ResourceUtils;
 
@@ -30,10 +30,12 @@ public class HgGLogClient extends HgCommand {
 	private final List<GChangeSet> sets = new ArrayList<GChangeSet>();
 
 	public HgGLogClient(IResource resource, int batchSize, int startRev) throws HgException {
-		super("glog", false);
+		super("glog", "Retrieving revision graph for resource", resource, false);
 		File fileHandle = ResourceUtils.getFileHandle(resource);
-		workingDir = ResourceUtils.getFirstExistingDirectory(fileHandle);
-
+		if(fileHandle.getPath().length() == 0) {
+			// unknown or virtual resource
+			return;
+		}
 		if (resource.getType() == IResource.FILE) {
 			addOptions(fileHandle.getAbsolutePath());
 		} else {
@@ -41,7 +43,7 @@ public class HgGLogClient extends HgCommand {
 				// glog doesn't follow directories
 				return;
 			}
-			HgRoot hgRoot = getHgRoot();
+
 			if(!hgRoot.equals(fileHandle)){
 				// multiple projects under same hg root handled by glog as directories
 				return;
@@ -72,8 +74,8 @@ public class HgGLogClient extends HgCommand {
 	}
 
 	public HgGLogClient(HgRoot hgRoot, int batchSize, int startRev) throws HgException {
-		super("glog", false);
-		workingDir = hgRoot;
+		super("glog", "Retrieving revision graph", hgRoot, false);
+
 		configureOptions(batchSize, startRev);
 		load(executeToString());
 	}

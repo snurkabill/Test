@@ -11,7 +11,7 @@
  *     StefanC                   - some updates
  *     Stefan Groschupf          - logError
  *     Bastian Doetsch           - updates, cleanup and documentation
- *     Andrei Loskutov (Intland) - bug fixes
+ *     Andrei Loskutov           - bug fixes
  *******************************************************************************/
 
 package com.vectrace.MercurialEclipse.team;
@@ -22,8 +22,7 @@ import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
 
-import org.eclipse.core.resources.IProject;
-import org.eclipse.core.resources.IResource;
+import org.eclipse.core.resources.IFile;
 import org.eclipse.core.resources.IWorkspaceRoot;
 import org.eclipse.core.resources.ResourcesPlugin;
 import org.eclipse.core.runtime.CoreException;
@@ -32,7 +31,6 @@ import org.eclipse.core.runtime.IStatus;
 import org.eclipse.core.runtime.QualifiedName;
 import org.eclipse.core.runtime.jobs.IJobManager;
 import org.eclipse.core.runtime.jobs.Job;
-import org.eclipse.jface.dialogs.MessageDialog;
 import org.eclipse.jface.preference.IPreferenceStore;
 import org.eclipse.jface.preference.PreferenceConverter;
 import org.eclipse.jface.preference.PreferenceDialog;
@@ -40,18 +38,19 @@ import org.eclipse.swt.graphics.Color;
 import org.eclipse.swt.graphics.Font;
 import org.eclipse.swt.graphics.FontData;
 import org.eclipse.swt.graphics.RGB;
-import org.eclipse.swt.widgets.Shell;
-import org.eclipse.team.core.Team;
 import org.eclipse.ui.dialogs.PreferencesUtil;
 
 import com.vectrace.MercurialEclipse.MercurialEclipsePlugin;
 import com.vectrace.MercurialEclipse.SafeUiJob;
 import com.vectrace.MercurialEclipse.commands.AbstractClient;
 import com.vectrace.MercurialEclipse.commands.HgClients;
-import com.vectrace.MercurialEclipse.commands.HgCommand;
 import com.vectrace.MercurialEclipse.commands.HgConfigClient;
+import com.vectrace.MercurialEclipse.commands.HgParentClient;
 import com.vectrace.MercurialEclipse.exception.HgException;
+import com.vectrace.MercurialEclipse.model.ChangeSet;
+import com.vectrace.MercurialEclipse.model.HgRoot;
 import com.vectrace.MercurialEclipse.preferences.MercurialPreferenceConstants;
+import com.vectrace.MercurialEclipse.storage.HgCommitMessageManager;
 import com.vectrace.MercurialEclipse.utils.IniFile;
 import com.vectrace.MercurialEclipse.utils.StringUtils;
 
@@ -96,7 +95,9 @@ public final class MercurialUtilities {
 	 * returned as default.
 	 *
 	 * @return the path to the executable or, if not defined "hg"
+	 * @deprecated Use {@link com.vectrace.MercurialEclipse.commands.HgClients#getExecutable()}
 	 */
+	@Deprecated
 	public static String getHGExecutable() {
 		return HgClients.getPreference(MercurialPreferenceConstants.MERCURIAL_EXECUTABLE, "hg"); //$NON-NLS-1$
 	}
@@ -231,60 +232,6 @@ public final class MercurialUtilities {
 		}
 	}
 
-	public static boolean isPossiblySupervised(IResource resource) {
-		if (resource == null) {
-			return false;
-		}
-		// check, if we're team provider
-		IProject project = resource.getProject();
-		if (!MercurialTeamProvider.isHgTeamProviderFor(project)) {
-			return false;
-		}
-		return !(Team.isIgnoredHint(resource) || resource.isTeamPrivateMember());
-	}
-
-	/**
-	 * Checks if the given resource is controlled by MercurialEclipse. If the given resource is
-	 * linked, it is not controlled by MercurialEclipse and therefore false is returned. A linked
-	 * file is not followed, so even if there might be a hg repository in the linked files original
-	 * location, we won't handle such a resource as supervised.
-	 *
-	 * @param dialog
-	 *            flag to signify that an error message should be displayed if the resource is a
-	 *            linked resource Return true if the resource
-	 * @return true, if MercurialEclipse provides team functions to this resource, false otherwise.
-	 */
-	public static boolean hgIsTeamProviderFor(IResource resource, boolean dialog) {
-		// check, if we're team provider
-		if (resource == null) {
-			return false;
-		}
-		IProject project = resource.getProject();
-		if (project == null || !MercurialTeamProvider.isHgTeamProviderFor(project)) {
-			return false;
-		}
-
-		// if we are team provider, this project can't be linked :-).
-		if (resource instanceof IProject) {
-			return true;
-		}
-
-		// Check to se if resource is not in a link
-		boolean isLinked = resource.isLinked(IResource.CHECK_ANCESTORS);
-
-		// open dialog if resource is linked and flag is set to true
-		if (dialog && isLinked) {
-			Shell shell = MercurialEclipsePlugin.getActiveShell();
-			MessageDialog.openInformation(shell, Messages
-					.getString("MercurialUtilities.linkWarningShort"), //$NON-NLS-1$
-					Messages.getString("MercurialUtilities.linkWarningLong")); //$NON-NLS-1$
-		}
-
-		// TODO Follow links and see if they point to another reposetory
-
-		return !isLinked;
-	}
-
 	/**
 	 * Returns the username for hg as configured in preferences. If it's not defined in the
 	 * preference store, null is returned.
@@ -303,8 +250,7 @@ public final class MercurialUtilities {
 		// try to read username via hg showconfig
 		if (StringUtils.isEmpty(username)) {
 			try {
-				username = HgConfigClient.getHgConfigLine(ResourcesPlugin.getWorkspace().getRoot()
-						.getLocation().toFile(), "ui.username");
+				username = HgConfigClient.getHgConfigLine("ui.username");
 			} catch (HgException e) {
 				MercurialEclipsePlugin.logError(e);
 			}
@@ -347,49 +293,6 @@ public final class MercurialUtilities {
 			username = null;
 		}
 		return username;
-	}
-
-	/**
-	 * Execute a command via the shell. Can throw HgException if the command does not execute
-	 * correctly. Exception will contain the error stream from the command execution.
-	 *
-	 * @returns String containing the successful output
-	 *
-	 *          TODO: Should log failure. TODO: Should not return null for failure.
-	 */
-	public static String executeCommand(String[] cmd, File workingDir, boolean consoleOutput)
-			throws HgException {
-		return execute(cmd, workingDir).executeToString();
-	}
-
-	private static LegacyAdaptor execute(String[] cmd, File workingDir) {
-		String[] copy = new String[cmd.length - 2];
-		System.arraycopy(cmd, 2, copy, 0, cmd.length - 2);
-		LegacyAdaptor legacyAdaptor = new LegacyAdaptor(cmd[1], workingDir, true);
-		legacyAdaptor.args(copy);
-		return legacyAdaptor;
-	}
-
-	private static class LegacyAdaptor extends HgCommand {
-
-		protected LegacyAdaptor(String command, File workingDir, boolean escapeFiles) {
-			super(command, workingDir, escapeFiles);
-		}
-
-		LegacyAdaptor args(String... arguments) {
-			this.addOptions(arguments);
-			return this;
-		}
-
-		@Override
-		public String executeToString() throws HgException {
-			return super.executeToString();
-		}
-
-		@Override
-		public byte[] executeToBytes() throws HgException {
-			return super.executeToBytes();
-		}
 	}
 
 	public static boolean isCommandAvailable(String command, QualifiedName sessionPropertyName,
@@ -458,4 +361,53 @@ public final class MercurialUtilities {
 		return getFont(data);
 	}
 
+	public static MercurialRevisionStorage getParentRevision(ChangeSet cs, IFile file) {
+		MercurialRevisionStorage parentRev;
+		String[] parents = cs.getParents();
+		if(cs.getRevision().getRevision() == 0){
+			parentRev = new NullRevision(file, cs);
+		} else if (parents.length == 0) {
+			// TODO for some reason, we do not always have right parent info in the changesets
+			// If we are on the different branch then the changeset? or if the changeset
+			// logs was created for a file, and not each version of a *file* has
+			// direct version predecessor. So such tree 20 -> 21 -> 22 works fine,
+			// but tree 20 -> 22 seems not to work per default
+			// So simply enforce the parents resolving
+			try {
+				parents = HgParentClient.getParentNodeIds(file, cs);
+			} catch (HgException e) {
+				MercurialEclipsePlugin.logError(e);
+			}
+			if (parents.length == 0) {
+				parentRev = new NullRevision(file, cs);
+			} else {
+				parentRev = new MercurialRevisionStorage(file, parents[0]);
+			}
+		} else {
+			parentRev = new MercurialRevisionStorage(file, parents[0]);
+		}
+		return parentRev;
+	}
+
+	public static void setMergeViewDialogShown(boolean shown) {
+		try {
+			ResourcesPlugin
+					.getWorkspace()
+					.getRoot()
+					.setSessionProperty(ResourceProperties.MERGE_COMMIT_OFFERED,
+							shown ? "true" : null);
+		} catch (CoreException e) {
+			MercurialEclipsePlugin.logError(e);
+		}
+	}
+
+	public static boolean isMergeViewDialogShown() {
+		try {
+			return ResourcesPlugin.getWorkspace().getRoot()
+					.getSessionProperty(ResourceProperties.MERGE_COMMIT_OFFERED) != null;
+		} catch (CoreException e) {
+			MercurialEclipsePlugin.logError(e);
+			return true;
+		}
+	}
 }

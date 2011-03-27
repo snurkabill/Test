@@ -10,7 +10,8 @@
  *     Stefan Groschupf          - logError
  *     Jérôme Nègre              - some fixes
  *     Stefan C                  - Code cleanup
- *     Andrei Loskutov (Intland) - bug fixes
+ *     Andrei Loskutov           - bug fixes
+ *     Zsolt Koppany (Intland)
  *     Adam Berkes (Intland)     - default encoding
  *     Philip Graf               - proxy support
  *     Bastian Doetsch           - bug fixes and implementation
@@ -18,11 +19,14 @@
 
 package com.vectrace.MercurialEclipse;
 
-import java.io.File;
+import static com.vectrace.MercurialEclipse.preferences.MercurialPreferenceConstants.PREF_PUSH_NEW_BRANCH;
+
 import java.lang.reflect.InvocationTargetException;
 import java.nio.charset.Charset;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -40,6 +44,7 @@ import org.eclipse.core.runtime.jobs.ISchedulingRule;
 import org.eclipse.core.runtime.jobs.Job;
 import org.eclipse.core.runtime.jobs.JobChangeAdapter;
 import org.eclipse.jface.operation.IRunnableWithProgress;
+import org.eclipse.jface.preference.IPreferenceStore;
 import org.eclipse.jface.resource.ImageDescriptor;
 import org.eclipse.swt.custom.BusyIndicator;
 import org.eclipse.swt.graphics.Image;
@@ -56,9 +61,10 @@ import org.osgi.util.tracker.ServiceTracker;
 
 import com.vectrace.MercurialEclipse.commands.AbstractShellCommand;
 import com.vectrace.MercurialEclipse.commands.HgClients;
-import com.vectrace.MercurialEclipse.commands.HgCommand;
 import com.vectrace.MercurialEclipse.commands.HgDebugInstallClient;
+import com.vectrace.MercurialEclipse.commands.RootlessHgCommand;
 import com.vectrace.MercurialEclipse.exception.HgException;
+import com.vectrace.MercurialEclipse.model.HgRoot;
 import com.vectrace.MercurialEclipse.preferences.MercurialPreferenceConstants;
 import com.vectrace.MercurialEclipse.storage.HgCommitMessageManager;
 import com.vectrace.MercurialEclipse.storage.HgRepositoryLocationManager;
@@ -81,6 +87,7 @@ public class MercurialEclipsePlugin extends AbstractUIPlugin {
 	private static MercurialEclipsePlugin plugin;
 
 	private static final Charset HGENCODING;
+
 	static {
 		// next in line is HGENCODING in environment
 		String enc = System.getProperty("HGENCODING");
@@ -107,10 +114,20 @@ public class MercurialEclipsePlugin extends AbstractUIPlugin {
 
 	private ServiceTracker proxyServiceTracker;
 
-	private static final Version LOWEST_WORKING_VERSION = new Version(1, 3, 1);
+	/**
+	 * The minimum hg version plugin needs, inclusive.
+	 * Please document new requirements here.
+	 * See also http://mercurial.selenic.com/wiki/WhatsNew.
+	 * --new-branch for push requires 1.6.0, but this is optional feature
+	 * --branch for incoming/outgoing/pull/push requires 1.5.0 (must have)
+	 */
+	private static final Version LOWEST_WORKING_VERSION = new Version(1, 5, 0);
+	private static final Version PREFERRED_VERSION = new Version(1, 6, 0);
 
-	private static final Pattern VERSION_PATTERN = Pattern.compile(
-			".*version\\s+(\\d(\\.\\d)+)+.*", Pattern.CASE_INSENSITIVE); //$NON-NLS-1$
+	/** permanently disabled hg options (due version limitations)*/
+	public static final Set<String> DISABLED_OPTIONS = new HashSet<String>();
+
+	private static final Pattern VERSION_PATTERN = Pattern.compile(".*version\\s+(\\d(\\.\\d)+)+.*", Pattern.CASE_INSENSITIVE); //$NON-NLS-1$
 
 
 	public MercurialEclipsePlugin() {
@@ -201,7 +218,7 @@ public class MercurialEclipsePlugin extends AbstractUIPlugin {
 	}
 
 	private void checkHgVersion() throws HgException {
-		AbstractShellCommand command = new HgCommand("version", (File) null, true); //$NON-NLS-1$
+		AbstractShellCommand command = new RootlessHgCommand("version", "Checking for required version"); //$NON-NLS-1$
 		command.setShowOnConsole(false);
 		String version = new String(command.executeToBytes(Integer.MAX_VALUE)).trim();
 		String[] split = version.split("\\n"); //$NON-NLS-1$
@@ -210,6 +227,19 @@ public class MercurialEclipsePlugin extends AbstractUIPlugin {
 		if (matcher.matches()) {
 			version = matcher.group(1);
 			if (version != null && LOWEST_WORKING_VERSION.compareTo(new Version(version)) <= 0) {
+				if(PREFERRED_VERSION.compareTo(new Version(version)) <= 0) {
+					return;
+				}
+				DISABLED_OPTIONS.add("--new-branch");
+				IPreferenceStore store = getPreferenceStore();
+				store.setDefault(PREF_PUSH_NEW_BRANCH, false);
+				store.setValue(PREF_PUSH_NEW_BRANCH, false);
+				MercurialEclipsePlugin
+						.logWarning(
+								"Can not use some of the new Mercurial features, hg version greater equals "
+										+ PREFERRED_VERSION + " required, but " + version
+										+ " found. Permanently disabled options: "
+										+ DISABLED_OPTIONS + ".", null);
 				return;
 			}
 			throw new HgException(
@@ -516,4 +546,18 @@ public class MercurialEclipsePlugin extends AbstractUIPlugin {
 		return null;
 	}
 
+	/**
+	 * Unwrap and throw as a CoreException. Note: Never returns
+	 * @param e The exception to use
+	 * @throws CoreException
+	 */
+	public static void rethrow(Throwable e) throws CoreException {
+		if (e instanceof CoreException) {
+			throw (CoreException)e;
+		} else if (e instanceof InvocationTargetException) {
+			rethrow(((InvocationTargetException) e).getTargetException());
+		}
+
+		throw new HgException(e.getLocalizedMessage(), e);
+	}
 }

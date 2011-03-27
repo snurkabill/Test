@@ -7,7 +7,7 @@
  *
  * Contributors:
  * bastian	implementation
- *     Andrei Loskutov (Intland) - bug fixes
+ *     Andrei Loskutov - bug fixes
  *******************************************************************************/
 package com.vectrace.MercurialEclipse.operations;
 
@@ -56,7 +56,9 @@ public class QImportOperation extends HgOperation {
 
 	}
 
-	@Override
+	/**
+	 * @see org.eclipse.jface.operation.IRunnableWithProgress#run(org.eclipse.core.runtime.IProgressMonitor)
+	 */
 	public void run(IProgressMonitor monitor) throws InvocationTargetException,
 			InterruptedException {
 		monitor.beginTask(getActionDescription(), 3);

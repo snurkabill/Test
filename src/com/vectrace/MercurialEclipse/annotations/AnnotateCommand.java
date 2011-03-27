@@ -10,13 +10,12 @@
  *     StefanC           - remove empty lines, code cleenup
  *     Jérôme Nègre      - make it work
  *     Bastian Doetsch   - refactorings
- *     Andrei Loskutov (Intland) - bug fixes
+ *     Andrei Loskutov   - bug fixes
  *******************************************************************************/
 
 package com.vectrace.MercurialEclipse.annotations;
 
 import java.io.BufferedReader;
-import java.io.File;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.Reader;
@@ -28,45 +27,38 @@ import java.util.Locale;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-import org.eclipse.core.resources.IFile;
+import org.eclipse.core.resources.IResource;
 
 import com.vectrace.MercurialEclipse.HgRevision;
-import com.vectrace.MercurialEclipse.commands.AbstractClient;
+import com.vectrace.MercurialEclipse.commands.HgCommand;
 import com.vectrace.MercurialEclipse.exception.HgException;
-import com.vectrace.MercurialEclipse.model.HgRoot;
-import com.vectrace.MercurialEclipse.team.MercurialUtilities;
-import com.vectrace.MercurialEclipse.utils.ResourceUtils;
+import com.vectrace.MercurialEclipse.team.MercurialTeamProvider;
 
 public class AnnotateCommand {
 	private static final Pattern ANNOTATE = Pattern
-			.compile("^\\s*(.+[^ ])\\s+(\\w+)\\s+(\\w+)\\s+(\\w+ \\w+ \\w+ \\w+:\\w+:\\w+ \\w+ [\\+\\-]\\w+).*: (.*)$"); //$NON-NLS-1$
+			.compile("^\\s*(.+?)\\s+(\\d+)\\s+(\\w+)\\s+(\\w+ \\w+ \\d+ \\d+:\\d+:\\d+ \\d+ [\\+\\-]\\d+)"); //$NON-NLS-1$
 
 	private static final DateFormat DATE_FORMAT = new SimpleDateFormat(
 			"EEE MMM dd HH:mm:ss yyyy Z", Locale.ENGLISH); //$NON-NLS-1$
 
-	private final File file;
+	private final IResource file;
 
-	public AnnotateCommand(File remoteFile) {
+	public AnnotateCommand(IResource remoteFile) {
 		this.file = remoteFile;
 	}
 
 	public AnnotateBlocks execute() throws HgException {
-		IFile resource = (IFile) ResourceUtils.convert(file);
 
-		if (!MercurialUtilities.hgIsTeamProviderFor(resource, true)) {
+		if (!MercurialTeamProvider.isHgTeamProviderFor(file)) {
 			return null;
 		}
-		HgRoot root = AbstractClient.getHgRoot(resource);
-		String relPath = root.toRelative(resource.getLocation().toFile());
-		String[] launchCmd = { MercurialUtilities.getHGExecutable(),
-				"annotate", "--follow", "--user", "--number", "--changeset", "--date", //$NON-NLS-1$ //$NON-NLS-2$ //$NON-NLS-3$ //$NON-NLS-4$ //$NON-NLS-5$ //$NON-NLS-6$
-				"--", relPath }; //$NON-NLS-1$
 
-		String output = MercurialUtilities.executeCommand(launchCmd, root, true);
-		if (output == null) {
-			return null;
-		}
-		return createFromStdOut(new StringReader(output));
+		HgCommand command = new HgCommand("annotate", "Fetching annotations for resource", file, true);
+
+		command.addOptions("--follow", "--user", "--number", "--changeset", "--date");
+		command.addFiles(file);
+
+		return createFromStdOut(new StringReader(command.executeToString()));
 	}
 
 	protected static AnnotateBlocks createFromStdOut(InputStream contents) {
@@ -80,13 +72,11 @@ public class AnnotateCommand {
 			int count = 0;
 			String line;
 			while ((line = reader.readLine()) != null) {
-				if (line.trim().length() == 0) {
+				Matcher matcher = ANNOTATE.matcher(line);
+				if (!matcher.find()) {
 					// ignore empty lines
 					continue;
 				}
-
-				Matcher matcher = ANNOTATE.matcher(line);
-				matcher.find();
 				String author = matcher.group(1);
 				int revision = Integer.parseInt(matcher.group(2));
 				String changeset = matcher.group(3);

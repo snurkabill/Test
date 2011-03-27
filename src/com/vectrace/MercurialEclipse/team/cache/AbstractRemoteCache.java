@@ -6,7 +6,7 @@
  * http://www.eclipse.org/legal/epl-v10.html
  *
  * Contributors:
- * Andrei Loskutov (Intland) - implementation
+ * Andrei Loskutov         - implementation
  *******************************************************************************/
 package com.vectrace.MercurialEclipse.team.cache;
 
@@ -179,12 +179,11 @@ public abstract class AbstractRemoteCache extends AbstractCache {
 	 */
 	public SortedSet<ChangeSet> getChangeSets(IResource resource,
 			IHgRepositoryLocation repository, String branch) throws HgException {
-		IProject project = resource.getProject();
-		// check if mercurial is team provider and if we're working on an open project
-		if (!project.isAccessible() || !MercurialTeamProvider.isHgTeamProviderFor(project)){
+		HgRoot hgRoot = MercurialTeamProvider.getHgRoot(resource);
+		if (hgRoot == null){
+			// if mercurial is not team provider or if we're working on a closed project
 			return EMPTY_SET;
 		}
-		HgRoot hgRoot = MercurialTeamProvider.getHgRoot(project);
 		RemoteKey key = new RemoteKey(hgRoot, repository, branch);
 		synchronized (repoDatas){
 			RemoteData data = fastRepoMap.get(key);
@@ -213,12 +212,12 @@ public abstract class AbstractRemoteCache extends AbstractCache {
 	 */
 	public SortedSet<ChangeSet> hasChangeSets(IResource resource, IHgRepositoryLocation repository,
 			String branch) {
-		IProject project = resource.getProject();
-		// check if mercurial is team provider and if we're working on an open project
-		if (!project.isAccessible() || !MercurialTeamProvider.isHgTeamProviderFor(project)){
+		// also checks if mercurial is team provider and if we're working on an open project
+		HgRoot hgRoot = MercurialTeamProvider.getHgRoot(resource);
+		if (hgRoot == null){
+			// if mercurial is not team provider or if we're working on a closed project
 			return EMPTY_SET;
 		}
-		HgRoot hgRoot = MercurialTeamProvider.getHgRoot(project);
 		RemoteKey key = new RemoteKey(hgRoot, repository, branch);
 		synchronized (repoDatas){
 			RemoteData data = fastRepoMap.get(key);

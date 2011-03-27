@@ -6,7 +6,7 @@
  * http://www.eclipse.org/legal/epl-v10.html
  *
  * Contributors:
- *     Andrei Loskutov (Intland) - implementation
+ *     Andrei Loskutov - implementation
  *******************************************************************************/
 package com.vectrace.MercurialEclipse.history;
 
@@ -47,6 +47,12 @@ public class FileStatusDecorator extends LabelProvider implements ILightweightLa
 				break;
 			case REMOVED:
 				overlay = DecoratorImages.REMOVED;
+				break;
+			case COPIED:
+				overlay = DecoratorImages.COPIED;
+				break;
+			case MOVED:
+				overlay = DecoratorImages.MOVED;
 				break;
 			}
 		}

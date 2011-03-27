@@ -7,7 +7,7 @@
  *
  * Contributors:
  * bastian	implementation
- *     Andrei Loskutov (Intland) - bug fixes
+ *     Andrei Loskutov - bug fixes
  *******************************************************************************/
 package com.vectrace.MercurialEclipse.commands.extensions;
 
@@ -81,8 +81,8 @@ public class HgSigsClient extends AbstractClient {
 			return null;
 		}
 		try {
-			AbstractShellCommand c = new HgCommand("sigcheck", hgRoot, //$NON-NLS-1$
-					false);
+			AbstractShellCommand c = new HgCommand("sigcheck", //$NON-NLS-1$
+					"Checking signature", hgRoot, false);
 			c.addOptions("--config", "extensions.gpg=");
 			c.setUsePreferenceTimeout(MercurialPreferenceConstants.DEFAULT_TIMEOUT);
 			c.addOptions(nodeId);

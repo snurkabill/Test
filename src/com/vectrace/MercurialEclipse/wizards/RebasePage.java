@@ -7,7 +7,7 @@
  *
  * Contributors:
  * bastian	implementation
- * Andrei Loskutov (Intland) - bugfixes
+ * Andrei Loskutov - bugfixes
  *******************************************************************************/
 package com.vectrace.MercurialEclipse.wizards;
 
@@ -21,9 +21,11 @@ import org.eclipse.swt.widgets.Group;
 
 import com.vectrace.MercurialEclipse.MercurialEclipsePlugin;
 import com.vectrace.MercurialEclipse.commands.HgStatusClient;
+import com.vectrace.MercurialEclipse.commands.extensions.HgRebaseClient;
 import com.vectrace.MercurialEclipse.exception.HgException;
 import com.vectrace.MercurialEclipse.model.ChangeSet;
 import com.vectrace.MercurialEclipse.model.HgRoot;
+import com.vectrace.MercurialEclipse.preferences.MercurialPreferenceConstants;
 import com.vectrace.MercurialEclipse.team.MercurialUtilities;
 import com.vectrace.MercurialEclipse.team.ResourceProperties;
 import com.vectrace.MercurialEclipse.ui.ChangesetTable;
@@ -31,6 +33,8 @@ import com.vectrace.MercurialEclipse.ui.SWTWidgetHelper;
 
 /**
  * @author bastian
+ *
+ * Rebase page. Not applicable if a rebase is in progress.
  */
 public class RebasePage extends HgWizardPage {
 
@@ -40,8 +44,8 @@ public class RebasePage extends HgWizardPage {
 	private Button baseRevCheckBox;
 	private Button destRevCheckBox;
 	private Button collapseRevCheckBox;
-	private Button continueRevCheckBox;
-	private Button abortRevCheckBox;
+	private Button keepCheckBox;
+	private Button keepBranchesCheckBox;
 	private ChangesetTable destTable;
 
 	public RebasePage(String pageName, String title,
@@ -74,7 +78,7 @@ public class RebasePage extends HgWizardPage {
 	public void setPageComplete(boolean complete) {
 		if(complete){
 			try {
-				if(HgStatusClient.isDirty(hgRoot)){
+				if(HgStatusClient.isDirty(hgRoot) && !HgRebaseClient.isRebasing(hgRoot)){
 					setErrorMessage("Outstanding uncommitted changes! Rebase is not possible.");
 					super.setPageComplete(false);
 					return;
@@ -87,87 +91,20 @@ public class RebasePage extends HgWizardPage {
 	}
 
 	private void createOptionsWidgets(Composite comp) {
-
-		final boolean mergeInProgress = HgStatusClient.isMergeInProgress(hgRoot);
-
 		Group optionGroup = SWTWidgetHelper.createGroup(comp, Messages.getString("RebasePage.optionGroup.label"), 2, //$NON-NLS-1$
 				GridData.FILL_BOTH);
 
 		collapseRevCheckBox = SWTWidgetHelper.createCheckBox(optionGroup,
 				Messages.getString("RebasePage.option.collapse")); //$NON-NLS-1$
-		abortRevCheckBox = SWTWidgetHelper.createCheckBox(optionGroup,
-				Messages.getString("RebasePage.option.abort")); //$NON-NLS-1$
+		keepBranchesCheckBox = SWTWidgetHelper.createCheckBox(optionGroup,
+				Messages.getString("RebasePage.option.keepBranches")); //$NON-NLS-1$
+		keepCheckBox = SWTWidgetHelper.createCheckBox(optionGroup,
+				Messages.getString("RebasePage.option.keep")); //$NON-NLS-1$
 
-		SelectionListener abortSl = new SelectionListener() {
-			public void widgetDefaultSelected(SelectionEvent e) {
-				widgetSelected(e);
-			}
-
-			public void widgetSelected(SelectionEvent e) {
-				boolean selection = abortRevCheckBox.getSelection();
-				sourceRevCheckBox.setEnabled(!selection && !mergeInProgress);
-				baseRevCheckBox.setEnabled(!selection && !mergeInProgress);
-				destRevCheckBox.setEnabled(!selection && !mergeInProgress);
-
-				if (selection || mergeInProgress) {
-					sourceRevCheckBox.setSelection(false);
-					baseRevCheckBox.setSelection(false);
-					destRevCheckBox.setSelection(false);
-					collapseRevCheckBox.setSelection(false);
-					srcTable.setEnabled(false);
-					destTable.setEnabled(false);
-				}
-				if(selection) {
-					continueRevCheckBox.setSelection(false);
-				}
-				if(mergeInProgress && !selection && !continueRevCheckBox.getSelection()){
-					setPageComplete(false);
-				} else {
-					setPageComplete(true);
-				}
-			}
-		};
-
-		abortRevCheckBox.addSelectionListener(abortSl);
-
-		continueRevCheckBox = SWTWidgetHelper.createCheckBox(optionGroup,
-				Messages.getString("RebasePage.option.continue")); //$NON-NLS-1$
-
-		SelectionListener contSl = new SelectionListener() {
-			public void widgetDefaultSelected(SelectionEvent e) {
-				widgetSelected(e);
-			}
-
-			public void widgetSelected(SelectionEvent e) {
-				boolean selection = continueRevCheckBox.getSelection();
-
-				sourceRevCheckBox.setEnabled(!selection && !mergeInProgress);
-				baseRevCheckBox.setEnabled(!selection && !mergeInProgress);
-				destRevCheckBox.setEnabled(!selection && !mergeInProgress);
-
-				if (selection || mergeInProgress) {
-					sourceRevCheckBox.setSelection(false);
-					baseRevCheckBox.setSelection(false);
-					destRevCheckBox.setSelection(false);
-					collapseRevCheckBox.setSelection(false);
-					srcTable.setEnabled(false);
-					destTable.setEnabled(false);
-				}
-				if(selection) {
-					abortRevCheckBox.setSelection(false);
-				}
-				if(mergeInProgress && !selection && !abortRevCheckBox.getSelection()){
-					setPageComplete(false);
-				} else {
-					setPageComplete(true);
-				}
-			}
-		};
-		if(mergeInProgress){
-			continueRevCheckBox.setSelection(true);
-			contSl.widgetSelected(null);
+		if (MercurialEclipsePlugin.getDefault().getPreferenceStore()
+				.getBoolean(MercurialPreferenceConstants.PREF_DEFAULT_REBASE_KEEP_BRANCHES)) {
+			keepBranchesCheckBox.setSelection(true);
 		}
-		continueRevCheckBox.addSelectionListener(contSl);
 	}
 
 	private void createDestWidgets(Composite comp) {
@@ -264,12 +201,12 @@ public class RebasePage extends HgWizardPage {
 		return collapseRevCheckBox.getSelection();
 	}
 
-	public boolean isContinueRevSelected() {
-		return continueRevCheckBox.getSelection();
+	public boolean isKeepSelected() {
+		return keepCheckBox.getSelection();
 	}
 
-	public boolean isAbortSelected() {
-		return abortRevCheckBox.getSelection();
+	public boolean isKeepBranchesSelected() {
+		return keepBranchesCheckBox.getSelection();
 	}
 
 	/**

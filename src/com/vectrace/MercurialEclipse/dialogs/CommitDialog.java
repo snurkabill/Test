@@ -11,7 +11,7 @@
  *     Bastian Doetsch - Added spellchecking and some other stuff
  *     StefanC - many updates
  *     Zingo Andersen - some updates
- *     Andrei Loskutov (Intland) - bug fixes
+ *     Andrei Loskutov - bug fixes
  *     Adam Berkes (Intland) - bug fixes
  *******************************************************************************/
 package com.vectrace.MercurialEclipse.dialogs;
@@ -22,6 +22,7 @@ import java.util.Map;
 import java.util.Set;
 
 import org.eclipse.core.resources.IResource;
+import org.eclipse.core.runtime.Assert;
 import org.eclipse.core.runtime.CoreException;
 import org.eclipse.core.runtime.IPath;
 import org.eclipse.core.runtime.IProgressMonitor;
@@ -29,6 +30,7 @@ import org.eclipse.core.runtime.IStatus;
 import org.eclipse.core.runtime.Status;
 import org.eclipse.core.runtime.jobs.Job;
 import org.eclipse.jface.dialogs.IDialogConstants;
+import org.eclipse.jface.dialogs.IDialogSettings;
 import org.eclipse.jface.dialogs.MessageDialog;
 import org.eclipse.jface.dialogs.TitleAreaDialog;
 import org.eclipse.jface.text.Document;
@@ -131,21 +133,14 @@ public class CommitDialog extends TitleAreaDialog {
 	protected Options options;
 
 	public static class Options {
-		public boolean showDiff;
-		public boolean showAmend;
-		public boolean showCloseBranch;
-		public boolean showRevert;
-		public boolean filesSelectable;
-		public String defaultCommitMessage;
-
-		public Options() {
-			defaultCommitMessage = DEFAULT_COMMIT_MESSAGE;
-			filesSelectable = true;
-			showCloseBranch = true;
-			showDiff = true;
-			showAmend = true;
-			showRevert = true;
-		}
+		public boolean showDiff = true;
+		public boolean showAmend = true;
+		public boolean showCloseBranch = true;
+		public boolean showRevert = true;
+		public boolean filesSelectable = true;
+		public String defaultCommitMessage = DEFAULT_COMMIT_MESSAGE;
+		public boolean showCommitMessage = true;
+		public boolean allowEmptyCommit = false;
 	}
 
 	/**
@@ -156,6 +151,9 @@ public class CommitDialog extends TitleAreaDialog {
 	 */
 	public CommitDialog(Shell shell, HgRoot hgRoot, List<IResource> resources) {
 		super(shell);
+
+		Assert.isNotNull(hgRoot);
+
 		this.root = hgRoot;
 		setShellStyle(getShellStyle() | SWT.RESIZE | SWT.TITLE);
 		options = new Options();
@@ -174,6 +172,32 @@ public class CommitDialog extends TitleAreaDialog {
 
 	public List<IResource> getResourcesToAdd() {
 		return resourcesToAdd;
+	}
+
+	@Override
+	protected IDialogSettings getDialogBoundsSettings() {
+		IDialogSettings dialogSettings = MercurialEclipsePlugin.getDefault().getDialogSettings();
+		String sectionName = getClass().getSimpleName();
+		IDialogSettings section = dialogSettings.getSection(sectionName);
+		if (section == null) {
+			dialogSettings.addNewSection(sectionName);
+		}
+		return section;
+	}
+
+	/**
+	 * @see org.eclipse.jface.dialogs.Dialog#getDialogBoundsStrategy()
+	 */
+	@Override
+	protected int getDialogBoundsStrategy() {
+		int strategy = super.getDialogBoundsStrategy();
+
+		// When amend is set it changes the dialog size
+		if (trayControl != null) {
+			strategy &= ~DIALOG_PERSISTSIZE;
+		}
+
+		return strategy;
 	}
 
 	@Override
@@ -220,18 +244,29 @@ public class CommitDialog extends TitleAreaDialog {
 						inResources == null ? null : inResources.toArray(new IResource[0]));
 		setCommitMessage(initialCommitMessage);
 
+		if (commitTextBox != null) {
 		commitTextBox.getTextWidget().setFocus();
 		commitTextBox.getTextWidget().selectAll();
+		}
+
 		return control;
 	}
 
-	private void validateCommitMessage(final String message) {
+	private void validateControls() {
+		final String message = commitTextBox.getDocument().get();
 		if (StringUtils.isEmpty(message) || DEFAULT_COMMIT_MESSAGE.equals(message)) {
-			setErrorMessage(Messages.getString("CommitDialog.message")); // ";
+
+			setErrorMessage(Messages.getString("CommitDialog.commitMessageRequired")); // ";
+			getButton(IDialogConstants.OK_ID).setEnabled(false);
+		} else if (commitFilesList.getCheckedResources().size() == 0 && !options.allowEmptyCommit
+				&& commitFilesList.isSelectable()
+				&& (amendCheckbox == null || !amendCheckbox.getSelection())
+				&& !isCloseBranchSelected()) {
+			setErrorMessage(Messages.getString("CommitDialog.noResourcesSelected")); // ";
 			getButton(IDialogConstants.OK_ID).setEnabled(false);
 		} else {
 			setErrorMessage(null); // ";
-			setMessage(Messages.getString("CommitDialog.message")); // ";
+			setMessage(Messages.getString("CommitDialog.readyToCommit")); // ";
 			getButton(IDialogConstants.OK_ID).setEnabled(true);
 		}
 	}
@@ -284,6 +319,7 @@ public class CommitDialog extends TitleAreaDialog {
 				} else {
 					closeSash();
 				}
+				validateControls();
 			}
 			public void widgetDefaultSelected(SelectionEvent e) {
 				widgetSelected(e);
@@ -295,6 +331,12 @@ public class CommitDialog extends TitleAreaDialog {
 		SWTWidgetHelper.createLabel(container, Messages.getString("CommitDialog.selectFiles"));
 		CommitFilesChooser chooser = new CommitFilesChooser(container, areFilesSelectable(), inResources,
 				true, true, false);
+
+		chooser.addStateListener(new Listener() {
+			public void handleEvent(Event event) {
+				validateControls();
+			}
+		});
 
 		IResource[] mylynTaskResources = MylynFacadeFactory.getMylynFacade()
 				.getCurrentTaskResources();
@@ -321,6 +363,10 @@ public class CommitDialog extends TitleAreaDialog {
 	}
 
 	private void createCommitTextBox(Composite container) {
+		if(!options.showCommitMessage){
+			return;
+		}
+
 		setMessage(Messages.getString("CommitDialog.commitTextLabel.text"));
 
 		commitTextBox = new SourceViewer(container, null, SWT.V_SCROLL | SWT.MULTI | SWT.BORDER
@@ -349,12 +395,16 @@ public class CommitDialog extends TitleAreaDialog {
 
 		commitTextBox.addTextListener(new ITextListener() {
 			public void textChanged(TextEvent event) {
-				validateCommitMessage(commitTextBox.getDocument().get());
+				validateControls();
 			}
 		});
 	}
 
 	private void createOldCommitCombo(Composite container) {
+		if(!options.showCommitMessage){
+			return;
+		}
+
 		final String[] oldCommits = MercurialEclipsePlugin.getCommitMessageManager()
 				.getCommitMessages();
 		if (oldCommits.length > 0) {
@@ -424,13 +474,12 @@ public class CommitDialog extends TitleAreaDialog {
 				updateChangeset(pm);
 
 				// only proceed if files are present
-				if (currentChangeset.getChangedFiles() == null) {
+				if (currentChangeset.getChangedFiles().isEmpty()) {
 					setErrorMessage(Messages.getString("CommitDialog.noChangesetToAmend"));
 					return;
 				}
-				String[] parents = currentChangeset.getParents();
-				if(parents != null && parents.length == 2 && !StringUtils.isEmpty(parents[0])
-						&& !StringUtils.isEmpty(parents[1])){
+
+				if(currentChangeset.isMerge()) {
 					setErrorMessage(Messages.getString("CommitDialog.noAmendForMerge"));
 					return;
 				}
@@ -502,16 +551,26 @@ public class CommitDialog extends TitleAreaDialog {
 	}
 
 	private boolean confirmHistoryRewrite() {
-		return MessageDialog.openQuestion(getShell(), Messages
-				.getString("CommitDialog.reallyAmendAndRewriteHistory"), //$NON-NLS-1$
-				Messages.getString("CommitDialog.amendWarning1")
-						+ Messages.getString("CommitDialog.amendWarning2")
-						+ Messages.getString("CommitDialog.amendWarning3"));
+		MessageDialog dialog = new MessageDialog(
+				getShell(),
+				Messages.getString("CommitDialog.reallyAmendAndRewriteHistory"), //$NON-NLS-1$
+				null,
+				Messages.getString("CommitDialog.amendWarning1") 				//$NON-NLS-1$
+					+ Messages.getString("CommitDialog.amendWarning2")			//$NON-NLS-1$
+					+ Messages.getString("CommitDialog.amendWarning3"),			//$NON-NLS-1$
+				MessageDialog.CONFIRM,
+				new String[]{
+					IDialogConstants.YES_LABEL,
+					IDialogConstants.CANCEL_LABEL},
+				1 // default index - cancel
+				);
+		dialog.setBlockOnOpen(true); // if false then may show in background
+		return  dialog.open() == 0; // 0 means yes
 	}
 
 	/**
 	 * @return the result of the commit operation (hg output), if any. If there was no commit or
-	 *         commit ouput was null, return empty string
+	 *         commit output was null, return empty string
 	 */
 	public String getCommitResult() {
 		return commitResult != null ? commitResult : "";
@@ -529,7 +588,7 @@ public class CommitDialog extends TitleAreaDialog {
 			// refresh patch with added/removed/changed files
 			pm.subTask("Refreshing MQ amend patch with newly added/removed/changed files.");
 			String result = HgQRefreshClient
-					.refresh(root, true, resourcesToCommit, messageToCommit);
+					.refresh(root, true, resourcesToCommit, messageToCommit, true);
 			pm.worked(1);
 			// remove patch and promote it to a new changeset
 			pm.subTask("Removing amend patch from MQ and promoting it to repository.");
@@ -579,7 +638,10 @@ public class CommitDialog extends TitleAreaDialog {
 			msg = options.defaultCommitMessage;
 		}
 		commitTextDocument.set(msg);
+
+		if (commitTextBox != null) {
 		commitTextBox.setSelectedRange(0, msg.length());
+	}
 	}
 
 	public String getUser() {
@@ -605,7 +667,7 @@ public class CommitDialog extends TitleAreaDialog {
 		monitor.setVisible(false);
 
 		// set old commit message
-		IDocument msg = commitTextBox.getDocument();
+		IDocument msg = commitTextDocument;
 		if ("".equals(msg.get()) || msg.get().equals(DEFAULT_COMMIT_MESSAGE)) {
 			msg.set(currentChangeset.getComment());
 		}

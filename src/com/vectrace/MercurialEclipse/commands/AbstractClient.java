@@ -7,7 +7,7 @@
  *
  * Contributors:
  * 	   Bastian	implementation
- *     Andrei Loskutov (Intland) - bug fixes
+ *     Andrei Loskutov           - bug fixes
  *     Adam Berkes (Intland)     - bug fixes
  *     Philip Graf               - proxy support
  *******************************************************************************/
@@ -21,6 +21,7 @@ import java.util.regex.Pattern;
 
 import org.eclipse.core.net.proxy.IProxyData;
 import org.eclipse.core.net.proxy.IProxyService;
+import org.eclipse.core.resources.IContainer;
 import org.eclipse.core.resources.IResource;
 import org.eclipse.core.runtime.Assert;
 import org.eclipse.core.runtime.IPath;
@@ -29,6 +30,8 @@ import com.vectrace.MercurialEclipse.MercurialEclipsePlugin;
 import com.vectrace.MercurialEclipse.exception.HgException;
 import com.vectrace.MercurialEclipse.model.HgRoot;
 import com.vectrace.MercurialEclipse.model.IHgRepositoryLocation;
+import com.vectrace.MercurialEclipse.preferences.MercurialPreferenceConstants;
+import com.vectrace.MercurialEclipse.team.cache.MercurialRootCache;
 import com.vectrace.MercurialEclipse.utils.ResourceUtils;
 
 /**
@@ -67,52 +70,40 @@ public abstract class AbstractClient {
 		return myLine;
 	}
 
-	protected static File getWorkingDirectory(IResource resource) {
-		File file = ResourceUtils.getFileHandle(resource);
-		return getWorkingDirectory(file);
-	}
-
-	protected static File getWorkingDirectory(IPath path) {
-		return getWorkingDirectory(path.toFile());
-	}
-
-	protected static File getWorkingDirectory(File file) {
-		return ResourceUtils.getFirstExistingDirectory(file);
-	}
-
 	/**
 	 * @param resource
 	 * @return hg root as <b>canonical file</b> (see {@link File#getCanonicalFile()})
 	 * @throws HgException
 	 */
-	public static HgRoot getHgRoot(IResource resource) throws HgException {
-		File file = ResourceUtils.getFileHandle(resource);
-		return HgRootClient.getHgRoot(file);
+	static HgRoot getHgRoot(IResource resource) throws HgException {
+		Assert.isNotNull(resource);
+		return MercurialRootCache.getInstance().getHgRoot(resource);
 	}
 
-	public static HgRoot getHgRoot(IPath path) throws HgException {
-		return getHgRoot(path.toFile());
-	}
-
-	public static HgRoot getHgRoot(File file) throws HgException {
-		Assert.isNotNull(file);
-		return HgRootClient.getHgRoot(file);
+	/**
+	 * Checks if the specified resource is an HgRoot. If it is, the HgRoot is returned, otherwise null is returned.
+	 */
+	public static HgRoot isHgRoot(IResource res) throws HgException {
+		Assert.isNotNull(res);
+		if(!(res instanceof IContainer)){
+			return null;
+		}
+		IContainer container = (IContainer)res;
+		if(container.findMember(".hg") != null){
+			return getHgRoot(container);
+		}
+		return null;
 	}
 
 	static List<File> toFiles(List<IResource> files) {
 		List<File> toFiles = new ArrayList<File>();
 		for (IResource r : files) {
-			toFiles.add(r.getLocation().toFile());
+			IPath path = ResourceUtils.getPath(r);
+			if(!path.isEmpty()) {
+				toFiles.add(path.toFile());
+			}
 		}
 		return toFiles;
-	}
-
-	static List<String> toPaths(List<File> files) {
-		List<String> paths = new ArrayList<String>();
-		for (File f : files) {
-			paths.add(f.getAbsolutePath());
-		}
-		return paths;
 	}
 
 	/**
@@ -133,7 +124,8 @@ public abstract class AbstractClient {
 		// see bug http://bitbucket.org/mercurialeclipse/main/issue/224/
 		// If hg command uses non-null directory, which is NOT under the hg control,
 		// MercurialTeamProvider.getAndStoreHgRoot() throws an exception
-		AbstractShellCommand command = new HgCommand("help", (File) null, false);
+		AbstractShellCommand command = new RootlessHgCommand("help", "Checking availablility of "
+				+ commandName);
 		if (extensionEnabler != null && extensionEnabler.length() != 0) {
 			command.addOptions("--config", "extensions." + extensionEnabler); //$NON-NLS-1$ //$NON-NLS-2$
 		}
@@ -227,5 +219,15 @@ public abstract class AbstractClient {
 			host.append(':').append(proxy.getPort());
 		}
 		return host.toString();
+	}
+
+	protected static void addMergeToolPreference(AbstractShellCommand command) {
+		boolean useExternalMergeTool = Boolean.valueOf(
+				HgClients.getPreference(MercurialPreferenceConstants.PREF_USE_EXTERNAL_MERGE,
+						"false")).booleanValue(); //$NON-NLS-1$
+
+		if (!useExternalMergeTool) {
+			command.addOptions("--config", "ui.merge=internal:fail"); //$NON-NLS-1$ //$NON-NLS-2$
+		}
 	}
 }

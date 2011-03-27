@@ -7,13 +7,18 @@
  *
  * Contributors:
  *     Subclipse project committers - reference
- *     Andrei Loskutov (Intland) - bug fixes
+ *     Andrei Loskutov - bug fixes
+ *     Bjoern Stachmann - diff viewer
  *******************************************************************************/
 package com.vectrace.MercurialEclipse.history;
 
 import static com.vectrace.MercurialEclipse.preferences.MercurialPreferenceConstants.*;
 
 import org.eclipse.core.resources.IFile;
+import org.eclipse.core.runtime.IProgressMonitor;
+import org.eclipse.core.runtime.IStatus;
+import org.eclipse.core.runtime.Status;
+import org.eclipse.core.runtime.jobs.Job;
 import org.eclipse.jface.action.Action;
 import org.eclipse.jface.action.IMenuListener;
 import org.eclipse.jface.action.IMenuManager;
@@ -21,7 +26,10 @@ import org.eclipse.jface.action.IToolBarManager;
 import org.eclipse.jface.action.MenuManager;
 import org.eclipse.jface.action.Separator;
 import org.eclipse.jface.preference.IPreferenceStore;
+import org.eclipse.jface.text.BadLocationException;
 import org.eclipse.jface.text.Document;
+import org.eclipse.jface.text.IDocument;
+import org.eclipse.jface.text.IRegion;
 import org.eclipse.jface.text.ITextOperationTarget;
 import org.eclipse.jface.text.TextViewer;
 import org.eclipse.jface.text.source.SourceViewer;
@@ -35,24 +43,33 @@ import org.eclipse.jface.viewers.StructuredSelection;
 import org.eclipse.swt.SWT;
 import org.eclipse.swt.custom.SashForm;
 import org.eclipse.swt.custom.StyledText;
+import org.eclipse.swt.graphics.Color;
 import org.eclipse.swt.layout.GridData;
 import org.eclipse.swt.widgets.Composite;
+import org.eclipse.swt.widgets.Display;
 import org.eclipse.swt.widgets.Menu;
 import org.eclipse.team.ui.history.IHistoryPageSite;
 import org.eclipse.ui.IActionBars;
 import org.eclipse.ui.IWorkbenchActionConstants;
 import org.eclipse.ui.actions.BaseSelectionListenerAction;
 import org.eclipse.ui.part.IPageSite;
+import org.eclipse.ui.progress.UIJob;
 import org.eclipse.ui.texteditor.ITextEditorActionConstants;
 
 import com.vectrace.MercurialEclipse.MercurialEclipsePlugin;
+import com.vectrace.MercurialEclipse.commands.HgPatchClient;
+import com.vectrace.MercurialEclipse.exception.HgException;
 import com.vectrace.MercurialEclipse.model.FileStatus;
+import com.vectrace.MercurialEclipse.model.HgRoot;
+import com.vectrace.MercurialEclipse.team.cache.HgRootRule;
 import com.vectrace.MercurialEclipse.utils.ResourceUtils;
+import com.vectrace.MercurialEclipse.utils.StringUtils;
 import com.vectrace.MercurialEclipse.wizards.Messages;
 
 public class ChangedPathsPage {
 
 	private static final String IMG_COMMENTS = "comments.gif"; //$NON-NLS-1$
+	private static final String IMG_DIFFS = "diffs.gif"; //$NON-NLS-1$
 	private static final String IMG_AFFECTED_PATHS_FLAT_MODE = "flatLayout.gif"; //$NON-NLS-1$
 
 	private SashForm mainSashForm;
@@ -60,19 +77,30 @@ public class ChangedPathsPage {
 
 	private boolean showComments;
 	private boolean showAffectedPaths;
+	private boolean showDiffs;
 	private boolean wrapCommentsText;
 
 	private ChangePathsTableProvider changePathsViewer;
-	private TextViewer textViewer;
+	private TextViewer commentTextViewer;
+	private TextViewer diffTextViewer;
 
 	private final IPreferenceStore store = MercurialEclipsePlugin.getDefault()
 			.getPreferenceStore();
 	private ToggleAffectedPathsOptionAction[] toggleAffectedPathsLayoutActions;
 
 	private final MercurialHistoryPage page;
+	private final Color colorBlue;
+	private final Color colorGreen;
+	private final Color colorBlack;
+	private final Color colorRed;
 
 	public ChangedPathsPage(MercurialHistoryPage page, Composite parent) {
 		this.page = page;
+		Display display = parent.getDisplay();
+		colorBlue = display.getSystemColor(SWT.COLOR_BLUE);
+		colorGreen = display.getSystemColor(SWT.COLOR_DARK_GREEN);
+		colorBlack = display.getSystemColor(SWT.COLOR_BLACK);
+		colorRed = display.getSystemColor(SWT.COLOR_DARK_RED);
 		init(parent);
 	}
 
@@ -80,10 +108,10 @@ public class ChangedPathsPage {
 		this.showComments = store.getBoolean(PREF_SHOW_COMMENTS);
 		this.wrapCommentsText = store.getBoolean(PREF_WRAP_COMMENTS);
 		this.showAffectedPaths = store.getBoolean(PREF_SHOW_PATHS);
+		this.showDiffs = store.getBoolean(PREF_SHOW_DIFFS);
 
 		this.mainSashForm = new SashForm(parent, SWT.VERTICAL);
-		this.mainSashForm.setLayoutData(new GridData(
-				GridData.FILL_BOTH));
+		this.mainSashForm.setLayoutData(new GridData(SWT.FILL, SWT.FILL, true, true));
 
 		this.toggleAffectedPathsLayoutActions = new ToggleAffectedPathsOptionAction[] {
 				new ToggleAffectedPathsOptionAction(this,
@@ -97,80 +125,217 @@ public class ChangedPathsPage {
 
 
 	public void createControl() {
-		createAffectedPathsViewer();
-		addSelectionListener();
+		createRevisionDetailViewers();
+		addSelectionListeners();
 		contributeActions();
 	}
 
-	private void addSelectionListener() {
+	private void addSelectionListeners() {
 		page.getTableViewer().addSelectionChangedListener(
 				new ISelectionChangedListener() {
 					private Object currentLogEntry;
+					private int currentNumberOfSelectedElements;
 
 					public void selectionChanged(SelectionChangedEvent event) {
 						ISelection selection = event.getSelection();
-						Object logEntry = ((IStructuredSelection) selection)
-								.getFirstElement();
-						if (logEntry != currentLogEntry) {
+						Object logEntry = ((IStructuredSelection) selection).getFirstElement();
+						int nrOfSelectedElements = ((IStructuredSelection) selection).size();
+						if (logEntry != currentLogEntry || nrOfSelectedElements != currentNumberOfSelectedElements) {
 							this.currentLogEntry = logEntry;
+							this.currentNumberOfSelectedElements = nrOfSelectedElements;
 							updatePanels(selection);
 						}
 					}
 				});
+
+		changePathsViewer.addSelectionChangedListener(new ISelectionChangedListener() {
+
+			private Object selectedChangePath;
+
+			public void selectionChanged(SelectionChangedEvent event) {
+				IStructuredSelection selection = (IStructuredSelection) event.getSelection();
+				FileStatus changePath = (FileStatus) selection.getFirstElement();
+				if (changePath != selectedChangePath) {
+					selectedChangePath = changePath;
+					selectInDiffViewerAndScroll(changePath);
+				}
+			}
+		});
 	}
 
-	private void createAffectedPathsViewer() {
-		int[] weights = null;
-		weights = mainSashForm.getWeights();
-		if (innerSashForm != null) {
-			innerSashForm.dispose();
+	private void selectInDiffViewerAndScroll(FileStatus selectedChangePath) {
+		if(selectedChangePath == null) {
+			return;
 		}
-		if (changePathsViewer != null) {
-			changePathsViewer.getControl().dispose();
+
+		String pathAsString = selectedChangePath.getRootRelativePath().toString();
+
+		// Note: this is a plain text search for the path in the diff text
+		// This could be refined with a regular expression matching the
+		// whole diff line.
+		int offset = diffTextViewer.getDocument().get().indexOf(pathAsString);
+
+		if(offset != -1) {
+			selectInDiffViewerAndScrollToPosition(offset, pathAsString.length());
 		}
+	}
+
+	private void selectInDiffViewerAndScrollToPosition(int offset, int length) {
+		try {
+			diffTextViewer.setSelectedRange(offset, length);
+			int line = diffTextViewer.getDocument().getLineOfOffset(offset);
+			diffTextViewer.setTopIndex(line);
+		} catch (BadLocationException e) {
+			MercurialEclipsePlugin.logError(e);
+		}
+	}
+
+	/**
+	 * Creates the detail viewers (commentViewer, changePathsViewer and diffViewer) shown
+	 * below the table of revisions. Will rebuild these viewers after a layout change.
+	 */
+	private void createRevisionDetailViewers() {
+		disposeExistingViewers();
 
 		int layout = store.getInt(PREF_AFFECTED_PATHS_LAYOUT);
+		int swtOrientation = layout == LAYOUT_HORIZONTAL ? SWT.HORIZONTAL: SWT.VERTICAL;
+		innerSashForm = new SashForm(mainSashForm,  swtOrientation);
 
-		if (layout == LAYOUT_HORIZONTAL) {
-			innerSashForm = new SashForm(mainSashForm, SWT.HORIZONTAL);
-		} else {
-			innerSashForm = new SashForm(mainSashForm, SWT.VERTICAL);
-			createText(innerSashForm);
-		}
-
+		createText(innerSashForm);
 		changePathsViewer = new ChangePathsTableProvider(innerSashForm, this);
-
-		if (layout == LAYOUT_HORIZONTAL) {
-			createText(innerSashForm);
-		}
+		createDiffViewer(innerSashForm);
 
 		setViewerVisibility();
+		refreshLayout();
+	}
 
-		innerSashForm.layout();
-		if (weights != null && weights.length == 2) {
-			mainSashForm.setWeights(weights);
+	private void disposeExistingViewers() {
+		if (innerSashForm != null && !innerSashForm.isDisposed()) {
+			// disposes ALL child widgets too
+			innerSashForm.dispose();
 		}
-		mainSashForm.layout();
+	}
 
-		updatePanels(page.getTableViewer().getSelection());
+	private void createDiffViewer(SashForm parent) {
+		SourceViewer sourceViewer = new SourceViewer(parent, null, null, true,
+				SWT.H_SCROLL | SWT.V_SCROLL | SWT.MULTI | SWT.READ_ONLY);
+		sourceViewer.getTextWidget().setIndent(2);
+
+		diffTextViewer = sourceViewer;
+		diffTextViewer.setDocument(new Document());
 	}
 
 	private void updatePanels(ISelection selection) {
 		if (!(selection instanceof IStructuredSelection)) {
-			textViewer.setDocument(new Document("")); //$NON-NLS-1$
-			changePathsViewer.setInput(null);
+			clearTextChangePathsAndDiffTextViewers();
 			return;
 		}
-		IStructuredSelection ss = (IStructuredSelection) selection;
-		if (ss.size() != 1) {
-			textViewer.setDocument(new Document("")); //$NON-NLS-1$
-			changePathsViewer.setInput(null);
+
+		Object[] selectedElememts = ((IStructuredSelection) selection).toArray();
+		if (selectedElememts.length == 1) {
+			MercurialRevision revision = (MercurialRevision) selectedElememts[0];
+			updatePanelsAfterSelectionOf(revision);
+		} else if (selectedElememts.length == 2) {
+			MercurialRevision youngerRevision = (MercurialRevision) selectedElememts[0];
+			MercurialRevision olderRevision = (MercurialRevision) selectedElememts[1];
+			updatePanelsAfterSelectionOf(olderRevision, youngerRevision);
+		} else {
+			clearTextChangePathsAndDiffTextViewers();
+		}
+	}
+
+	private void clearTextChangePathsAndDiffTextViewers() {
+		commentTextViewer.setDocument(new Document("")); //$NON-NLS-1$
+		changePathsViewer.setInput(null);
+		diffTextViewer.setDocument(new Document("")); //$NON-NLS-1$
+	}
+
+	private void updatePanelsAfterSelectionOf(MercurialRevision revision) {
+		commentTextViewer.setDocument(new Document(revision.getChangeSet().getComment()));
+		changePathsViewer.setInput(revision);
+		updateDiffPanelFor(revision, null);
+	}
+
+	private void updatePanelsAfterSelectionOf(MercurialRevision firstRevision, MercurialRevision secondRevision) {
+		// TODO update to combined comment
+		commentTextViewer.setDocument(new Document());
+		// TODO update to combined file list
+		changePathsViewer.setInput(null);
+		updateDiffPanelFor(firstRevision, secondRevision);
+	}
+
+	private void updateDiffPanelFor(final MercurialRevision entry, final MercurialRevision secondEntry) {
+		if(!showDiffs) {
+			diffTextViewer.setDocument(new Document());
 			return;
 		}
-		MercurialRevision entry = (MercurialRevision) ss.getFirstElement();
-		textViewer.setDocument(new Document(entry.getChangeSet()
-				.getComment()));
-		changePathsViewer.setInput(entry);
+		Job.getJobManager().cancel(FetchDiffJob.class);
+		diffTextViewer.setDocument(new Document());
+		final HgRoot hgRoot = entry.getChangeSet().getHgRoot();
+		FetchDiffJob job = new FetchDiffJob(entry, secondEntry, hgRoot);
+		// give the changePathsViewer a chance to fetch the data first
+		getHistoryPage().scheduleInPage(job, 100);
+	}
+
+	private void applyLineColoringToDiffViewer(IProgressMonitor monitor) {
+		IDocument document = diffTextViewer.getDocument();
+		int nrOfLines = document.getNumberOfLines();
+		Display display = diffTextViewer.getControl().getDisplay();
+
+		for (int lineNo = 0; lineNo < nrOfLines && !monitor.isCanceled();)
+		{
+			// color lines 100 at a time to allow user cancellation in between
+			try {
+				diffTextViewer.getControl().setRedraw(false);
+				for (int i = 0; i < 100 && lineNo < nrOfLines; i++, lineNo++) {
+					try {
+						IRegion lineInformation = document.getLineInformation(i);
+						int offset = lineInformation.getOffset();
+						int length = lineInformation.getLength();
+						Color lineColor = getDiffLineColor(document.get( offset, length));
+						diffTextViewer.setTextColor(lineColor, offset, length, true);
+					} catch (BadLocationException e) {
+						MercurialEclipsePlugin.logError(e);
+					}
+				}
+			}
+			finally {
+				diffTextViewer.getControl().setRedraw(true);
+			}
+
+			// don't dispatch event with redraw disabled & re-check control status afterwards !
+			while(display.readAndDispatch()){
+				// give user the chance to break the job
+			}
+			if (diffTextViewer.getControl() == null || diffTextViewer.getControl().isDisposed()) {
+				return;
+			}
+		}
+	}
+
+	private Color getDiffLineColor(String line) {
+		if(StringUtils.isEmpty(line)){
+			return colorBlack;
+		}
+		if(line.startsWith("diff ")) {
+			return colorBlue;
+		} else if(line.startsWith("+++ ")) {
+			return colorBlue;
+		} else if(line.startsWith("--- ")) {
+			return colorBlue;
+		} else if(line.startsWith("@@ ")) {
+			return colorBlue;
+		} else if(line.startsWith("new file mode")) {
+			return colorBlue;
+		} else if(line.startsWith("\\ ")) {
+			return colorBlue;
+		} else if(line.startsWith("+")) {
+			return colorGreen;
+		} else if(line.startsWith("-")) {
+			return colorRed;
+		} else {
+			return colorBlack;
+		}
 	}
 
 	/**
@@ -188,14 +353,14 @@ public class ChangedPathsPage {
 				SWT.H_SCROLL | SWT.V_SCROLL | SWT.MULTI | SWT.READ_ONLY);
 		result.getTextWidget().setIndent(2);
 
-		this.textViewer = result;
+		this.commentTextViewer = result;
 
 		// Create actions for the text editor (copy and select all)
 		final TextViewerAction copyAction = new TextViewerAction(
-				this.textViewer, ITextOperationTarget.COPY);
-		copyAction.setText(Messages.getString("HistoryView.copy")); //$NON-NLS-1$
+				this.commentTextViewer, ITextOperationTarget.COPY);
+		copyAction.setText(Messages.getString("HistoryView.copy"));
 
-		this.textViewer
+		this.commentTextViewer
 				.addSelectionChangedListener(new ISelectionChangedListener() {
 					public void selectionChanged(SelectionChangedEvent event) {
 						copyAction.update();
@@ -203,8 +368,8 @@ public class ChangedPathsPage {
 				});
 
 		final TextViewerAction selectAllAction = new TextViewerAction(
-				this.textViewer, ITextOperationTarget.SELECT_ALL);
-		selectAllAction.setText(Messages.getString("HistoryView.selectAll")); //$NON-NLS-1$
+				this.commentTextViewer, ITextOperationTarget.SELECT_ALL);
+		selectAllAction.setText(Messages.getString("HistoryView.selectAll"));
 
 		IHistoryPageSite parentSite = getHistoryPageSite();
 		IPageSite pageSite = parentSite.getWorkbenchPageSite();
@@ -226,7 +391,7 @@ public class ChangedPathsPage {
 			}
 		});
 
-		StyledText text = this.textViewer.getTextWidget();
+		StyledText text = this.commentTextViewer.getTextWidget();
 		Menu menu = menuMgr.createContextMenu(text);
 		text.setMenu(menu);
 	}
@@ -243,11 +408,25 @@ public class ChangedPathsPage {
 				store.setValue(PREF_SHOW_COMMENTS, showComments);
 			}
 		};
+
 		toggleShowComments.setChecked(showComments);
+
+		Action toggleShowDiffs = new Action(Messages
+				// TODO create new text & image
+				.getString("HistoryView.showDiffs"), //$NON-NLS-1$
+				MercurialEclipsePlugin.getImageDescriptor(IMG_DIFFS)) {
+			@Override
+			public void run() {
+				showDiffs = isChecked();
+				setViewerVisibility();
+				store.setValue(PREF_SHOW_DIFFS, showDiffs);
+			}
+		};
+		toggleShowDiffs.setChecked(showDiffs);
 
 		// Toggle wrap comments action
 		Action toggleWrapCommentsAction = new Action(Messages
-				.getString("HistoryView.wrapComments")) { //$NON-NLS-1$
+				.getString("HistoryView.wrapComments")) {
 			@Override
 			public void run() {
 				wrapCommentsText = isChecked();
@@ -281,6 +460,7 @@ public class ChangedPathsPage {
 		actionBarsMenu.add(new Separator());
 		actionBarsMenu.add(toggleShowComments);
 		actionBarsMenu.add(toggleShowAffectedPathsAction);
+		actionBarsMenu.add(toggleShowDiffs);
 
 		actionBarsMenu.add(new Separator());
 		for (int i = 0; i < toggleAffectedPathsLayoutActions.length; i++) {
@@ -289,9 +469,9 @@ public class ChangedPathsPage {
 
 		// Create the local tool bar
 		IToolBarManager tbm = actionBars.getToolBarManager();
-		tbm.add(new Separator());
 		tbm.add(toggleShowComments);
 		tbm.add(toggleShowAffectedPathsAction);
+		tbm.add(toggleShowDiffs);
 		tbm.update(false);
 
 		actionBars.updateActionBars();
@@ -300,7 +480,9 @@ public class ChangedPathsPage {
 		final BaseSelectionListenerAction openEditorAction = page.getOpenEditorAction();
 		final BaseSelectionListenerAction compareWithCurrent = page.getCompareWithCurrentAction();
 		final BaseSelectionListenerAction compareWithPrevious = page.getCompareWithPreviousAction();
+		final BaseSelectionListenerAction compareWithOther = page.getCompareWithOtherAction();
 		final BaseSelectionListenerAction actionRevert = page.getRevertAction();
+		final BaseSelectionListenerAction focusOnSelected = page.getFocusOnSelectedFileAction();
 
 		changePathsViewer.addDoubleClickListener(new IDoubleClickListener() {
 			public void doubleClick(DoubleClickEvent event) {
@@ -332,19 +514,24 @@ public class ChangedPathsPage {
 				}
 				selection = new StructuredSelection(derived);
 				openAction.selectionChanged(selection);
+				focusOnSelected.selectionChanged(selection);
 				openEditorAction.selectionChanged(selection);
 				compareWithCurrent.selectionChanged(selection);
+				compareWithOther.selectionChanged(selection);
 				selection = new StructuredSelection(new Object[]{derived, fileStatus});
 				compareWithPrevious.selectionChanged(selection);
 				menuMgr1.add(openAction);
 				menuMgr1.add(openEditorAction);
+				menuMgr1.add(focusOnSelected);
 				menuMgr1.add(new Separator(IWorkbenchActionConstants.GROUP_FILE));
 				menuMgr1.add(compareWithCurrent);
 				menuMgr1.add(compareWithPrevious);
+				menuMgr1.add(compareWithOther);
 				menuMgr1.add(new Separator());
 				selection = new StructuredSelection(new Object[]{derived});
 				actionRevert.selectionChanged(selection);
 				menuMgr1.add(actionRevert);
+				menuMgr1.add(new Separator(IWorkbenchActionConstants.MB_ADDITIONS));
 			}
 
 		});
@@ -353,20 +540,102 @@ public class ChangedPathsPage {
 	}
 
 	private void setViewerVisibility() {
-		if (showComments && showAffectedPaths) {
-			mainSashForm.setMaximizedControl(null);
-			innerSashForm.setMaximizedControl(null);
-		} else if (showComments) {
-			mainSashForm.setMaximizedControl(null);
-			innerSashForm.setMaximizedControl(textViewer.getTextWidget());
-		} else if (showAffectedPaths) {
-			mainSashForm.setMaximizedControl(null);
-			innerSashForm.setMaximizedControl(changePathsViewer.getControl());
-		} else {
-			mainSashForm.setMaximizedControl(page.getTableViewer().getControl().getParent());
+		boolean lowerPartVisible = showAffectedPaths || showComments ||  showDiffs;
+		mainSashForm.setMaximizedControl(lowerPartVisible ? null : getChangesetsTableControl());
+		if(!lowerPartVisible) {
+			return;
 		}
-		changePathsViewer.refresh();
-		textViewer.getTextWidget().setWordWrap(wrapCommentsText);
+
+		int[] weights = {
+				showComments ? 1 : 0, //
+				showAffectedPaths ? 1 : 0, //
+				showDiffs ? 1 : 0 //
+		};
+		innerSashForm.setWeights(weights);
+
+		commentTextViewer.getTextWidget().setWordWrap(wrapCommentsText);
+
+		updatePanels(page.getTableViewer().getSelection());
+	}
+
+	private Composite getChangesetsTableControl() {
+		return page.getTableViewer().getControl().getParent();
+	}
+
+	public void refreshLayout() {
+		innerSashForm.layout();
+		int[] weights = mainSashForm.getWeights();
+		if (weights != null && weights.length == 2) {
+			mainSashForm.setWeights(weights);
+		}
+		mainSashForm.layout();
+	}
+
+	/**
+	 * @author Andrei
+	 */
+	private final class FetchDiffJob extends Job {
+
+		private final MercurialRevision entry;
+
+		private final MercurialRevision secondEntry;
+
+		private final HgRoot hgRoot;
+
+
+		private FetchDiffJob(MercurialRevision entry, MercurialRevision secondEntry,
+				HgRoot hgRoot) {
+			super("Fetching the diff data");
+			this.entry = entry;
+			this.secondEntry = secondEntry;
+			this.hgRoot = hgRoot;
+			setRule(new HgRootRule(hgRoot));
+		}
+
+		@Override
+		protected IStatus run(IProgressMonitor monitor) {
+			try {
+				String diff = HgPatchClient.getDiff(hgRoot, entry, secondEntry);
+				if (!monitor.isCanceled() && diffTextViewer.getControl() != null
+						&& !diffTextViewer.getControl().isDisposed()) {
+					getHistoryPage().scheduleInPage(new UpdateDiffViewerJob(diff));
+				}
+			} catch (HgException e) {
+				MercurialEclipsePlugin.logError(e);
+				return e.getStatus();
+			}
+			return Status.OK_STATUS;
+		}
+
+		@Override
+		public boolean belongsTo(Object family) {
+			return FetchDiffJob.class == family;
+		}
+	}
+
+	class UpdateDiffViewerJob extends UIJob {
+
+		private final String diff;
+
+		public UpdateDiffViewerJob(String diff) {
+			super(diffTextViewer.getControl().getDisplay(), "Updating diff pane");
+			this.diff = diff;
+		}
+
+		@Override
+		public IStatus runInUIThread(IProgressMonitor monitor) {
+			if (diffTextViewer.getControl() == null || diffTextViewer.getControl().isDisposed()) {
+				return Status.CANCEL_STATUS;
+			}
+			diffTextViewer.setDocument(new Document(diff));
+			applyLineColoringToDiffViewer(monitor);
+			return monitor.isCanceled()? Status.CANCEL_STATUS : Status.OK_STATUS;
+		}
+
+		@Override
+		public boolean belongsTo(Object family) {
+			return FetchDiffJob.class == family;
+		}
 	}
 
 	public static class ToggleAffectedPathsOptionAction extends Action {
@@ -390,7 +659,7 @@ public class ChangedPathsPage {
 			if (isChecked()) {
 				MercurialEclipsePlugin.getDefault().getPreferenceStore()
 						.setValue(preferenceName, value);
-				page.createAffectedPathsViewer();
+				page.createRevisionDetailViewers();
 			}
 		}
 

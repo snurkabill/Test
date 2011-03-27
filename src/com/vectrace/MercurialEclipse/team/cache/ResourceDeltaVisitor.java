@@ -6,13 +6,11 @@
  * http://www.eclipse.org/legal/epl-v10.html
  *
  * Contributors:
- *     Andrei Loskutov (Intland) - implementation
+ *     Andrei Loskutov           - implementation
  *******************************************************************************/
 package com.vectrace.MercurialEclipse.team.cache;
 
-import java.util.HashSet;
 import java.util.Map;
-import java.util.Set;
 
 import org.eclipse.core.resources.IProject;
 import org.eclipse.core.resources.IResource;
@@ -32,20 +30,21 @@ import com.vectrace.MercurialEclipse.model.HgRoot;
 import com.vectrace.MercurialEclipse.operations.InitOperation;
 import com.vectrace.MercurialEclipse.preferences.MercurialPreferenceConstants;
 import com.vectrace.MercurialEclipse.team.MercurialTeamProvider;
-import com.vectrace.MercurialEclipse.team.MercurialUtilities;
 import com.vectrace.MercurialEclipse.utils.ResourceUtils;
 
 final class ResourceDeltaVisitor implements IResourceDeltaVisitor {
 
-	private final Map<IProject, Set<IResource>> removed;
-	private final Map<IProject, Set<IResource>> changed;
-	private final Map<IProject, Set<IResource>> added;
+	private final Map<IProject, RootResourceSet<IResource>> removed;
+	private final Map<IProject, RootResourceSet<IResource>> changed;
+	private final Map<IProject, RootResourceSet<IResource>> added;
 	private final boolean autoShare;
 	private final MercurialStatusCache cache;
 	private int resourcesCount;
+	private HgRoot currentRoot;
 
-	ResourceDeltaVisitor(Map<IProject, Set<IResource>> removed, Map<IProject, Set<IResource>> changed,
-			Map<IProject, Set<IResource>> added) {
+	ResourceDeltaVisitor(Map<IProject, RootResourceSet<IResource>> removed,
+			Map<IProject, RootResourceSet<IResource>> changed,
+			Map<IProject, RootResourceSet<IResource>> added) {
 		this.removed = removed;
 		this.changed = changed;
 		this.added = added;
@@ -73,14 +72,23 @@ final class ResourceDeltaVisitor implements IResourceDeltaVisitor {
 			return false;
 		}
 
-		if (!MercurialUtilities.isPossiblySupervised(res)) {
+		if (!MercurialTeamProvider.isHgTeamProviderFor(res)) {
 			return false;
 		}
+
+		boolean subrepoEnabled = cache.isSubrepoSupportEnabled();
+		if(subrepoEnabled){
+			// We should re-set currentRoot each time because the delta resources may be
+			// from different projects AND from different UNRELATED roots too
+			currentRoot = MercurialTeamProvider.getHgRoot(res);
+		} else {
+			currentRoot = MercurialTeamProvider.getHgRoot(project);
+		}
+
 		if((res == project && openOrClosedOrDeleted) || isCompleteStatusRequested()){
-			addResource(changed, project, project);
+			addResource(changed, project, currentRoot, project);
 			return false;
 		}
-		// System.out.println("Observing change on: " + res);
 
 		// NB: the resource may not exist at this point (deleted/moved)
 		// so any access to the IResource's API should be checked against null
@@ -88,7 +96,7 @@ final class ResourceDeltaVisitor implements IResourceDeltaVisitor {
 			IResource resource = isCompleteStatusRequested()? project : res;
 			switch (delta.getKind()) {
 			case IResourceDelta.ADDED:
-				addResource(added, project, resource);
+				addResource(added, project, currentRoot, resource);
 				// System.out.println("\t ADDED: " + resource);
 				if(isCompleteStatusRequested()){
 					return false;
@@ -100,10 +108,10 @@ final class ResourceDeltaVisitor implements IResourceDeltaVisitor {
 
 					// fix for issue 10155: No status update after reverting changes on .hgignore
 					if(MercurialStatusCache.canTriggerFullCacheUpdate(resource)){
-						addResource(changed, project, project);
+						addResource(changed, project, currentRoot, project);
 						return false;
 					}
-					addResource(changed, project, resource);
+					addResource(changed, project, currentRoot, resource);
 					// System.out.println("\t CHANGED: " + resource);
 					if(isCompleteStatusRequested()){
 						return false;
@@ -112,7 +120,7 @@ final class ResourceDeltaVisitor implements IResourceDeltaVisitor {
 				break;
 			case IResourceDelta.REMOVED:
 				if (cache.isSupervised(project, ResourceUtils.getPath(res))) {
-					addResource(removed, project, resource);
+					addResource(removed, project, currentRoot, resource);
 					// System.out.println("\t REMOVED: " + resource);
 					if(isCompleteStatusRequested()){
 						return false;
@@ -124,7 +132,7 @@ final class ResourceDeltaVisitor implements IResourceDeltaVisitor {
 					res = res.getParent();
 					if (res != null && cache.isSupervised(project, ResourceUtils.getPath(res))){
 						resource = isCompleteStatusRequested()? project : res;
-						addResource(changed, project, resource);
+						addResource(changed, project, currentRoot, resource);
 						// System.out.println("\t CHANGED: " + resource);
 						if(isCompleteStatusRequested()){
 							return false;
@@ -142,13 +150,16 @@ final class ResourceDeltaVisitor implements IResourceDeltaVisitor {
 	}
 
 
-	private void addResource(Map<IProject, Set<IResource>> map, IProject project, IResource res){
-		Set<IResource> set = map.get(project);
-		if(set == null) {
-			set = new HashSet<IResource>();
+	private void addResource(Map<IProject, RootResourceSet<IResource>> map, IProject project, HgRoot root, IResource res){
+		if(root == null) {
+			return;
+		}
+		RootResourceSet<IResource> set = map.get(project);
+		if(set == null){
+			set = new RootResourceSet<IResource>();
 			map.put(project, set);
 		}
-		set.add(res);
+		set.add(root, res);
 		resourcesCount++;
 	}
 
@@ -157,7 +168,7 @@ final class ResourceDeltaVisitor implements IResourceDeltaVisitor {
 	}
 
 	private void autoshareProject(final IProject project) {
-		final HgRoot hgRoot = MercurialTeamProvider.hasHgRoot(project);
+		final HgRoot hgRoot = MercurialRootCache.getInstance().calculateHgRoot(project);
 		if(hgRoot == null){
 			return;
 		}

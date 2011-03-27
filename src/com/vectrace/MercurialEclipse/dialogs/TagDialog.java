@@ -7,11 +7,12 @@
  *
  * Contributors:
  *     Jerome Negre              - implementation
- *     Andrei Loskutov (Intland) - bug fixes
+ *     Andrei Loskutov           - bug fixes
  *******************************************************************************/
 package com.vectrace.MercurialEclipse.dialogs;
 
 import org.eclipse.jface.dialogs.Dialog;
+import org.eclipse.jface.dialogs.IDialogSettings;
 import org.eclipse.swt.SWT;
 import org.eclipse.swt.events.MouseEvent;
 import org.eclipse.swt.events.MouseListener;
@@ -73,6 +74,17 @@ public class TagDialog extends Dialog {
 	protected void configureShell(Shell newShell) {
 		super.configureShell(newShell);
 		newShell.setText(Messages.getString("TagDialog.shell.text")); //$NON-NLS-1$
+	}
+
+	@Override
+	protected IDialogSettings getDialogBoundsSettings() {
+		IDialogSettings dialogSettings = MercurialEclipsePlugin.getDefault().getDialogSettings();
+		String sectionName = getClass().getSimpleName();
+		IDialogSettings section = dialogSettings.getSection(sectionName);
+		if (section == null) {
+			dialogSettings.addNewSection(sectionName);
+		}
+		return section;
 	}
 
 	@Override
@@ -204,7 +216,14 @@ public class TagDialog extends Dialog {
 		TabItem item = new TabItem(folder, SWT.NONE);
 		item.setText(Messages.getString("TagDialog.removeTag")); //$NON-NLS-1$
 		Composite composite = SWTWidgetHelper.createComposite(folder, 1);
+
 		final TagTable tt = new TagTable(composite, hgRoot);
+		tt.hideTip();
+
+		GridData data = new GridData(GridData.FILL_BOTH);
+		data.heightHint = 150;
+		tt.setLayoutData(data);
+
 		try {
 			tt.setTags(HgTagClient.getTags(hgRoot));
 		} catch (HgException e2) {

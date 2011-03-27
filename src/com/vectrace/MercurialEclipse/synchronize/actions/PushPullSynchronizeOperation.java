@@ -7,12 +7,11 @@
  *
  * Contributors:
  *     Bastian Doetsch			 - implementation
- *     Andrei Loskutov (Intland) - bug fixes
+ *     Andrei Loskutov           - bug fixes
  ******************************************************************************/
 package com.vectrace.MercurialEclipse.synchronize.actions;
 
 import java.lang.reflect.InvocationTargetException;
-import java.util.Collections;
 import java.util.Set;
 
 import org.eclipse.compare.structuremergeviewer.IDiffElement;
@@ -22,6 +21,10 @@ import org.eclipse.core.runtime.IStatus;
 import org.eclipse.core.runtime.Status;
 import org.eclipse.core.runtime.jobs.Job;
 import org.eclipse.jface.dialogs.MessageDialog;
+import org.eclipse.jface.dialogs.MessageDialogWithToggle;
+import org.eclipse.jface.preference.IPreferenceStore;
+import org.eclipse.jface.window.Window;
+import org.eclipse.swt.SWT;
 import org.eclipse.team.ui.synchronize.ISynchronizePageConfiguration;
 import org.eclipse.team.ui.synchronize.SynchronizeModelOperation;
 import org.eclipse.ui.statushandlers.StatusManager;
@@ -29,12 +32,13 @@ import org.eclipse.ui.statushandlers.StatusManager;
 import com.vectrace.MercurialEclipse.MercurialEclipsePlugin;
 import com.vectrace.MercurialEclipse.commands.HgPushPullClient;
 import com.vectrace.MercurialEclipse.exception.HgException;
-import com.vectrace.MercurialEclipse.history.ChangeSetComparator;
 import com.vectrace.MercurialEclipse.menu.PushHandler;
 import com.vectrace.MercurialEclipse.model.ChangeSet;
 import com.vectrace.MercurialEclipse.model.HgRoot;
 import com.vectrace.MercurialEclipse.model.IHgRepositoryLocation;
+import com.vectrace.MercurialEclipse.preferences.MercurialPreferenceConstants;
 import com.vectrace.MercurialEclipse.synchronize.MercurialSynchronizeParticipant;
+import com.vectrace.MercurialEclipse.synchronize.MercurialSynchronizeSubscriber;
 import com.vectrace.MercurialEclipse.synchronize.Messages;
 import com.vectrace.MercurialEclipse.synchronize.cs.ChangesetGroup;
 import com.vectrace.MercurialEclipse.team.MercurialTeamProvider;
@@ -73,15 +77,11 @@ public class PushPullSynchronizeOperation extends SynchronizeModelOperation {
 			if(monitor.isCanceled()){
 				return;
 			}
-			if(isPull){
-				// see issue #10802: if we run "pull" on the changesets group, pull latest
-				// version, which mean: do NOT specify the range for pull
-				changeSet = null;
-				hgRoot = group.getChangesets().iterator().next().getHgRoot();
-			} else {
-				changeSet = Collections.min(group.getChangesets(),	new ChangeSetComparator());
-				hgRoot = changeSet.getHgRoot();
-			}
+
+			// Alternative: Find all the heads and push/pull them individually (without doing
+			// workspace refreshes in between)
+			changeSet = null;
+			hgRoot = group.getChangesets().iterator().next().getHgRoot();
 		}
 
 		if(hgRoot == null){
@@ -100,7 +100,14 @@ public class PushPullSynchronizeOperation extends SynchronizeModelOperation {
 		monitor.beginTask(getTaskName(hgRoot), 1);
 		String jobName = isPull ? Messages.getString("PushPullSynchronizeOperation.PullJob")
 				: Messages.getString("PushPullSynchronizeOperation.PushJob");
-		new PushPullJob(jobName, hgRoot, changeSet, monitor).schedule();
+		PushPullJob job = new PushPullJob(jobName, hgRoot, changeSet, monitor);
+
+		if (changeSet == null)
+		{
+			job.setBranch(MercurialSynchronizeSubscriber.getSyncBranch(hgRoot));
+		}
+
+		job.schedule();
 	}
 
 	private String getTaskName(HgRoot hgRoot) {
@@ -137,9 +144,22 @@ public class PushPullSynchronizeOperation extends SynchronizeModelOperation {
 		}
 		getShell().getDisplay().syncExec(new Runnable(){
 			public void run() {
-				monitor.setCanceled(!MessageDialog.openConfirm(getShell(), title, message));
+				showDontShowAgainConfirmDialog(monitor, title, message, MercurialPreferenceConstants.PREF_SHOW_PULL_WARNING_DIALOG);
 			}
+
 		});
+	}
+
+	private void showDontShowAgainConfirmDialog(final IProgressMonitor monitor, final String title,
+			final String message, String key) {
+		IPreferenceStore store = MercurialEclipsePlugin.getDefault().getPreferenceStore();
+		String pref = store.getString(key);
+		if (MessageDialogWithToggle.PROMPT.equals(pref)) {
+			String toggleMessage = Messages.getString("Dialogs.DontShowAgain");
+			MessageDialogWithToggle confirmDialog = MessageDialogWithToggle.open(MessageDialog.CONFIRM, getShell(), title, message, toggleMessage, false, store, key, SWT.NONE);
+			int returnCode = confirmDialog.getReturnCode();
+			monitor.setCanceled(returnCode != Window.OK);
+		}
 	}
 
 	private void checkProjects(final IProgressMonitor monitor, HgRoot hgRoot) {
@@ -155,7 +175,7 @@ public class PushPullSynchronizeOperation extends SynchronizeModelOperation {
 		final String message = "Pull will affect " + projects.size() + " projects in workspace. Continue?";
 		getShell().getDisplay().syncExec(new Runnable(){
 			public void run() {
-				monitor.setCanceled(!MessageDialog.openConfirm(getShell(), title, message));
+				showDontShowAgainConfirmDialog(monitor, title, message, MercurialPreferenceConstants.PREF_SHOW_MULTIPLE_PROJECTS_DIALOG);
 			}
 		});
 	}
@@ -165,12 +185,26 @@ public class PushPullSynchronizeOperation extends SynchronizeModelOperation {
 		private final IProgressMonitor opMonitor;
 		private final HgRoot hgRoot;
 		private final ChangeSet changeSet;
+		private String branch;
 
+		/**
+		 * @param name Human readable name
+		 * @param hgRoot The hg root
+		 * @param changeSet The changeset, may be null to push/pull everything
+		 * @param opMonitor The progress monitor
+		 */
 		private PushPullJob(String name, HgRoot hgRoot, ChangeSet changeSet, IProgressMonitor opMonitor) {
 			super(name);
 			this.hgRoot = hgRoot;
 			this.changeSet = changeSet;
 			this.opMonitor = opMonitor;
+		}
+
+		/**
+		 * @param branch The branch name, or null for all/any
+		 */
+		public void setBranch(String branch) {
+			this.branch = branch;
 		}
 
 		@Override
@@ -194,13 +228,13 @@ public class PushPullSynchronizeOperation extends SynchronizeModelOperation {
 					boolean rebase = false;
 					boolean force = false;
 					boolean timeout = true;
-					HgPushPullClient.pull(hgRoot, changeSet, location, update, rebase, force, timeout);
+					HgPushPullClient.pull(hgRoot, changeSet, location, update, rebase, force, timeout, false, branch);
 					// pull client does the refresh automatically, no extra job required here
 				} else {
-					HgPushPullClient.push(hgRoot, location, false, changeSet.getChangeset(), Integer.MAX_VALUE);
+					HgPushPullClient.push(hgRoot, location, false, changeSet, Integer.MAX_VALUE, branch);
 					new RefreshRootJob(hgRoot, RefreshRootJob.OUTGOING).schedule();
 				}
-			} catch (HgException ex) {
+			} catch (final HgException ex) {
 				MercurialEclipsePlugin.logError(ex);
 				if(!isPull){
 					// try to recover: open the default dialog, where user can change some
@@ -208,7 +242,12 @@ public class PushPullSynchronizeOperation extends SynchronizeModelOperation {
 					MercurialEclipsePlugin.getStandardDisplay().asyncExec(new Runnable() {
 						public void run() {
 							try {
-								new PushHandler().run(hgRoot);
+								PushHandler handler = new PushHandler();
+
+								handler.setInitialMessage(Messages
+										.getString("PushPullSynchronizeOperation.PushFailed")
+										+ ex.getConciseMessage());
+								handler.run(hgRoot);
 							} catch (Exception e) {
 								MercurialEclipsePlugin.logError(e);
 							}

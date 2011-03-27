@@ -10,7 +10,8 @@
  *     VecTrace (Zingo Andersen) - updateing it
  *     Jérôme Nègre              - adding label decorator section
  *     Stefan C                  - Code cleanup
- *     Andrei Loskutov (Intland) - bug fixes
+ *     Andrei Loskutov           - bug fixes
+ *     Ilya Ivanov (Intland)	 - bug fixes
  *******************************************************************************/
 
 package com.vectrace.MercurialEclipse.preferences;
@@ -160,12 +161,25 @@ IWorkbenchPreferencePage {
 				Messages.getString("GeneralPreferencePage.field.username"), getFieldEditorParent())); //$NON-NLS-1$
 
 		addField(new BooleanFieldEditor(
-				MercurialPreferenceConstants.PREF_USE_MERCURIAL_USERNAME,
+				PREF_USE_MERCURIAL_USERNAME,
 				"Prefer 'username' value from .hgrc as default user name", getFieldEditorParent())); //$NON-NLS-1$
+
+		addField(new BooleanFieldEditor(
+				PREF_DEFAULT_REBASE_KEEP_BRANCHES,
+				"Default to 'Retain the branch name' for Rebase command", getFieldEditorParent())); //$NON-NLS-1$
 
 		addField(new BooleanFieldEditor(
 				PREF_USE_EXTERNAL_MERGE,
 				Messages.getString("GeneralPreferencePage.useExternalMergeTool"), getFieldEditorParent())); //$NON-NLS-1$
+
+		BooleanFieldEditor editor = new BooleanFieldEditor(
+				PREF_PUSH_NEW_BRANCH,
+				Messages.getString("GeneralPreferencePage.pushNewBranches"), getFieldEditorParent());
+		addField(editor);
+		if(MercurialEclipsePlugin.DISABLED_OPTIONS.contains("--new-branch")) {
+			editor.setEnabled(false, getFieldEditorParent());
+			editor.setLabelText(editor.getLabelText() + "\n(Option disabled due the unsupported hg version)");
+		}
 
 		addField(new LabelDecoratorRadioGroupFieldEditor(
 				LABELDECORATOR_LOGIC,
@@ -187,6 +201,11 @@ IWorkbenchPreferencePage {
 		addField(new BooleanFieldEditor(
 				PREF_AUTO_SHARE_PROJECTS,
 				Messages.getString("GeneralPreferencePage.autoshare"), //$NON-NLS-1$
+				getFieldEditorParent()));
+
+		addField(new BooleanFieldEditor(
+				PREF_PRESELECT_UNTRACKED_IN_COMMIT_DIALOG,
+				Messages.getString("GeneralPreferencePage.preselectUntrackedInCommitDialog"), //$NON-NLS-1$
 				getFieldEditorParent()));
 
 		IntegerFieldEditor commitSizeEditor = new IntegerFieldEditor(

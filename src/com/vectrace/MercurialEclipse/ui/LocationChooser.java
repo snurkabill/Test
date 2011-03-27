@@ -6,8 +6,8 @@
  * http://www.eclipse.org/legal/epl-v10.html
  *
  * Contributors:
- * Administrator	implementation
- *     Andrei Loskutov (Intland) - bug fixes
+ *     Administrator            - implementation
+ *     Andrei Loskutov          - bug fixes
  *******************************************************************************/
 package com.vectrace.MercurialEclipse.ui;
 
@@ -39,6 +39,7 @@ import org.eclipse.ui.dialogs.ResourceListSelectionDialog;
 import org.eclipse.ui.dialogs.SaveAsDialog;
 
 import com.vectrace.MercurialEclipse.utils.ClipboardUtils;
+import com.vectrace.MercurialEclipse.utils.ResourceUtils;
 import com.vectrace.MercurialEclipse.wizards.Messages;
 
 /**
@@ -69,8 +70,14 @@ public class LocationChooser extends Composite implements Listener {
 
 	private final IDialogSettings settings;
 
-	public LocationChooser(Composite parent, boolean save,
-			IDialogSettings settings) {
+	// constructors
+
+	public LocationChooser(Composite parent, boolean save, IDialogSettings settings) {
+		this(parent, save, settings, null);
+	}
+
+	public LocationChooser(Composite parent, boolean save, IDialogSettings settings,
+			String defaultFileName) {
 		super(parent, SWT.None);
 		GridLayout layout = new GridLayout();
 		layout.numColumns = 3;
@@ -78,8 +85,10 @@ public class LocationChooser extends Composite implements Listener {
 		createLocationControl();
 		this.save = save;
 		this.settings = settings;
-		restoreSettings();
+		restoreSettings(defaultFileName);
 	}
+
+	// operations
 
 	protected void createLocationControl() {
 		btnClipboard = SWTWidgetHelper.createRadioButton(this, Messages
@@ -128,7 +137,14 @@ public class LocationChooser extends Composite implements Listener {
 			if (save) {
 				SaveAsDialog dialog = new SaveAsDialog(getDisplay()
 						.getActiveShell());
-				dialog.setOriginalFile(getWorkspaceFile());
+				IFile file = getWorkspaceFile();
+
+				if (file != null) {
+					dialog.setOriginalFile(file);
+				} else {
+					dialog.setOriginalName(txtWorkspaceFile.getText());
+				}
+
 				// dialog.setText(txtWorkspaceFile.getText());
 				// dialog.setTitle(getTitle());
 				if (dialog.open() == Window.OK) {
@@ -195,7 +211,7 @@ public class LocationChooser extends Composite implements Listener {
 	}
 
 	private boolean isValidSystemFile(File file) {
-		if (file == null) {
+		if (file == null || file.getPath().length() == 0) {
 			return false;
 		}
 		if (!file.isAbsolute()) {
@@ -232,20 +248,26 @@ public class LocationChooser extends Composite implements Listener {
 			return null;
 		case Workspace:
 			IFile file = getWorkspaceFile();
-			return file == null ? null : file.getLocation().toFile();
+			return file == null ? null : ResourceUtils.getFileHandle(file);
 		default:
 			return null;
 		}
 	}
 
-	public IFile getWorkspaceFile() {
+	private IFile getWorkspaceFile() {
 		if (!btnWorkspace.getSelection() || txtWorkspaceFile.getText() == null
 				|| txtWorkspaceFile.getText().length() == 0) {
 			return null;
 		}
-		IPath parentToWorkspace = new Path(txtWorkspaceFile.getText());
-		return ResourcesPlugin.getWorkspace().getRoot().getFile(
-				parentToWorkspace);
+
+		try {
+			IPath parentToWorkspace = new Path(txtWorkspaceFile.getText());
+			return ResourcesPlugin.getWorkspace().getRoot().getFile(
+					parentToWorkspace);
+		} catch (Throwable e) {
+			// Invalid path
+			return null;
+		}
 	}
 
 	// private boolean isValidWorkSpaceLocation(IFile file) {
@@ -269,6 +291,7 @@ public class LocationChooser extends Composite implements Listener {
 		LocationType type = getLocationType();
 		txtSystemFile.setEnabled(type == LocationType.FileSystem);
 		btnBrowseFileSystem.setEnabled(type == LocationType.FileSystem);
+		txtWorkspaceFile.setEnabled(type == LocationType.Workspace);
 		btnBrowseWorkspace.setEnabled(type == LocationType.Workspace);
 	}
 
@@ -315,21 +338,53 @@ public class LocationChooser extends Composite implements Listener {
 
 	}
 
-	protected void restoreSettings() {
+	/**
+	 * @param defaultFilename May be null
+	 */
+	protected void restoreSettings(String defaultFileName) {
 		if (settings == null) {
 			return;
 		}
-		String val = settings.get("LocationType"); //$NON-NLS-1$
-		if (val != null) {
+
+		String val;
+
+		if ((val = settings.get("LocationType")) != null) {
 			setLocationType(LocationType.valueOf(val));
 		}
+
+		if ((val = applyDefaultFileName(defaultFileName, settings.get("TxtSystemFile"))) != null) {
+			txtSystemFile.setText(val);
+		}
+
+		if ((val = applyDefaultFileName(defaultFileName, settings.get("TxtWorkspaceFile"))) != null) {
+			txtWorkspaceFile.setText(val);
+		}
+	}
+
+	private static String applyDefaultFileName(String defaultFileName, String val) {
+		if (val == null) {
+			return defaultFileName;
+		} else if (defaultFileName == null || defaultFileName.length() == 0) {
+			return val;
+		}
+
+		int nEnd = Math.max(val.lastIndexOf('\\'), val.lastIndexOf('/'));
+
+		if (nEnd >= 0) {
+			return val.substring(0, nEnd + 1) + defaultFileName;
+		}
+
+		return defaultFileName;
 	}
 
 	public void saveSettings() {
 		if (settings == null) {
 			return;
 		}
-		settings.put("LocationType", getLocationType().name()); //$NON-NLS-1$
+
+		settings.put("LocationType", getLocationType().name());
+		settings.put("TxtSystemFile", txtSystemFile.getText());
+		settings.put("TxtWorkspaceFile", txtWorkspaceFile.getText());
 	}
 
 	private void setLocationType(LocationType type) {

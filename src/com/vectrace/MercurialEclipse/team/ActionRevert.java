@@ -10,7 +10,7 @@
  *     Software Balm Consulting Inc (Peter Hunnisett <peter_hge at softwarebalm dot com>) - some updates
  *     StefanC                   - some updates
  *     Charles O'Farrell         - fix revert open file
- *     Andrei Loskutov (Intland) - bug fixes
+ *     Andrei Loskutov           - bug fixes
  *******************************************************************************/
 package com.vectrace.MercurialEclipse.team;
 
@@ -18,8 +18,8 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.Map.Entry;
+import java.util.Set;
 
 import org.eclipse.core.resources.IContainer;
 import org.eclipse.core.resources.IFile;
@@ -29,6 +29,7 @@ import org.eclipse.core.runtime.CoreException;
 import org.eclipse.core.runtime.IProgressMonitor;
 import org.eclipse.core.runtime.IStatus;
 import org.eclipse.core.runtime.NullProgressMonitor;
+import org.eclipse.core.runtime.Path;
 import org.eclipse.core.runtime.Status;
 import org.eclipse.core.runtime.jobs.Job;
 import org.eclipse.jface.action.IAction;
@@ -45,7 +46,6 @@ import com.vectrace.MercurialEclipse.MercurialEclipsePlugin;
 import com.vectrace.MercurialEclipse.SafeWorkspaceJob;
 import com.vectrace.MercurialEclipse.commands.HgParentClient;
 import com.vectrace.MercurialEclipse.commands.HgRevertClient;
-import com.vectrace.MercurialEclipse.commands.HgStatusClient;
 import com.vectrace.MercurialEclipse.dialogs.RevertDialog;
 import com.vectrace.MercurialEclipse.exception.HgException;
 import com.vectrace.MercurialEclipse.menu.UpdateHandler;
@@ -133,7 +133,7 @@ public class ActionRevert implements IWorkbenchWindowActionDelegate {
 		}
 	}
 
-	private void handleWithDialog(final HgException e) {
+	private static void handleWithDialog(final HgException e) {
 		MercurialEclipsePlugin.logError(e);
 		// TODO use statushandler???
 		if(Display.getCurrent() != null) {
@@ -154,7 +154,7 @@ public class ActionRevert implements IWorkbenchWindowActionDelegate {
 		return ResourceUtils.getResource(selection.getFirstElement());
 	}
 
-	private ChangeSet getParentChangeset(IResource resource) throws HgException {
+	private static ChangeSet getParentChangeset(IResource resource) throws HgException {
 		String[] parents = HgParentClient.getParentNodeIds(resource);
 		ChangeSet cs = LocalChangesetCache.getInstance().getOrFetchChangeSetById(resource, parents[0]);
 		if(cs != null && cs.getChangesetIndex() != 0) {
@@ -171,8 +171,8 @@ public class ActionRevert implements IWorkbenchWindowActionDelegate {
 		return null;
 	}
 
-	private void revertToParentVersion(final IResource resource){
-		Job job = new Job("Reverting to parent revision: " + resource.getLocation()){
+	private static void revertToParentVersion(final IResource resource){
+		Job job = new Job("Reverting to parent revision: " + ResourceUtils.getPath(resource)){
 			@Override
 			protected IStatus run(IProgressMonitor monitor) {
 				ChangeSet cs;
@@ -189,12 +189,17 @@ public class ActionRevert implements IWorkbenchWindowActionDelegate {
 		job.schedule();
 	}
 
-	private void revertToGivenVersion(IResource resource, ChangeSet cs, IProgressMonitor monitor) throws HgException {
+	private static void revertToGivenVersion(IResource resource, ChangeSet cs, IProgressMonitor monitor) throws HgException {
 		HgRoot hgRoot = MercurialTeamProvider.getHgRoot(resource);
 		List<IResource> list = new ArrayList<IResource>();
 		list.add(resource);
-		HgRevertClient.performRevert(monitor, hgRoot, list, cs);
-		refreshResource(monitor, MercurialStatusCache.getInstance(), resource);
+		Set<String> reverted = HgRevertClient.performRevert(monitor, hgRoot, list, cs);
+		for (String path : reverted) {
+			IFile fileHandle = ResourceUtils.getFileHandle(new Path(path));
+			if(fileHandle != null) {
+				refreshResource(monitor, MercurialStatusCache.getInstance(), fileHandle);
+			}
+		}
 	}
 
 	private Shell getShell() {
@@ -239,11 +244,11 @@ public class ActionRevert implements IWorkbenchWindowActionDelegate {
 		for (Object obj : selection.toList()) {
 			if (obj instanceof IResource) {
 				IResource resource = (IResource) obj;
-				boolean merging = HgStatusClient.isMergeInProgress(resource);
+				boolean merging = MercurialStatusCache.getInstance().isMergeInProgress(resource);
 				if(merging){
 					mergeIsRunning = true;
 				}
-				boolean supervised = MercurialUtilities.hgIsTeamProviderFor(resource, false);
+				boolean supervised = MercurialTeamProvider.isHgTeamProviderFor(resource);
 				if (supervised) {
 					resources.add(resource);
 				}
@@ -332,7 +337,11 @@ public class ActionRevert implements IWorkbenchWindowActionDelegate {
 		monitor.done();
 	}
 
-	private void refreshResource(IProgressMonitor monitor, MercurialStatusCache cache,
+	/**
+	 * @param cache non null
+	 * @param resource non null
+	 */
+	private static void refreshResource(IProgressMonitor monitor, MercurialStatusCache cache,
 			IResource resource) {
 		try {
 			if(cache.isAdded(ResourceUtils.getPath(resource))){
@@ -370,7 +379,7 @@ public class ActionRevert implements IWorkbenchWindowActionDelegate {
 					resource.delete(IResource.KEEP_HISTORY, monitor);
 				}
 				deleteEmptyDirs(parent, monitor);
-				cache.clearStatusCache(resource, false);
+				cache.clearStatusCache(resource);
 			} catch (CoreException e) {
 				MercurialEclipsePlugin.logError(e);
 			}
@@ -395,7 +404,7 @@ public class ActionRevert implements IWorkbenchWindowActionDelegate {
 	 * @return a map where the files with the specified state are grouped by the project.
 	 * Projects with no files of given state are not included into the map
 	 */
-	private Map<IProject, Set<IResource>> getFiles(int statusBit, Set<IProject> projects) {
+	private static Map<IProject, Set<IResource>> getFiles(int statusBit, Set<IProject> projects) {
 		MercurialStatusCache cache = MercurialStatusCache.getInstance();
 		Map<IProject, Set<IResource>> resources = new HashMap<IProject, Set<IResource>>();
 		for (IProject project : projects) {
@@ -412,7 +421,7 @@ public class ActionRevert implements IWorkbenchWindowActionDelegate {
 		// To completely undo the uncommitted merge and discard all local modifications,
 		// you will need to issue a hg update -C -r . (note the "dot" at the end of the command).
 		try {
-			UpdateHandler update = new UpdateHandler();
+			UpdateHandler update = new UpdateHandler(false);
 			update.setCleanEnabled(true);
 			update.setRevision(".");
 			update.setShell(getShell());

@@ -6,8 +6,8 @@
  * http://www.eclipse.org/legal/epl-v10.html
  *
  * Contributors:
- * bastian	implementation
- *     Andrei Loskutov (Intland) - bug fixes
+ *     bastian					- implementation
+ *     Andrei Loskutov			- bug fixes
  *******************************************************************************/
 package com.vectrace.MercurialEclipse.model;
 
@@ -16,6 +16,9 @@ import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.net.URI;
 import java.nio.charset.Charset;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.Map.Entry;
 
 import org.eclipse.core.resources.IProject;
 import org.eclipse.jface.resource.ImageDescriptor;
@@ -24,6 +27,7 @@ import com.vectrace.MercurialEclipse.MercurialEclipsePlugin;
 import com.vectrace.MercurialEclipse.exception.HgException;
 import com.vectrace.MercurialEclipse.team.MercurialTeamProvider;
 import com.vectrace.MercurialEclipse.utils.IniFile;
+import com.vectrace.MercurialEclipse.utils.ResourceUtils;
 import com.vectrace.MercurialEclipse.utils.StringUtils;
 
 /**
@@ -33,13 +37,38 @@ import com.vectrace.MercurialEclipse.utils.StringUtils;
  * @author bastian
  */
 public class HgRoot extends HgPath implements IHgRepositoryLocation {
+
+	// constants
+
+	private static final String PATHS_SECTION = "paths";
+
 	private static final String HG_HGRC = ".hg/hgrc";
 
-	private static final long serialVersionUID = 2L;
+	private static final long serialVersionUID = 3L;
+
+	// attributes
+
+	/**
+	 * Preferred encoding
+	 */
 	private Charset encoding;
-	private Charset fallbackencoding;
-	private File config;
-	private String user;
+
+	/**
+	 * Cached encoding fall back encoding as specified in the config file
+	 */
+	private transient Charset fallbackencoding;
+
+	/**
+	 * Cached config file (.hg/hgrc)
+	 */
+	private transient File config;
+
+	/**
+	 * Cached user name or empty string if not specified in the config file
+	 */
+	private transient String user;
+
+	// constructors
 
 	public HgRoot(String pathname) throws IOException {
 		super(pathname);
@@ -48,6 +77,8 @@ public class HgRoot extends HgPath implements IHgRepositoryLocation {
 	public HgRoot(File file) throws IOException {
 		super(file);
 	}
+
+	// operations
 
 	public void setEncoding(Charset charset) {
 		this.encoding = charset;
@@ -68,7 +99,7 @@ public class HgRoot extends HgPath implements IHgRepositoryLocation {
 	 *
 	 * @return the {@link java.io.File} referencing the hgrc file, <code>null</code> if it doesn't exist.
 	 */
-	public File getConfig() {
+	protected File getConfig() {
 		if (config == null) {
 			File hgrc = new File(this, HG_HGRC);
 			if (hgrc.isFile()) {
@@ -79,7 +110,7 @@ public class HgRoot extends HgPath implements IHgRepositoryLocation {
 		return config;
 	}
 
-	public String getConfigItem(String section, String key) {
+	protected String getConfigItem(String section, String key) {
 		getConfig();
 		if (config != null) {
 			try {
@@ -91,6 +122,36 @@ public class HgRoot extends HgPath implements IHgRepositoryLocation {
 		return null;
 	}
 
+	/**
+	 * Get the entries from the paths section of the config file if available
+	 * @return A map from logical names to paths
+	 * @throws FileNotFoundException If the config file doesn't exist
+	 */
+	public Map<String, String> getPaths() throws FileNotFoundException {
+		File hgrc = getConfig();
+		Map<String, String> paths = new HashMap<String, String>();
+		if (hgrc == null) {
+			return paths;
+		}
+
+		IniFile ini = new IniFile(hgrc.getAbsolutePath());
+		Map<String, String> section = ini.getSection(PATHS_SECTION);
+		if (section != null) {
+			for (Entry<String, String> entry : section.entrySet()) {
+				String logicalName = entry.getKey();
+				String path = entry.getValue();
+				if(!StringUtils.isEmpty(logicalName) && !StringUtils.isEmpty(path)) {
+					paths.put(logicalName, path);
+				}
+			}
+		}
+
+		return paths;
+	}
+
+	/**
+	 * @return The fallback encoding as specified in the config file, otherwise windows-1251
+	 */
 	public Charset getFallbackencoding() {
 		if(fallbackencoding == null){
 			// set fallbackencoding to windows standard codepage
@@ -157,7 +218,7 @@ public class HgRoot extends HgPath implements IHgRepositoryLocation {
 		IProject[] projects = MercurialTeamProvider.getKnownHgProjects(this).toArray(
 				new IProject[0]);
 		if (projects.length == 1) {
-			if (getIPath().equals(projects[0].getLocation())) {
+			if (getIPath().equals(ResourceUtils.getPath(projects[0]))) {
 				return projects;
 			}
 		}
@@ -181,4 +242,5 @@ public class HgRoot extends HgPath implements IHgRepositoryLocation {
 	public boolean isLocal() {
 		return true;
 	}
+
 }

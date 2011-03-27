@@ -7,7 +7,7 @@
  *
  * Contributors:
  *     Bastian Doetsch
- *     Andrei Loskutov (Intland) - bug fixes
+ *     Andrei Loskutov - bug fixes
  *******************************************************************************/
 package com.vectrace.MercurialEclipse.menu;
 
@@ -18,12 +18,22 @@ import com.vectrace.MercurialEclipse.wizards.PushRepoWizard;
 
 public class PushHandler extends RootHandler {
 
+	private String message;
+
 	@Override
 	public void run(final HgRoot hgRoot) {
 		PushRepoWizard pushRepoWizard = new PushRepoWizard(hgRoot);
 		WizardDialog pushWizardDialog = new WizardDialog(getShell(),
 				pushRepoWizard);
+
+		if (message != null) {
+			pushRepoWizard.setInitialMessage(message);
+		}
+
 		pushWizardDialog.open();
 	}
 
+	public void setInitialMessage(String message) {
+		this.message = message;
+	}
 }

@@ -8,25 +8,27 @@
  * Contributors:
  *     Jerome Negre              - implementation
  *     Bastian Doetsch
- *     Andrei Loskutov (Intland) - bug fixes
+ *     Andrei Loskutov           - bug fixes
+ *     John Peberdy              - refactoring
  *******************************************************************************/
 package com.vectrace.MercurialEclipse.commands;
 
 import java.io.File;
-import java.io.OutputStream;
+import java.io.IOException;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
-import org.eclipse.core.resources.IContainer;
+import org.eclipse.core.resources.IResource;
+import org.eclipse.core.runtime.Assert;
 
-import com.vectrace.MercurialEclipse.MercurialEclipsePlugin;
 import com.vectrace.MercurialEclipse.exception.HgException;
 import com.vectrace.MercurialEclipse.model.HgRoot;
 import com.vectrace.MercurialEclipse.storage.HgCommitMessageManager;
 import com.vectrace.MercurialEclipse.team.MercurialUtilities;
+import com.vectrace.MercurialEclipse.utils.ResourceUtils;
 
 /**
  *
@@ -41,32 +43,39 @@ public class HgCommand extends AbstractShellCommand {
 
 	private String lastUserName;
 
-	public HgCommand(List<String> commands, File workingDir, boolean escapeFiles) {
-		super(commands, workingDir, escapeFiles);
-	}
+	private String bundleFile;
 
-	public HgCommand(String command, File workingDir, boolean escapeFiles) {
-		super();
+	// constructors
+
+	public HgCommand(String command, String uiName, HgRoot root, boolean escapeFiles) {
+		super(uiName, root, root, escapeFiles);
 		this.command = command;
-		this.workingDir = workingDir;
-		this.escapeFiles = escapeFiles;
+
+		Assert.isNotNull(command);
+		Assert.isNotNull(hgRoot);
 	}
 
-	public HgCommand(String command, IContainer container,
-			boolean escapeFiles) {
-		this(command, container.getLocation().toFile(), escapeFiles);
+	/**
+	 * Invoke a hg command in the directory of the given resource using the resource to find the HgRoot.
+	 *
+	 * @param command The command to execute
+	 * @param uiName Human readable name for this command
+	 * @param resource The resource to use for working directory
+	 * @param escapeFiles Whether to escape files
+	 * @throws HgException
+	 */
+	public HgCommand(String command, String uiName, IResource resource, boolean escapeFiles) throws HgException {
+		super(uiName, AbstractClient.getHgRoot(resource), ResourceUtils.getFirstExistingDirectory(ResourceUtils.getFileHandle(resource)), escapeFiles);
+		this.command = command;
+
+		Assert.isNotNull(command);
+		Assert.isNotNull(hgRoot);
 	}
 
-	public HgCommand(String command, boolean escapeFiles) {
-		this(command, (File) null, escapeFiles);
-	}
+	// operations
 
-	protected String getHgExecutable() {
-		return HgClients.getExecutable();
-	}
-
-	public HgRoot getHgRoot() throws HgException{
-		return getHgRoot(workingDir);
+	public HgRoot getHgRoot() {
+		return hgRoot;
 	}
 
 	/**
@@ -108,17 +117,12 @@ public class HgCommand extends AbstractShellCommand {
 	 * executed. If no hg root or no user name option was given, does nothing.
 	 */
 	public void rememberUserName(){
-		if(lastUserName == null){
+		if (lastUserName == null){
 			return;
 		}
-		HgRoot hgRoot;
-		try {
-			hgRoot = getHgRoot();
-		} catch (HgException e) {
-			MercurialEclipsePlugin.logError(e);
-			return;
-		}
+
 		String commitName = HgCommitMessageManager.getDefaultCommitName(hgRoot);
+
 		if(!commitName.equals(lastUserName)) {
 			HgCommitMessageManager.setDefaultCommitName(hgRoot, lastUserName);
 		}
@@ -130,6 +134,14 @@ public class HgCommand extends AbstractShellCommand {
 			return false;
 		}
 		return COMMANDS_CONFLICTING_WITH_USER_ARG.contains(command);
+	}
+
+	public void setBundleOverlay(File file) throws IOException {
+		if (file != null) {
+			bundleFile = file.getCanonicalPath();
+		} else {
+			bundleFile = null;
+		}
 	}
 
 	/**
@@ -144,20 +156,26 @@ public class HgCommand extends AbstractShellCommand {
 		return str.replace("\"", "\\\""); //$NON-NLS-1$ //$NON-NLS-2$
 	}
 
+	/**
+	 * @see com.vectrace.MercurialEclipse.commands.AbstractShellCommand#customizeCommands(java.util.List)
+	 */
 	@Override
-	protected boolean executeToStream(OutputStream output, int timeout,
-			boolean expectPositiveReturnValue) throws HgException {
+	protected void customizeCommands(List<String> cmd) {
 
-		// Request non-interactivity flag
-		List<String> cmd = getCommands();
+		if (bundleFile != null) {
+			// Add -R <bundleFile>
+			cmd.add(1, bundleFile);
+			cmd.add(1, "-R");
+		}
+
 		cmd.add(1, "-y");
-		commands = cmd;
-		// delegate to superclass
-		return super.executeToStream(output, timeout, expectPositiveReturnValue);
 	}
 
+	/**
+	 * @see com.vectrace.MercurialEclipse.commands.AbstractShellCommand#getExecutable()
+	 */
 	@Override
 	protected String getExecutable() {
-		return getHgExecutable();
+		return HgClients.getExecutable();
 	}
 }

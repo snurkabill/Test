@@ -7,7 +7,7 @@
  *
  * Contributors:
  *     VecTrace (Zingo Andersen) - implementation
- *     Andrei Loskutov (Intland) - bug fixes
+ *     Andrei Loskutov - bug fixes
  *******************************************************************************/
 package com.vectrace.MercurialEclipse.team;
 
@@ -43,6 +43,17 @@ public final class DecoratorImages {
 	 * Modified Image Descriptor
 	 */
 	public static final ImageDescriptor MODIFIED = ImageDescriptor.createFromFile(DecoratorImages.class, "images/modified_ov.gif"); //$NON-NLS-1$
+
+	/**
+	 * Copied Image Descriptor
+	 */
+
+	public static final ImageDescriptor COPIED = ImageDescriptor.createFromFile(DecoratorImages.class, "images/copied_ov.gif"); //$NON-NLS-1$
+
+	/**
+	 * Moved Image Descriptor
+	 */
+	public static final ImageDescriptor MOVED = ImageDescriptor.createFromFile(DecoratorImages.class, "images/moved_ov.gif"); //$NON-NLS-1$
 
 	/**
 	 * Not tracked Image Descriptor

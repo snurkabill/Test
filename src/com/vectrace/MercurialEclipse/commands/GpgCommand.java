@@ -14,6 +14,7 @@ import java.io.File;
 import java.util.List;
 
 import com.vectrace.MercurialEclipse.MercurialEclipsePlugin;
+import com.vectrace.MercurialEclipse.model.HgRoot;
 import com.vectrace.MercurialEclipse.preferences.MercurialPreferenceConstants;
 
 /**
@@ -22,14 +23,11 @@ import com.vectrace.MercurialEclipse.preferences.MercurialPreferenceConstants;
  */
 public class GpgCommand extends AbstractShellCommand {
 
-	public GpgCommand(List<String> commands, File workingDir,
-			boolean escapeFiles) {
-		super(commands, workingDir, escapeFiles);
+	public GpgCommand(HgRoot hgRoot, String uiName, List<String> commands, File workingDir) {
+		super(uiName, hgRoot, commands, workingDir, false);
 	}
 
-	/*
-	 * (non-Javadoc)
-	 *
+	/**
 	 * @see com.vectrace.MercurialEclipse.commands.AbstractShellCommand#getExecutable()
 	 */
 	@Override

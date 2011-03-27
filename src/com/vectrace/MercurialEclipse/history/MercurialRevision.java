@@ -9,13 +9,16 @@
  *     VecTrace (Zingo Andersen) - implementation
  *     Stefan Groschupf          - logError
  *     Stefan C                  - Code cleanup
- *     Andrei Loskutov (Intland) - bug fixes
+ *     Andrei Loskutov           - bug fixes
+ *     John Peberdy              - optimization
  *******************************************************************************/
 package com.vectrace.MercurialEclipse.history;
 
 import java.io.File;
 import java.net.URI;
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.List;
 import java.util.SortedSet;
 import java.util.TreeSet;
 
@@ -35,6 +38,7 @@ import com.vectrace.MercurialEclipse.model.ChangeSet;
 import com.vectrace.MercurialEclipse.model.GChangeSet;
 import com.vectrace.MercurialEclipse.model.Signature;
 import com.vectrace.MercurialEclipse.model.Tag;
+import com.vectrace.MercurialEclipse.properties.DoNotDisplayMe;
 import com.vectrace.MercurialEclipse.team.MercurialRevisionStorage;
 
 /**
@@ -49,10 +53,21 @@ public class MercurialRevision extends FileRevision {
 	private MercurialRevisionStorage mercurialRevisionStorage;
 	private final GChangeSet gChangeSet;
 	private final int revision;
-	private final String hash;
 	private final Signature signature;
 	private File parent;
+
+	/**
+	 * Tags sorted by revision
+	 * @see #pendingTags
+	 */
 	private Tag [] tags;
+
+	/**
+	 *  List of unsorted tags not yet added to {@link #tags}. May be null.
+	 *  @see #tags
+	 */
+	private List<Tag> pendingTags;
+
 	private Status bisectStatus;
 
 	/**
@@ -69,7 +84,6 @@ public class MercurialRevision extends FileRevision {
 		this.changeSet = changeSet;
 		this.gChangeSet = gChangeSet;
 		this.revision = changeSet.getChangesetIndex();
-		this.hash = changeSet.getChangeset();
 		this.resource = resource;
 		this.signature = sig;
 		this.bisectStatus = bisectStatus;
@@ -113,20 +127,24 @@ public class MercurialRevision extends FileRevision {
 		return changeSet;
 	}
 
+	@DoNotDisplayMe
 	public GChangeSet getGChangeSet() {
 		return gChangeSet;
 	}
 
+	@DoNotDisplayMe
 	public String getName() {
 		return resource.getName();
 	}
 
 	@Override
+	@DoNotDisplayMe
 	public boolean exists() {
 		return true;
 	}
 
 	@Override
+	@DoNotDisplayMe
 	public String getContentIdentifier() {
 		return changeSet.getChangeset();
 	}
@@ -142,6 +160,7 @@ public class MercurialRevision extends FileRevision {
 	}
 
 	@Override
+	@DoNotDisplayMe
 	public long getTimestamp() {
 		return resource.exists()? resource.getLocalTimeStamp() : super.getTimestamp();
 	}
@@ -153,7 +172,10 @@ public class MercurialRevision extends FileRevision {
 
 	@Override
 	public Tag [] getTags() {
-		if(tags == null){
+		if (pendingTags != null) {
+			processPendingTags();
+		}
+		if(tags == null) {
 			return changeSet.getTags();
 		}
 		return tags;
@@ -175,7 +197,7 @@ public class MercurialRevision extends FileRevision {
 	}
 
 	/**
-	 * Allows to add extra tags, not contained in the underlined changeset, to this revision.
+	 * Allows to add extra tags, not contained in the underlying changeset, to this revision.
 	 * The point is: we want to be able to show tag information on revisions of particular
 	 * files, which was NOT directly tagged, but we want to know which existing tags are
 	 * covered by the version.
@@ -186,8 +208,22 @@ public class MercurialRevision extends FileRevision {
 		if(newTag == null) {
 			return;
 		}
+		if (pendingTags == null) {
+			pendingTags = new ArrayList<Tag>(4);
+		}
+		pendingTags.add(newTag);
+	}
+
+	private void processPendingTags() {
+		if (pendingTags == null) {
+			return;
+		}
+
 		SortedSet<Tag> all = new TreeSet<Tag>();
-		all.add(newTag);
+
+		all.addAll(pendingTags);
+		pendingTags = null;
+
 		if(tags != null) {
 			for (Tag tag : tags) {
 				if(tag != null) {
@@ -209,6 +245,7 @@ public class MercurialRevision extends FileRevision {
 	 */
 	public void cleanupExtraTags(){
 		tags = null;
+		pendingTags = null;
 	}
 
 	public IStorage getStorage(IProgressMonitor monitor) throws CoreException {
@@ -217,11 +254,11 @@ public class MercurialRevision extends FileRevision {
 				IFile parentRes =  ResourcesPlugin.getWorkspace().getRoot()
 					.getFileForLocation(new Path(parent.getAbsolutePath()));
 				mercurialRevisionStorage = new MercurialRevisionStorage(parentRes,
-						revision, hash, changeSet);
+						revision, getContentIdentifier(), changeSet);
 			} else {
 				if(resource instanceof IFile){
 					mercurialRevisionStorage = new MercurialRevisionStorage((IFile) resource,
-							revision, hash, changeSet);
+							revision, getContentIdentifier(), changeSet);
 					mercurialRevisionStorage.setParent(parent);
 				}
 			}
@@ -229,6 +266,7 @@ public class MercurialRevision extends FileRevision {
 		return mercurialRevisionStorage;
 	}
 
+	@DoNotDisplayMe
 	public boolean isPropertyMissing() {
 		return false;
 	}
@@ -246,15 +284,9 @@ public class MercurialRevision extends FileRevision {
 	}
 
 	/**
-	 * @return the hash
-	 */
-	public String getHash() {
-		return hash;
-	}
-
-	/**
 	 * @return never null
 	 */
+	@DoNotDisplayMe
 	public IResource getResource() {
 		return resource;
 	}
@@ -277,6 +309,7 @@ public class MercurialRevision extends FileRevision {
 	 *
 	 * @return true, if the resource represented by this revision is file
 	 */
+	@DoNotDisplayMe
 	public boolean isFile(){
 		return resource instanceof IFile;
 	}
@@ -310,6 +343,10 @@ public class MercurialRevision extends FileRevision {
 		if (tags != null) {
 			builder.append("tags="); //$NON-NLS-1$
 			builder.append(Arrays.asList(tags));
+		}
+		if (pendingTags != null) {
+			builder.append("pendingTags="); //$NON-NLS-1$
+			builder.append(pendingTags);
 		}
 		builder.append("]"); //$NON-NLS-1$
 		return builder.toString();

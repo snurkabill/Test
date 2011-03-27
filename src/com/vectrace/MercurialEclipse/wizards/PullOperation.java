@@ -6,7 +6,7 @@
  * http://www.eclipse.org/legal/epl-v10.html
  *
  * Contributors:
- *     Andrei Loskutov (Intland) - implementation
+ *     Andrei Loskutov - implementation
  *******************************************************************************/
 package com.vectrace.MercurialEclipse.wizards;
 
@@ -132,7 +132,7 @@ class PullOperation extends HgOperation {
 				if (doUpdate) {
 					updateSeparately = true;
 				}
-				r += HgPushPullClient.pull(hgRoot, pullRevision, repo, false, rebase, force, timeout);
+				r += HgPushPullClient.pull(hgRoot, pullRevision, repo, false, rebase, force, timeout, merge);
 			}
 		} else {
 			if (doUpdate) {
@@ -140,7 +140,7 @@ class PullOperation extends HgOperation {
 			}
 			File canonicalBundle = toCanonicalBundle();
 			BundleRepository bundleRepo = new BundleRepository(canonicalBundle);
-			r += HgPushPullClient.pull(hgRoot, pullRevision, bundleRepo, false, rebase, force, timeout);
+			r += HgPushPullClient.pull(hgRoot, pullRevision, bundleRepo, false, rebase, force, timeout, merge);
 		}
 
 		monitor.worked(1);
@@ -170,7 +170,10 @@ class PullOperation extends HgOperation {
 			@Override
 			public IStatus run(IProgressMonitor monitor1) {
 				try {
-					UpdateHandler updateHandler = new UpdateHandler();
+					// if merge or rebase requested don't ask user what to do
+					// with cross branches
+					boolean handleCrossBranches = !(merge || rebase);
+					UpdateHandler updateHandler = new UpdateHandler(handleCrossBranches);
 					updateHandler.setCleanEnabled(doCleanUpdate);
 					updateHandler.run(hgRoot);
 					return Status.OK_STATUS;
@@ -200,7 +203,9 @@ class PullOperation extends HgOperation {
 		return true;
 	}
 
-	@Override
+	/**
+	 * @see org.eclipse.jface.operation.IRunnableWithProgress#run(org.eclipse.core.runtime.IProgressMonitor)
+	 */
 	public void run(IProgressMonitor monitor) throws InvocationTargetException, InterruptedException {
 		try {
 			monitor.beginTask(Messages.getString("PullRepoWizard.pullOperation.pulling"), 6); //$NON-NLS-1$

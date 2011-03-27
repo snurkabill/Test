@@ -11,7 +11,7 @@
  *     StefanC
  *     Zsolt Koppany (Intland)
  *     Adam Berkes (Intland)
- *     Andrei Loskutov (Intland) - bug fixes
+ *     Andrei Loskutov           - bug fixes
  *******************************************************************************/
 package com.vectrace.MercurialEclipse.commands;
 
@@ -80,7 +80,7 @@ public class HgCommitClient extends AbstractClient {
 	 */
 	protected static String commit(HgRoot hgRoot, List<File> files, String user, String message,
 			boolean closeBranch) throws HgException {
-		HgCommand command = new HgCommand("commit", hgRoot, true); //$NON-NLS-1$
+		HgCommand command = new HgCommand("commit", "Committing resources", hgRoot, true); //$NON-NLS-1$
 		command.setExecutionRule(new AbstractShellCommand.ExclusiveExecutionRule(hgRoot));
 		command.setUsePreferenceTimeout(MercurialPreferenceConstants.COMMIT_TIMEOUT);
 		command.addUserName(user);
@@ -90,7 +90,7 @@ public class HgCommitClient extends AbstractClient {
 		File messageFile = saveMessage(message, command);
 		try {
 			addMessage(command, messageFile, message);
-			command.addFiles(AbstractClient.toPaths(files));
+			command.addFiles(files);
 			String result = command.executeToString();
 			command.rememberUserName();
 			return result;
@@ -120,13 +120,14 @@ public class HgCommitClient extends AbstractClient {
 	 * Implementation note: after merge, no files should be specified.
 	 */
 	public static String commit(HgRoot hgRoot, String user, String message) throws HgException {
-		HgCommand command = new HgCommand("commit", hgRoot, true); //$NON-NLS-1$
+		HgCommand command = new HgCommand("commit", "Committing all changes", hgRoot, true); //$NON-NLS-1$
 		command.setExecutionRule(new AbstractShellCommand.ExclusiveExecutionRule(hgRoot));
 		command.setUsePreferenceTimeout(MercurialPreferenceConstants.COMMIT_TIMEOUT);
 		command.addUserName(user);
 		File messageFile = saveMessage(message, command);
 		try {
 			addMessage(command, messageFile, message);
+			MercurialUtilities.setMergeViewDialogShown(false);
 			String result = command.executeToString();
 			command.rememberUserName();
 			new RefreshRootJob(hgRoot, RefreshRootJob.LOCAL_AND_OUTGOING).schedule();
@@ -147,7 +148,7 @@ public class HgCommitClient extends AbstractClient {
 		return str.replace("\"", "\\\""); //$NON-NLS-1$ //$NON-NLS-2$
 	}
 
-	private static File saveMessage(String message, HgCommand command) throws HgException {
+	private static File saveMessage(String message, HgCommand command) {
 		Writer writer = null;
 		try {
 			File messageFile = File.createTempFile("hgcommitmsg", ".txt");

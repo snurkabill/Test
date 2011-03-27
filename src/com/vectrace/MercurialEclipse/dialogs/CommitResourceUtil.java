@@ -9,7 +9,7 @@
  *     VecTrace (Zingo Andersen) - implementation
  *     Jérôme Nègre              - some fixes
  *     Stefan C                  - Code cleanup
- *     Andrei Loskutov (Intland) - bug fixes
+ *     Andrei Loskutov           - bug fixes
  *******************************************************************************/
 package com.vectrace.MercurialEclipse.dialogs;
 
@@ -17,88 +17,92 @@ import java.io.File;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
-import java.util.StringTokenizer;
 
+import org.eclipse.core.resources.IContainer;
+import org.eclipse.core.resources.IFile;
 import org.eclipse.core.resources.IResource;
-import org.eclipse.core.resources.IWorkspaceRoot;
-import org.eclipse.core.resources.ResourcesPlugin;
-import org.eclipse.core.runtime.Path;
+import org.eclipse.core.runtime.IPath;
 import org.eclipse.team.core.Team;
 
-import com.vectrace.MercurialEclipse.MercurialEclipsePlugin;
-import com.vectrace.MercurialEclipse.actions.StatusContainerAction;
-import com.vectrace.MercurialEclipse.exception.HgException;
 import com.vectrace.MercurialEclipse.model.HgRoot;
 import com.vectrace.MercurialEclipse.team.cache.MercurialStatusCache;
+import com.vectrace.MercurialEclipse.utils.ResourceUtils;
 
 public final class CommitResourceUtil {
 
-	private HgRoot root;
+	/**
+	 * Bit mask of status cache bits for cancidate statuses when committing
+	 */
+	private static final int COMMIT_CANDIDATE_STATUSES_BITS = MercurialStatusCache.BIT_MISSING
+			| MercurialStatusCache.BIT_REMOVED | MercurialStatusCache.BIT_UNKNOWN
+			| MercurialStatusCache.BIT_ADDED | MercurialStatusCache.BIT_MODIFIED;
 
-	public CommitResourceUtil() {
+	private CommitResourceUtil() {
+		// static utility
 	}
 
 	/**
 	 * @return never null
 	 */
-	public CommitResource[] getCommitResources(IResource[] inResources) throws HgException {
-		if(inResources.length == 0){
+	public static CommitResource[] getCommitResources(List<IResource> inResources) {
+		if(inResources.size() == 0){
 			return new CommitResource[0];
 		}
-		StatusContainerAction statusAction = new StatusContainerAction(null, inResources);
-		root = statusAction.getHgWorkingDir();
-		try {
-			statusAction.run();
-			String result = statusAction.getResult();
-			return spliceStatusResult(result);
-		} catch (Exception e) {
-			String msg = "HgRoot: " + root.getAbsolutePath() //$NON-NLS-1$
-					+ Messages.getString("CommitResourceUtil.error.unableToGetStatus") + e.getMessage(); //$NON-NLS-1$
-			MercurialEclipsePlugin.logError(msg, e);
-			return new CommitResource[0];
+		Map<HgRoot, List<IResource>> resourcesByRoot = ResourceUtils.groupByRoot(inResources);
+		Set<CommitResource> toCommit = new HashSet<CommitResource>();
+		for (Map.Entry<HgRoot, List<IResource>> mapEntry : resourcesByRoot.entrySet()) {
+			toCommit.addAll(spliceStatusResult(mapEntry.getKey(), mapEntry.getValue()));
 		}
+		return toCommit.toArray(new CommitResource[toCommit.size()]);
 	}
 
 	/**
-	 * Splice the output of the status result and build the CommitResources from that
-	 * @param statusOutput The output string of the Mercurial status action
-	 * @return The Commit-resources
+	 * Construct the {@link CommitResource} instances.
 	 */
-	private CommitResource[] spliceStatusResult(String statusOutput) {
-
+	private static List<CommitResource> spliceStatusResult(HgRoot root, List<IResource> resources) {
+		MercurialStatusCache cache = MercurialStatusCache.getInstance();
 		ArrayList<CommitResource> list = new ArrayList<CommitResource>();
-		StringTokenizer st = new StringTokenizer(statusOutput);
-		IWorkspaceRoot workspaceRoot = ResourcesPlugin.getWorkspace().getRoot();
 
-		// Tokens are always in pairs as lines are in the form "A
-		// TEST_FOLDER\test_file2.c"
-		// where the first token is the status and the 2nd is the path relative
-		// to the root.
-		while (st.hasMoreTokens()) {
-			String status = st.nextToken(" ").trim();
-			String fileName = st.nextToken("\n").trim();
-//            if(status.startsWith("?")){
-//                continue;
-//            }
-			Path path = new Path(new File(root, fileName).getAbsolutePath());
-			IResource statusResource = workspaceRoot.getFileForLocation(path);
-			if (!Team.isIgnoredHint(statusResource)) {
-				// file is allready managed or file is not in "ignore list"
-				list.add(new CommitResource(status, statusResource, new File(fileName)));
+		for (IResource resource : resources) {
+			if (resource instanceof IContainer) {
+				for (IResource curResource : cache.getResources(COMMIT_CANDIDATE_STATUSES_BITS,
+						(IContainer)resource)) {
+					processStatusResult(root, cache, list, curResource);
+				}
+			} else {
+				processStatusResult(root, cache, list, resource);
 			}
 		}
 
-		return list.toArray(new CommitResource[0]);
+		return list;
+	}
+
+	private static void processStatusResult(HgRoot root, MercurialStatusCache cache,
+			List<CommitResource> list, IResource resource) {
+		if (!(resource instanceof IFile)) {
+			return;
+		}
+		IPath location = ResourceUtils.getPath(resource);
+		if(location.isEmpty() || cache.isDirectory(location)) {
+			return;
+		}
+		Integer status = cache.getStatus(resource);
+		if (status != null || !Team.isIgnoredHint(resource)) {
+			File path = new File(root.toRelative(location.toFile()));
+			list.add(new CommitResource(status == null ? MercurialStatusCache.BIT_UNKNOWN : status
+					.intValue(), resource, path));
+		}
 	}
 
 	/**
 	 * Filter a list of commit-resources to contain only tracked ones (which are already tracked by Mercurial).
 	 */
-	public List<CommitResource> filterForTracked(CommitResource[] commitResources) {
+	public static List<CommitResource> filterForTracked(CommitResource[] commitResources) {
 		List<CommitResource> tracked = new ArrayList<CommitResource>();
 		for (CommitResource commitResource : commitResources) {
-			if (MercurialStatusCache.CHAR_UNKNOWN != commitResource.getStatus()) {
+			if (!commitResource.isUnknown()) {
 				tracked.add(commitResource);
 			}
 		}
@@ -111,7 +115,7 @@ public final class CommitResourceUtil {
 	 * @param resources
 	 * @return The commit resources
 	 */
-	public List<CommitResource> filterForResources(List<CommitResource> commitResources, List<IResource> resources) {
+	public static List<CommitResource> filterForResources(List<CommitResource> commitResources,List<IResource> resources) {
 		List<CommitResource> result = new ArrayList<CommitResource>();
 		if (resources == null || resources.isEmpty()) {
 			return result;

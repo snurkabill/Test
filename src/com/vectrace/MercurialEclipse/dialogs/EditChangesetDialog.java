@@ -6,7 +6,7 @@
  * http://www.eclipse.org/legal/epl-v10.html
  *
  * Contributors:
- *     Andrei Loskutov (Intland) - implementation
+ *     Andrei Loskutov - implementation
  *******************************************************************************/
 package com.vectrace.MercurialEclipse.dialogs;
 
@@ -77,9 +77,10 @@ public class EditChangesetDialog extends CommitDialog {
 
 	@Override
 	protected void okPressed() {
-		changeset.setComment(getCommitMessage());
+		changeset.setDescription(getCommitMessage());
 		changeset.setName(changesetNameText.getText());
-
+		setReturnCode(OK);
+		close();
 		// TODO add file management
 //		commitFilesList.getCheckedResources();
 //		commitFilesList.getUncheckedResources(FILE_ADDED,

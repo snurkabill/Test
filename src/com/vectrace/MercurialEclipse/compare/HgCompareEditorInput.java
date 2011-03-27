@@ -5,7 +5,7 @@
  * which accompanies this distribution, and is available at
  * http://www.eclipse.org/legal/epl-v10.html
  * Contributors:
- *     Andrei Loskutov (Intland) - bug fixes
+ *     Andrei Loskutov - bug fixes
  *******************************************************************************/
 package com.vectrace.MercurialEclipse.compare;
 
@@ -13,7 +13,9 @@ import java.lang.reflect.InvocationTargetException;
 
 import org.eclipse.compare.CompareConfiguration;
 import org.eclipse.compare.CompareEditorInput;
+import org.eclipse.compare.CompareNavigator;
 import org.eclipse.compare.ICompareNavigator;
+import org.eclipse.compare.INavigatable;
 import org.eclipse.compare.ResourceNode;
 import org.eclipse.compare.structuremergeviewer.Differencer;
 import org.eclipse.core.resources.IFile;
@@ -25,14 +27,8 @@ import org.eclipse.team.internal.ui.synchronize.SynchronizePageConfiguration;
 import org.eclipse.team.ui.synchronize.ISynchronizePageConfiguration;
 import org.eclipse.team.ui.synchronize.SyncInfoCompareInput;
 
-import com.vectrace.MercurialEclipse.MercurialEclipsePlugin;
-import com.vectrace.MercurialEclipse.commands.HgLogClient;
-import com.vectrace.MercurialEclipse.commands.HgParentClient;
-import com.vectrace.MercurialEclipse.exception.HgException;
-import com.vectrace.MercurialEclipse.model.ChangeSet;
 import com.vectrace.MercurialEclipse.model.FileFromChangeSet;
-import com.vectrace.MercurialEclipse.team.MercurialRevisionStorage;
-import com.vectrace.MercurialEclipse.team.MercurialTeamProvider;
+import com.vectrace.MercurialEclipse.synchronize.cs.ChangesetGroup;
 
 public class HgCompareEditorInput extends CompareEditorInput {
 	private static final Differencer DIFFERENCER = new Differencer();
@@ -51,90 +47,45 @@ public class HgCompareEditorInput extends CompareEditorInput {
 	 * and does 3-way compare.
 	 * @param syncConfig
 	 */
-	public HgCompareEditorInput(CompareConfiguration configuration,
-			IFile resource, ResourceNode left, ResourceNode right, ISynchronizePageConfiguration syncConfig) {
-		super(configuration);
-		this.resource = resource;
-		this.left = left;
-		this.syncConfig = syncConfig;
-		this.ancestor = findParentNodeIfExists(resource, left, right);
-		this.right = right;
+	public HgCompareEditorInput(CompareConfiguration configuration, IFile resource,
+			ResourceNode left, ResourceNode right, ResourceNode ancestor, ISynchronizePageConfiguration syncConfig) {
+		this(configuration, resource, left, right, ancestor, !(left instanceof RevisionNode), syncConfig);
+
 		setTitle(resource.getName());
-		configuration.setLeftLabel(left.getName());
-		// if left isn't a RevisionNode, then it must be the one on the filesystem
-		configuration.setLeftEditable(!(left instanceof RevisionNode));
-		configuration.setRightLabel(right.getName());
-		configuration.setRightEditable(false);
 	}
 
+	public HgCompareEditorInput(CompareConfiguration configuration, IFile leftResource,
+			ResourceNode right, ResourceNode ancestor) {
+		this(configuration, leftResource, new ResourceNode(leftResource), right, ancestor, true,
+				null);
 
-	private ResourceNode findParentNodeIfExists(IFile file, ResourceNode l, ResourceNode r) {
-		if (!(l instanceof RevisionNode && r instanceof RevisionNode)) {
-			return null;
-		}
-		RevisionNode lNode = (RevisionNode) l;
-		RevisionNode rNode = (RevisionNode) r;
+		setTitle(left.getName());
 
-		try {
-			int commonAncestor = -1;
-			if(lNode.getChangeSet() != null && rNode.getChangeSet() != null){
-				try {
-					commonAncestor = HgParentClient.findCommonAncestor(
-							MercurialTeamProvider.getHgRoot(file),
-							lNode.getChangeSet(), rNode.getChangeSet());
-				} catch (HgException e) {
-					// continue
-				}
-			}
-
-			int lId = lNode.getRevision();
-			int rId = rNode.getRevision();
-
-			if(commonAncestor == -1){
-				try {
-					commonAncestor = HgParentClient.findCommonAncestor(
-							MercurialTeamProvider.getHgRoot(file),
-							Integer.toString(lId), Integer.toString(rId));
-				} catch (HgException e) {
-					// continue: no changeset in the local repo, se issue #10616
-				}
-			}
-
-			if (commonAncestor == lId) {
-				return null;
-			}
-			if (commonAncestor == rId) {
-				return null;
-			}
-			ChangeSet tip = HgLogClient.getTip(MercurialTeamProvider.getHgRoot(file));
-			boolean localKnown = tip.getChangesetIndex() >= commonAncestor;
-			if(!localKnown){
-				// no common ancestor
-				return null;
-			}
-			return new RevisionNode(new MercurialRevisionStorage(file, commonAncestor));
-		} catch (HgException e) {
-			MercurialEclipsePlugin.logError(e);
-			return null;
+		if (ancestor != null) {
+			configuration.setAncestorLabel(getLabel(ancestor));
 		}
 	}
 
-	public HgCompareEditorInput(CompareConfiguration configuration,
-			IFile leftResource, ResourceNode ancestor, ResourceNode right, boolean localEditable) {
+	private HgCompareEditorInput(CompareConfiguration configuration, IFile resource,
+			ResourceNode left, ResourceNode right, ResourceNode ancestor, boolean bLeftEditable,
+			ISynchronizePageConfiguration syncConfig) {
 		super(configuration);
-		this.syncConfig = null;
-		this.left = new ResourceNode(leftResource);
+		this.syncConfig = syncConfig;
+		this.left = left;
 		this.ancestor = ancestor;
 		this.right = right;
-		this.resource = leftResource;
-		setTitle(left.getName());
-		configuration.setLeftLabel(left.getName());
-		configuration.setLeftEditable(localEditable);
-		if(ancestor != null) {
-			configuration.setAncestorLabel(ancestor.getName());
-		}
-		configuration.setRightLabel(right.getName());
+		this.resource = resource;
+		configuration.setLeftLabel(getLabel(left));
+		configuration.setLeftEditable(bLeftEditable);
+		configuration.setRightLabel(getLabel(right));
 		configuration.setRightEditable(false);
+	}
+
+	private static String getLabel(ResourceNode node) {
+		if (node instanceof RevisionNode) {
+			return ((RevisionNode) node).getLabel();
+		}
+		return node.getName();
 	}
 
 	@Override
@@ -180,26 +131,28 @@ public class HgCompareEditorInput extends CompareEditorInput {
 	 */
 	@Override
 	public synchronized ICompareNavigator getNavigator() {
-		ICompareNavigator navigator = super.getNavigator();
-		if (syncConfig != null && isSelectedInSynchronizeView()) {
-			ICompareNavigator nav = (ICompareNavigator) syncConfig
-					.getProperty(SynchronizePageConfiguration.P_NAVIGATOR);
+		CompareNavigator navigator = (CompareNavigator) super.getNavigator();
+		if (syncConfig != null) {
+			CompareNavigator nav = (CompareNavigator) syncConfig.getProperty(
+					SynchronizePageConfiguration.P_NAVIGATOR);
+
 			return new SyncNavigatorWrapper(navigator, nav);
 		}
 		return navigator;
 	}
 
-	private class SyncNavigatorWrapper implements ICompareNavigator {
+	private class SyncNavigatorWrapper extends CompareNavigator {
 
-		private final ICompareNavigator textDfiffDelegate;
-		private final ICompareNavigator syncViewDelegate;
+		private final CompareNavigator textDfiffDelegate;
+		private final CompareNavigator syncViewDelegate;
 
-		public SyncNavigatorWrapper(ICompareNavigator textDfiffDelegate,
-				ICompareNavigator syncViewDelegate) {
+		public SyncNavigatorWrapper(CompareNavigator textDfiffDelegate,
+				CompareNavigator syncViewDelegate) {
 			this.textDfiffDelegate = textDfiffDelegate;
 			this.syncViewDelegate = syncViewDelegate;
 		}
 
+		@Override
 		public boolean selectChange(boolean next) {
 			boolean endReached = textDfiffDelegate.selectChange(next);
 			if(endReached && syncViewDelegate != null && isSelectedInSynchronizeView()){
@@ -209,6 +162,16 @@ public class HgCompareEditorInput extends CompareEditorInput {
 			return endReached;
 		}
 
+		@Override
+		// This method won't be used by our implementation
+		protected INavigatable[] getNavigatables() {
+			return new INavigatable[0];
+		}
+
+		@Override
+		public boolean hasChange(boolean next) {
+			return (textDfiffDelegate.hasChange(next) || syncViewDelegate.hasChange(next));
+		}
 	}
 
 	private boolean isSelectedInSynchronizeView() {
@@ -221,9 +184,9 @@ public class HgCompareEditorInput extends CompareEditorInput {
 		}
 		IStructuredSelection ss = (IStructuredSelection) s;
 		Object element = ss.getFirstElement();
-		if (element instanceof FileFromChangeSet) {
-			FileFromChangeSet sime = (FileFromChangeSet) element;
-			return resource.equals(sime.getFile());
+		if (element instanceof FileFromChangeSet
+				|| element instanceof ChangesetGroup) {
+			return true;
 		}
 		return false;
 	}
@@ -274,6 +237,4 @@ public class HgCompareEditorInput extends CompareEditorInput {
 		}
 		return true;
 	}
-
-
 }

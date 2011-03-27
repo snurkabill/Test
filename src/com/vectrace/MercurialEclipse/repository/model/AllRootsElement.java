@@ -8,12 +8,12 @@
  * Contributors:
  *     Subclipse project committers - initial API and implementation
  *     Bastian Doetsch              - adaptation
- *     Andrei Loskutov (Intland) - bug fixes
+ *     Andrei Loskutov              - bug fixes
  ******************************************************************************/
 package com.vectrace.MercurialEclipse.repository.model;
 
+import java.util.Collection;
 import java.util.Iterator;
-import java.util.SortedSet;
 
 import org.eclipse.core.runtime.IAdaptable;
 import org.eclipse.jface.resource.ImageDescriptor;
@@ -23,7 +23,7 @@ import com.vectrace.MercurialEclipse.MercurialEclipsePlugin;
 import com.vectrace.MercurialEclipse.model.HgRoot;
 import com.vectrace.MercurialEclipse.model.IHgRepositoryLocation;
 import com.vectrace.MercurialEclipse.storage.HgRepositoryLocationManager;
-import com.vectrace.MercurialEclipse.team.MercurialTeamProvider;
+import com.vectrace.MercurialEclipse.team.cache.MercurialRootCache;
 
 /**
  * AllRootsElement is the model element for the repositories view.
@@ -37,8 +37,7 @@ public class AllRootsElement implements IWorkbenchAdapter, IAdaptable {
 		super();
 	}
 
-	@SuppressWarnings("unchecked")
-	public Object getAdapter(Class adapter) {
+	public Object getAdapter(@SuppressWarnings("rawtypes") Class adapter) {
 		if (adapter == IWorkbenchAdapter.class) {
 			return this;
 		}
@@ -51,9 +50,8 @@ public class AllRootsElement implements IWorkbenchAdapter, IAdaptable {
 	 */
 	public IHgRepositoryLocation[] getChildren(Object o) {
 		HgRepositoryLocationManager repoManager = MercurialEclipsePlugin.getRepoManager();
-		SortedSet<IHgRepositoryLocation> repoLocations = repoManager.getAllRepoLocations();
-
-		SortedSet<HgRoot> hgRoots = MercurialTeamProvider.getKnownHgRoots();
+		Collection<IHgRepositoryLocation> repoLocations = repoManager.getAllRepoLocations();
+		Collection<HgRoot> hgRoots = MercurialRootCache.getInstance().getKnownHgRoots();
 
 		// remove local repos which are known as hg roots
 		for (IHgRepositoryLocation hgRoot : hgRoots) {

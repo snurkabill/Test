@@ -9,7 +9,7 @@
  *     Gunnar Ahlberg - implementation
  *     Jérôme Nègre   - constants are now, well, constant
  *     Bastian Doetsch
- *     Andrei Loskutov (Intland) - bug fixes
+ *     Andrei Loskutov - bug fixes
  *******************************************************************************/
 
 package com.vectrace.MercurialEclipse.preferences;
@@ -36,11 +36,17 @@ public final class MercurialPreferenceConstants {
 	public static final String LABELDECORATOR_LOGIC = "hg.labeldecorator.logic"; //$NON-NLS-1$
 	public static final String LABELDECORATOR_LOGIC_2MM = "2-means-modified"; //$NON-NLS-1$
 	public static final String LABELDECORATOR_LOGIC_HB = "high-bit"; //$NON-NLS-1$
-	public static final String RESOURCE_DECORATOR_COMPUTE_DEEP_STATUS = "hg.performance.computeDeepStatus"; //$NON-NLS-1$
 	public static final String RESOURCE_DECORATOR_SHOW_CHANGESET = "hg.performance.fileShowsChangeset"; //$NON-NLS-1$
 	public static final String RESOURCE_DECORATOR_SHOW_INCOMING_CHANGESET = "hg.performance.fileShowsChangesetIncoming"; //$NON-NLS-1$
 	public static final String PREF_DECORATE_WITH_COLORS = "hg.labeldecorator.colors"; //$NON-NLS-1$
 	public static final String PREF_AUTO_SHARE_PROJECTS = "hg.autoshare"; //$NON-NLS-1$
+
+	/** true to automatically include all projects from the repository in the synchronize view */
+	public static final String PREF_SYNC_ALL_PROJECTS_IN_REPO = "hg.syncAllProjectsInRepository"; //$NON-NLS-1$
+	public static final String PREF_SYNC_ONLY_CURRENT_BRANCH = "hg.syncOnlyCurrentBranch"; //$NON-NLS-1$
+	public static final String PREF_SYNC_PRESENTATION_MODE = "hg.syncPresentationMode";  //$NON-NLS-1$
+
+	public static final String PREF_ENABLE_SUBREPO_SUPPORT = "enableSubrepoSupport"; //$NON-NLS-1$
 
 	/** do not limit graphical log data to show pretty revision graphs in the history view */
 	public static final String ENABLE_FULL_GLOG = "hg.performance.enableFullGlog"; //$NON-NLS-1$
@@ -86,16 +92,31 @@ public final class MercurialPreferenceConstants {
 
 	// history view
 	public static final String PREF_SHOW_COMMENTS = "pref_show_comments"; //$NON-NLS-1$
+	public static final String PREF_SHOW_DIFFS = "pref_show_diffs"; //$NON-NLS-1$
 
 	/** shows all tags also for file history, even if the file changeset's was not tagged as such */
 	public static  final String PREF_SHOW_ALL_TAGS = "pref_show_alltags"; //$NON-NLS-1$
 	public static final String PREF_WRAP_COMMENTS = "pref_wrap_comments"; //$NON-NLS-1$
 	public static final String PREF_SHOW_PATHS = "pref_show_paths"; //$NON-NLS-1$
+	public static final String PREF_SHOW_GOTO_TEXT = "pref_show_goto_text"; //$NON-NLS-1$
 	public static final String PREF_AFFECTED_PATHS_LAYOUT = "pref_affected_paths_layout2"; //$NON-NLS-1$
 	public static final int LAYOUT_HORIZONTAL = 1;
 	public static final int LAYOUT_VERTICAL = 2;
 	public static final String PREF_HISTORY_MERGE_CHANGESET_BACKGROUND = "hg.history.mergeChangesetsBackground";
 	public static final String PREF_HISTORY_MERGE_CHANGESET_FOREGROUND = "hg.history.mergeChangesetsForeground";
-	public static final String PREF_HISTORY_MERGE_CHANGESET_FONT = "hg.history.mergeChangesetsFont";
 	public static final String PREF_USE_MERCURIAL_USERNAME = "hg.useMercurialUsernameForCommit";
+	public static final String PREF_DEFAULT_REBASE_KEEP_BRANCHES = "hg.defaulRebaseKeepBranches";
+	public static final String PREF_DEFAULT_TRANSPLANT_FROM_LOCAL_BRANCHES = "hg.defaulTransplantFromLocal";
+
+	// clone
+	public static final String PREF_CLONE_UNCOMPRESSED = "hg.cloneUncompressed"; //$NON-NLS-1$
+
+	// push
+	public static final String PREF_PUSH_NEW_BRANCH = "hg.pushNewBranch"; //$NON-NLS-1$
+
+	// dialogs
+	public static final String PREF_SHOW_MULTIPLE_PROJECTS_DIALOG = "hg.showMultipleProjectsDialog";
+	public static final String PREF_SHOW_PULL_WARNING_DIALOG = "hg.showPullWarningDialog";
+	public static final String PREF_PRESELECT_UNTRACKED_IN_COMMIT_DIALOG = "hg.dialog.commit.preSelectUntracked";
+
 }

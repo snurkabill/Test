@@ -6,7 +6,7 @@
  * http://www.eclipse.org/legal/epl-v10.html
  *
  * Contributors:
- *     Andrei Loskutov (Intland) - bug fixes
+ *     Andrei Loskutov - bug fixes
  *******************************************************************************/
 package com.vectrace.MercurialEclipse.history;
 
@@ -19,7 +19,6 @@ import org.eclipse.jface.resource.JFaceResources;
 import org.eclipse.jface.viewers.TableViewer;
 import org.eclipse.swt.SWT;
 import org.eclipse.swt.graphics.Color;
-import org.eclipse.swt.graphics.Font;
 import org.eclipse.swt.graphics.GC;
 import org.eclipse.swt.graphics.LineAttributes;
 import org.eclipse.swt.widgets.Composite;
@@ -31,16 +30,15 @@ import org.eclipse.swt.widgets.TableItem;
 
 import com.vectrace.MercurialEclipse.commands.HgBisectClient.Status;
 import com.vectrace.MercurialEclipse.model.GChangeSet;
-import com.vectrace.MercurialEclipse.model.Signature;
 import com.vectrace.MercurialEclipse.model.GChangeSet.Edge;
 import com.vectrace.MercurialEclipse.model.GChangeSet.EdgeList;
+import com.vectrace.MercurialEclipse.model.Signature;
 import com.vectrace.MercurialEclipse.preferences.MercurialPreferenceConstants;
 import com.vectrace.MercurialEclipse.team.MercurialUtilities;
 
 public class GraphLogTableViewer extends TableViewer {
 	private final List<Color> colours = new ArrayList<Color>();
 	private final MercurialHistoryPage mhp;
-	private final Font mergeFont;
 	private final Color mergeBack;
 	private final Color mergeFore;
 
@@ -66,10 +64,8 @@ public class GraphLogTableViewer extends TableViewer {
 		colours.add(display.getSystemColor(SWT.COLOR_DARK_GRAY));
 		colours.add(display.getSystemColor(SWT.COLOR_DARK_GREEN));
 		colours.add(display.getSystemColor(SWT.COLOR_DARK_RED));
-		// TODO add pref store listener
-		mergeFont = MercurialUtilities
-				.getFontPreference(MercurialPreferenceConstants.PREF_HISTORY_MERGE_CHANGESET_FONT);
 
+		// TODO add pref store listener
 		mergeBack = MercurialUtilities
 				.getColorPreference(MercurialPreferenceConstants.PREF_HISTORY_MERGE_CHANGESET_BACKGROUND);
 		mergeFore = MercurialUtilities
@@ -91,7 +87,7 @@ public class GraphLogTableViewer extends TableViewer {
 		final Table table = tableItem.getParent();
 		int from = rev.getRevision() - 1;
 		int lastReqVersion = mhp.getMercurialHistory().getLastRequestedVersion();
-		if (from != lastReqVersion && from >= 0) {
+		if (from != lastReqVersion && from >= 0 && mhp.getMercurialHistory().getLastVersion() > 0) {
 			if (tableItem.equals(table.getItems()[table.getItemCount() - 1])) {
 				MercurialHistoryPage.RefreshMercurialHistory refreshJob = mhp.new RefreshMercurialHistory(
 						from);
@@ -140,8 +136,7 @@ public class GraphLogTableViewer extends TableViewer {
 			}
 		} else {
 			// use italic dark grey font for merge changesets
-			String[] parents = rev.getChangeSet().getParents();
-			if (parents != null && parents.length == 2) {
+			if (rev.getChangeSet().isMerge()) {
 				decorateMergeChangesets(tableItem);
 			}
 		}

@@ -9,7 +9,7 @@
  *     VecTrace (Zingo Andersen) - implementation
  *     Charles O'Farrell         - HgRevision
  *     Bastian Doetsch			 - some more info fields
- *     Andrei Loskutov (Intland) - bug fixes
+ *     Andrei Loskutov           - bug fixes
  *     Zsolt Koppany (Intland)   - bug fixes
  *     Adam Berkes (Intland)     - bug fixes
  *     Philip Graf               - bug fix
@@ -31,10 +31,19 @@ import org.eclipse.compare.structuremergeviewer.Differencer;
 import org.eclipse.core.resources.IFile;
 import org.eclipse.core.resources.IResource;
 import org.eclipse.core.runtime.IPath;
+import org.eclipse.core.runtime.ListenerList;
+import org.eclipse.team.core.synchronize.SyncInfoTree;
 import org.eclipse.team.internal.core.subscribers.CheckedInChangeSet;
 
 import com.vectrace.MercurialEclipse.HgRevision;
+import com.vectrace.MercurialEclipse.MercurialEclipsePlugin;
+import com.vectrace.MercurialEclipse.commands.HgParentClient;
+import com.vectrace.MercurialEclipse.commands.HgStatusClient;
+import com.vectrace.MercurialEclipse.exception.HgException;
 import com.vectrace.MercurialEclipse.model.FileStatus.Action;
+import com.vectrace.MercurialEclipse.properties.DoNotDisplayMe;
+import com.vectrace.MercurialEclipse.team.cache.LocalChangesetCache;
+import com.vectrace.MercurialEclipse.team.cache.MercurialStatusCache;
 import com.vectrace.MercurialEclipse.utils.ChangeSetUtils;
 import com.vectrace.MercurialEclipse.utils.ResourceUtils;
 import com.vectrace.MercurialEclipse.utils.StringUtils;
@@ -45,9 +54,13 @@ public class ChangeSet extends CheckedInChangeSet implements Comparable<ChangeSe
 	private static final List<FileStatus> EMPTY_STATUS =
 		Collections.unmodifiableList(new ArrayList<FileStatus>());
 	private static final Tag[] EMPTY_TAGS = new Tag[0];
-	private static final IFile[] EMPTY_FILES = new IFile[0];
-	private static final SimpleDateFormat SIMPLE_DATE_FORMAT = new SimpleDateFormat(
-			"yyyy-MM-dd hh:mm Z");
+	private final IFile[] EMPTY_FILES = new IFile[0];
+	private static final SimpleDateFormat INPUT_DATE_FORMAT = new SimpleDateFormat(
+			"yyyy-MM-dd HH:mm Z");
+
+	private static final SimpleDateFormat DISPLAY_DATE_FORMAT = new SimpleDateFormat(
+			"yyyy-MM-dd HH:mm");
+
 	public static final Date UNKNOWN_DATE = new Date(0);
 
 	public static enum Direction {
@@ -63,7 +76,6 @@ public class ChangeSet extends CheckedInChangeSet implements Comparable<ChangeSe
 	private String tagsStr;
 	private List<FileStatus> changedFiles;
 	private String description;
-	private String ageDate;
 	private String nodeShort;
 	private String[] parents;
 	private Date realDate;
@@ -75,10 +87,34 @@ public class ChangeSet extends CheckedInChangeSet implements Comparable<ChangeSe
 	private Tag[] tags;
 
 	/**
+	 * Lazy loaded list of files changed. Only applicable to merge changesets when {@link #showFirstParentChanges} is true.
+	 * @see #getChangesetFiles()
+	 */
+	private List<FileStatus> firstParentChangedFiles;
+
+	private ListenerList listenerList;
+
+	/**
+	 * A "dummy" changeset containing no additional information except given data
+	 */
+	public static class ShallowChangeSet extends ChangeSet {
+
+		/**
+		 * Creates a shallow changeset containing only provided data
+		 * @param changesetIndex
+		 * @param changeSet non null
+		 * @param root non null
+		 */
+		public ShallowChangeSet(int changesetIndex, String changeSet, HgRoot root) {
+			super(changesetIndex, changeSet, null, null, null, null, "", null, root);
+		}
+	}
+
+	/**
 	 * A more or less dummy changeset containing only index and global id. Such changeset is useful
 	 * and can be constructed from the other changesets "parent" ids
 	 */
-	public static class ParentChangeSet extends ChangeSet {
+	public static class ParentChangeSet extends ShallowChangeSet {
 
 		/**
 		 * @param indexAndId
@@ -87,8 +123,7 @@ public class ChangeSet extends CheckedInChangeSet implements Comparable<ChangeSe
 		 *            this changeset's child from which we are constructing the parent
 		 */
 		public ParentChangeSet(String indexAndId, ChangeSet child) {
-			super(getIndex(indexAndId), getChangeset(indexAndId), null, null, null, null,
-					"", null, child.getHgRoot()); //$NON-NLS-1$
+			super(getIndex(indexAndId), getChangeset(indexAndId), child.getHgRoot());
 			this.bundleFile = child.getBundleFile();
 			this.direction = child.direction;
 		}
@@ -151,7 +186,7 @@ public class ChangeSet extends CheckedInChangeSet implements Comparable<ChangeSe
 		}
 
 		public Builder description(String description) {
-			cs.setComment(description);
+			cs.setDescription(description);
 			return this;
 		}
 
@@ -181,13 +216,7 @@ public class ChangeSet extends CheckedInChangeSet implements Comparable<ChangeSe
 			return this;
 		}
 
-		// what is ageDate? Can it be derived from date and now()
-		public Builder ageDate(String ageDate) {
-			this.cs.ageDate = ageDate;
-			return this;
-		}
-
-		// nodeShort should be first X of changeset, this is superflous
+		// nodeShort should be first X of changeset, this is superfluous
 		public Builder nodeShort(String nodeShort) {
 			this.cs.nodeShort = nodeShort;
 			return this;
@@ -210,7 +239,7 @@ public class ChangeSet extends CheckedInChangeSet implements Comparable<ChangeSe
 		this.user = user;
 		this.date = date;
 		this.hgRoot = root;
-		setComment(description);
+		setDescription(description);
 		setParents(parents);
 		// remember index:fullchangesetid
 		setName(toString());
@@ -243,7 +272,7 @@ public class ChangeSet extends CheckedInChangeSet implements Comparable<ChangeSe
 					if (StringUtils.isEmpty(ctag)) {
 						continue;
 					}
-					Tag tag = new Tag(ctag, getChangesetIndex(), getChangeset(), false);
+					Tag tag = new Tag(hgRoot, ctag, this, false);
 					tagList.add(tag);
 				}
 				if (!tagList.isEmpty()) {
@@ -257,6 +286,27 @@ public class ChangeSet extends CheckedInChangeSet implements Comparable<ChangeSe
 		return tags;
 	}
 
+	/**
+	 * @param tags the tags to set
+	 */
+	public void setTags(Tag[] tags) {
+		this.tags = tags;
+	}
+
+	/**
+	 * @param tagsStr the tagsStr to set
+	 */
+	public void setTagsStr(String tagsStr) {
+		this.tagsStr = tagsStr;
+	}
+
+	/**
+	 * @return the tagsStr
+	 */
+	public String getTagsStr() {
+		return tagsStr;
+	}
+
 	public String getBranch() {
 		return branch;
 	}
@@ -266,21 +316,14 @@ public class ChangeSet extends CheckedInChangeSet implements Comparable<ChangeSe
 	}
 
 	public String getDateString() {
-		// return date;
-		String dt = date;
-		if (dt != null) {
-			// Return date without extra time-zone.
-			int off = dt.lastIndexOf(' ');
-			if (off != -1 && off < dt.length() - 1) {
-				switch (dt.charAt(off + 1)) {
-				case '+':
-				case '-':
-					dt = dt.substring(0, off);
-					break;
-				}
+		Date d = getRealDate();
+		if (d != null) {
+			// needed because static date format instances are not thread safe
+			synchronized (DISPLAY_DATE_FORMAT) {
+				return DISPLAY_DATE_FORMAT.format(d);
 			}
 		}
-		return dt;
+		return date;
 	}
 
 	@Override
@@ -310,12 +353,29 @@ public class ChangeSet extends CheckedInChangeSet implements Comparable<ChangeSe
 	}
 
 	/**
+	 * @param changedFiles the changedFiles to set
+	 */
+	public void setChangedFiles(List<FileStatus> changedFiles) {
+		this.changedFiles = (changedFiles == null ? EMPTY_STATUS : Collections
+				.unmodifiableList(changedFiles));
+	}
+
+	/**
 	 * @param resource
 	 *            non null
 	 * @return true if the given resource was removed in this changeset
 	 */
 	public boolean isRemoved(IResource resource) {
 		return contains(resource, FileStatus.Action.REMOVED);
+	}
+
+	/**
+	 * @param resource
+	 *            non null
+	 * @return true if the given resource was moved in this changeset
+	 */
+	public boolean isMoved(IResource resource) {
+		return contains(resource, FileStatus.Action.MOVED);
 	}
 
 	/**
@@ -334,6 +394,27 @@ public class ChangeSet extends CheckedInChangeSet implements Comparable<ChangeSe
 	 */
 	public boolean isModified(IResource resource) {
 		return contains(resource, FileStatus.Action.MODIFIED);
+	}
+
+	/**
+	 * @param resource
+	 *            non null
+	 * @return file status object if this changeset contains given resource, null otherwise
+	 */
+	public FileStatus getStatus(IResource resource) {
+		if (getChangedFiles().isEmpty()) {
+			return null;
+		}
+		IPath path = ResourceUtils.getPath(resource);
+		if(path.isEmpty()) {
+			return null;
+		}
+		for (FileStatus fileStatus : changedFiles) {
+			if (path.equals(fileStatus.getAbsolutePath())) {
+				return fileStatus;
+			}
+		}
+		return null;
 	}
 
 	/**
@@ -367,7 +448,46 @@ public class ChangeSet extends CheckedInChangeSet implements Comparable<ChangeSe
 	 * @return the ageDate
 	 */
 	public String getAgeDate() {
-		return ageDate;
+		double delta = (System.currentTimeMillis() - getRealDate().getTime());
+
+		delta /= 1000 * 60; // units is minutes
+
+		if (delta <= 1) {
+			return "less than a minute ago";
+		}
+
+		if (delta <= 60) {
+			return makeAgeString(delta, "minute");
+		}
+
+		delta /= 60;
+		if (delta <= 24) {
+			return makeAgeString(delta, "hour");
+		}
+
+		// 1 day to 31 days
+		delta /= 24; // units is days
+		if (delta <= 31) {
+			return makeAgeString(delta, "day");
+		}
+
+		// 4 weeks - 3 months
+		if (delta / 7 <= 12) {
+			return makeAgeString(delta / 7, "week");
+		}
+
+		// 3 months - 1 year
+		if (delta / 30 <= 12) {
+			return makeAgeString(delta / 30, "month");
+		}
+
+		return makeAgeString(delta / 365, "year");
+	}
+
+	private static String makeAgeString(double d, String unit) {
+		int i = (int) Math.max(1, Math.round(d));
+
+		return i + " " + unit + ((i == 1) ? "" : "s") + " ago";
 	}
 
 	/**
@@ -398,28 +518,17 @@ public class ChangeSet extends CheckedInChangeSet implements Comparable<ChangeSe
 		}
 		if (obj instanceof ChangeSet) {
 			ChangeSet other = (ChangeSet) obj;
-			if (getChangeset().equals(other.getChangeset())) {
+			if (getChangeset().equals(other.getChangeset())
+					&& getChangesetIndex() == other.getChangesetIndex()) {
 				return true;
 			}
-			// The question is: why changesets with different id's should be
-			// equal if they dates/indexes are equal???
-			// if (date != null && date.equals(other.getDateString())) {
-			// return true;
-			// }
-
-			// changeset indices are not equal in different repos, e.g. incoming
-			// so we can't do a check solely based on indexes.
-			// return getChangesetIndex() == other.getChangesetIndex();
 		}
 		return false;
 	}
 
 	@Override
 	public int hashCode() {
-		final int prime = 31;
-		int result = 1;
-		result = prime * result + ((changeset == null) ? 0 : changeset.hashCode());
-		return result;
+		return 31 + ((changeset == null) ? 0 : changeset.hashCode()) + changesetIndex;
 	}
 
 	/**
@@ -430,7 +539,10 @@ public class ChangeSet extends CheckedInChangeSet implements Comparable<ChangeSe
 		try {
 			if (realDate == null) {
 				if (date != null) {
-					realDate = SIMPLE_DATE_FORMAT.parse(date);
+					// needed because static date format instances are not thread safe
+					synchronized (INPUT_DATE_FORMAT) {
+						realDate = INPUT_DATE_FORMAT.parse(date);
+					}
 				} else {
 					realDate = UNKNOWN_DATE;
 				}
@@ -453,7 +565,26 @@ public class ChangeSet extends CheckedInChangeSet implements Comparable<ChangeSe
 		return parents;
 	}
 
-	private void setParents(String[] parents) {
+	public HgRevision getParentRevision(int ordinal, boolean bQuery) {
+		if (bQuery && getChangesetIndex() != 0 && (parents == null || parents.length == 0)) {
+			try {
+				parents = HgParentClient.getParentNodeIds(this, "{rev}:{node}");
+			} catch (HgException e) {
+				MercurialEclipsePlugin.logError(e);
+			}
+		}
+		return getParentRevision(ordinal);
+	}
+
+	public HgRevision getParentRevision(int ordinal) {
+		if (parents != null && 0 <= ordinal && ordinal < parents.length) {
+			return HgRevision.parse(parents[ordinal]);
+		}
+
+		return null;
+	}
+
+	public void setParents(String[] parents) {
 		// filter null parents (hg uses -1 to signify a null parent)
 		if (parents != null) {
 			List<String> temp = new ArrayList<String>(parents.length);
@@ -467,7 +598,30 @@ public class ChangeSet extends CheckedInChangeSet implements Comparable<ChangeSe
 		}
 	}
 
-	protected void setComment(String description) {
+	/**
+	 * @return True if this is a merge changeset.
+	 */
+	public boolean isMerge() {
+		return parents != null && 1 < parents.length && !StringUtils.isEmpty(parents[0])
+				&& !StringUtils.isEmpty(parents[1]);
+	}
+
+	private List<FileStatus> getFirstParentChangedFiles() {
+		if (firstParentChangedFiles == null) {
+			// Query for this data. Takes 300 - 500ms for me.
+			// Note: For non-merge changesets this should return identical to changedFiles.
+			try {
+				firstParentChangedFiles = MercurialStatusCache.parseStatus(HgStatusClient.getStatusForChangeset(this), getHgRoot());
+			} catch (Throwable t) {
+				firstParentChangedFiles = EMPTY_STATUS;
+				MercurialEclipsePlugin.logError("Failed to get changeset files changed wrt first parent", t);
+			}
+		}
+
+		return firstParentChangedFiles;
+	}
+
+	public void setDescription(String description) {
 		if (description != null) {
 			this.description = description;
 		} else {
@@ -508,7 +662,7 @@ public class ChangeSet extends CheckedInChangeSet implements Comparable<ChangeSe
 
 	public boolean contains(IPath local) {
 		for (IFile resource : getFiles()) {
-			if (local.equals(resource.getLocation())) {
+			if (local.equals(ResourceUtils.getPath(resource))) {
 				return true;
 			}
 		}
@@ -526,41 +680,49 @@ public class ChangeSet extends CheckedInChangeSet implements Comparable<ChangeSe
 	 * NOT performant, as it may create dynamic proxy objects. {@inheritDoc}
 	 */
 	@Override
+	@DoNotDisplayMe
 	public IFile[] getResources() {
 		return getFiles().toArray(EMPTY_FILES);
 	}
 
+	@DoNotDisplayMe
 	public FileFromChangeSet[] getChangesetFiles() {
 		List<FileFromChangeSet> fcs = new ArrayList<FileFromChangeSet>();
-		if (getChangedFiles().isEmpty()) {
-			return fcs.toArray(new FileFromChangeSet[0]);
-		}
 
-		for (FileStatus fileStatus : changedFiles) {
-			int kind = 0;
+		for (FileStatus fileStatus : getChangedFiles()) {
+			int action = 0;
+			int dir = 0;
 			switch (fileStatus.getAction()) {
 			case ADDED:
-				kind = Differencer.ADDITION;
+			case MOVED:
+			case COPIED:
+				action = Differencer.ADDITION;
 				break;
 			case MODIFIED:
-				kind = Differencer.CHANGE;
+				action = Differencer.CHANGE;
 				break;
 			case REMOVED:
-				kind = Differencer.DELETION;
+				action = Differencer.DELETION;
 				break;
 			}
 			switch (getDirection()) {
 			case INCOMING:
-				kind |= Differencer.LEFT;
+				dir |= Differencer.LEFT;
 				break;
 			case OUTGOING:
-				kind |= Differencer.RIGHT;
+				dir |= Differencer.RIGHT;
 				break;
 			case LOCAL:
-				kind |= Differencer.RIGHT;
+				dir |= Differencer.RIGHT;
 				break;
 			}
-			fcs.add(new FileFromChangeSet(this, fileStatus, kind));
+			fcs.add(new FileFromChangeSet(this, fileStatus, action | dir));
+
+			if(fileStatus.getAction() == FileStatus.Action.MOVED){
+				// for moved files, include an extra FileFromChangeset for the deleted file
+				FileStatus fs = new FileStatus(Action.REMOVED, fileStatus.getRootRelativeCopySourcePath().toString(), this.hgRoot);
+				fcs.add(new FileFromChangeSet(this, fs, dir | Differencer.DELETION));
+			}
 		}
 		return fcs.toArray(new FileFromChangeSet[0]);
 	}
@@ -570,6 +732,7 @@ public class ChangeSet extends CheckedInChangeSet implements Comparable<ChangeSe
 	 *         returned file references might not exist (yet/anymore) on the disk or in the Eclipse
 	 *         workspace.
 	 */
+	@DoNotDisplayMe
 	public Set<IFile> getFiles() {
 		if (files != null) {
 			return files;
@@ -585,6 +748,12 @@ public class ChangeSet extends CheckedInChangeSet implements Comparable<ChangeSe
 		}
 		files = Collections.unmodifiableSet(files1);
 		return files;
+	}
+
+	@Override
+	@DoNotDisplayMe
+	public SyncInfoTree getSyncInfoSet() {
+		return super.getSyncInfoSet();
 	}
 
 	@Override
@@ -610,6 +779,21 @@ public class ChangeSet extends CheckedInChangeSet implements Comparable<ChangeSe
 		return super.getName();
 	}
 
+	/**
+	 * @return Whether the repository is currently on this revision
+	 */
+	public boolean isCurrent() {
+		if (direction == Direction.OUTGOING && hgRoot != null) {
+			try {
+				return equals(LocalChangesetCache.getInstance().getChangesetForRoot(hgRoot));
+			} catch (HgException e) {
+				MercurialEclipsePlugin.logError(e);
+			}
+		}
+
+		return false;
+	}
+
 	@Override
 	public void remove(IResource resource) {
 		// not supported
@@ -620,4 +804,29 @@ public class ChangeSet extends CheckedInChangeSet implements Comparable<ChangeSe
 		// not supported
 	}
 
+	private void fireChanged() {
+		if (listenerList != null) {
+			for (Object listener : listenerList.getListeners()) {
+				((Listener) listener).changeSetChanged(this);
+			}
+		}
+	}
+
+	public void addListener(Listener listener) {
+		if (listenerList == null) {
+			listenerList = new ListenerList();
+		}
+
+		listenerList.add(listener);
+	}
+
+	public void removeListener(Listener listener) {
+		if (listenerList != null) {
+			listenerList.remove(listener);
+		}
+	}
+
+	public interface Listener {
+		public void changeSetChanged(ChangeSet cs);
+	}
 }

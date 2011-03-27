@@ -6,14 +6,16 @@
  * http://www.eclipse.org/legal/epl-v10.html
  *
  * Contributors:
- * bastian	implementation
- * Andrei Loskutov (Intland) - bugfixes
- * Zsolt Koppany (Intland)
+ *     bastian	               - implementation
+ *     Andrei Loskutov         - bugfixes
+ *     Zsolt Koppany (Intland)
  *******************************************************************************/
 package com.vectrace.MercurialEclipse.utils;
 
 import java.io.File;
 import java.io.IOException;
+import java.io.UnsupportedEncodingException;
+import java.net.URI;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
@@ -22,6 +24,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+import org.eclipse.core.filesystem.URIUtil;
 import org.eclipse.core.resources.IContainer;
 import org.eclipse.core.resources.IFile;
 import org.eclipse.core.resources.IFolder;
@@ -47,6 +50,7 @@ import com.vectrace.MercurialEclipse.exception.HgException;
 import com.vectrace.MercurialEclipse.model.ChangeSet;
 import com.vectrace.MercurialEclipse.model.HgRoot;
 import com.vectrace.MercurialEclipse.team.MercurialTeamProvider;
+import com.vectrace.MercurialEclipse.team.cache.MercurialRootCache;
 
 /**
  * @author bastian
@@ -54,6 +58,7 @@ import com.vectrace.MercurialEclipse.team.MercurialTeamProvider;
  */
 public final class ResourceUtils {
 
+	public static final IPath[] NO_PATHS = new Path[0];
 	private static final File TMP_ROOT = new File(System.getProperty("java.io.tmpdir"));
 	private static long tmpFileSuffix;
 
@@ -123,11 +128,30 @@ public final class ResourceUtils {
 	/**
 	 * @param resource
 	 *            a handle to possibly non-existing resource
-	 * @return a (file) path representing given resource
+	 * @return a (file) path representing given resource, never null. May return an "empty" file.
 	 */
 	public static File getFileHandle(IResource resource) {
-		IPath path = getPath(resource);
-		return path.toFile();
+		return getPath(resource).toFile();
+	}
+
+	/**
+	 * Tries to determine the encoding for a file resource. Returns null, if the encoding cannot be
+	 * determined.
+	 */
+	public static String getFileEncoding(IFile resource){
+		try{
+			String charset = resource.getCharset(true);
+			if(charset != null) {
+				new String(new byte[]{}, charset); //test that JVM has the charset available
+			}
+			return charset;
+		} catch (CoreException e) {
+			//cannot determine the file charset
+			return null;
+		} catch (UnsupportedEncodingException e) {
+			//unknown encoding, ignore the request
+			return null;
+		}
 	}
 
 	/**
@@ -137,14 +161,83 @@ public final class ResourceUtils {
 	 *         workspace
 	 */
 	public static IFile getFileHandle(IPath path) {
+		if(path == null) {
+			return null;
+		}
+		return (IFile) getHandle(path, true);
+	}
+
+	private static IResource getHandle(IPath origPath, boolean isFile) {
 		IWorkspaceRoot root = ResourcesPlugin.getWorkspace().getRoot();
-		return root.getFileForLocation(path);
+		// origPath may be canonical but not necessarily.
+		// Eclipse allows a project to be symlinked or an arbitrary folder under a project
+		// to be symlinked. Also Eclipse allows a subtree of one project to exist as another
+		// project.
+		// Mercurial doesn't follow symbolic links so if path is canonical it is sufficient to find
+		// a containing hg root. hg roots are always canonical.
+		// There is an unresolvable ambiguity when a project with a sub repo is imported
+		// as a project. Such cases are unsupported for now.
+		// If one of the candidate resources is under a Mercurial managed project it must
+		// be returned.
+		IPath[] paths = NO_PATHS;
+		IResource best = null;
+
+		loop: for (int i = 0;; i++) {
+			IPath path;
+
+			switch (i) {
+			case 0:
+				path = origPath;
+				break;
+			case 1:
+				// Only query the root cache if the plain path didn't find a definite match.
+				paths = MercurialRootCache.getInstance().uncanonicalize(origPath);
+				//$FALL-THROUGH$
+			default:
+				if (i - 1 >= paths.length) {
+					break loop;
+				}
+				path = paths[i - 1];
+			}
+
+			URI uri = URIUtil.toURI(path.makeAbsolute());
+			IResource[] resources = isFile ? root.findFilesForLocationURI(uri) : root
+					.findContainersForLocationURI(uri);
+			if (resources.length > 0) {
+				if (resources.length == 1) {
+					best = resources[0];
+				} else {
+					// try to find the first file contained in a hg root and managed by our team
+					// provider
+					for (IResource resource : resources) {
+						if (MercurialTeamProvider.isHgTeamProviderFor(resource.getProject())) {
+							return resource;
+						}
+					}
+				}
+			} else {
+				best = ifNull(isFile ? root.getFileForLocation(path) : root
+						.getContainerForLocation(path), best);
+			}
+
+			// Is best a definite match?
+			if (best != null && MercurialTeamProvider.isHgTeamProviderFor(best.getProject())) {
+				return best;
+			}
+		}
+		return best;
+	}
+
+	private static IResource ifNull(IResource a, IResource b) {
+		return a == null ? b : a;
 	}
 
 	/**
 	 * @param resource
 	 *            a handle to possibly non-existing resource
-	 * @return a (file) path representing given resource
+	 * @return a (file) path representing given resource, might be {@link Path#EMPTY} in case the
+	 *         resource location and project location are both unknown. {@link Path#EMPTY} return
+	 *         value will be always logged as error.
 	 */
 	public static IPath getPath(IResource resource) {
 		IPath path = resource.getLocation();
@@ -153,12 +246,18 @@ public final class ResourceUtils {
 			IProject project = resource.getProject();
 			IPath projectLocation = project.getLocation();
 			if (projectLocation == null) {
-				// project removed too
-				projectLocation = project.getWorkspace().getRoot().getLocation().append(
-						project.getName());
+				// project removed too, there is no way to correctly determine the right
+				// location in case project is not located under workspace or project name doesn't
+				// match project root folder name
+				String message = "Failed to resolve location for resource (project deleted): " + resource;
+				MercurialEclipsePlugin.logWarning(message, new IllegalStateException(message));
+				return Path.EMPTY;
 			}
-			if (project == resource) {
-				return projectLocation;
+
+			URI locationURI = resource.getLocationURI();
+			if(isVirtual(locationURI)) {
+				// path is null for virtual folders => we can't do anything here
+				return Path.EMPTY;
 			}
 			path = projectLocation.append(resource.getFullPath().removeFirstSegments(1));
 		}
@@ -166,11 +265,36 @@ public final class ResourceUtils {
 	}
 
 	/**
-	 * Converts a {@link java.io.File} to a workspace resource
+	 * see issue 12500: we should check whether the resource is virtual
+	 * <p>
+	 * TODO as soon as 3.5 is not supported, use resource.isVirtual() call
 	 *
-	 * @param file
-	 * @return
-	 * @throws HgException
+	 * @param locationURI
+	 *            may be null
+	 * @return true if the given path is null OR is virtual location
+	 */
+	public static boolean isVirtual(URI locationURI) {
+		return locationURI == null || "virtual".equals(locationURI.getScheme());
+	}
+
+	/**
+	 * @param linked non null linked resource
+	 * @return may return null if the link target is not inside workspace
+	 */
+	public static IResource getRealLocation(IResource linked) {
+		IPath path = getPath(linked);
+		if(path.isEmpty()) {
+			return null;
+		}
+		IResource handle = getHandle(path, linked.getType() == IResource.FILE);
+		if(handle == null || handle.isLinked()) {
+			return null;
+		}
+		return handle;
+	}
+
+	/**
+	 * Converts a {@link java.io.File} to a workspace resource
 	 */
 	public static IResource convert(File file) throws HgException {
 		String canonicalPath;
@@ -179,14 +303,7 @@ public final class ResourceUtils {
 		} catch (IOException e) {
 			throw new HgException(e.getLocalizedMessage(), e);
 		}
-		IWorkspaceRoot root = ResourcesPlugin.getWorkspace().getRoot();
-		IResource resource;
-		if (file.isDirectory()) {
-			resource = root.getContainerForLocation(new Path(canonicalPath));
-		} else {
-			resource = root.getFileForLocation(new Path(canonicalPath));
-		}
-		return resource;
+		return getHandle(new Path(canonicalPath), !file.isDirectory());
 	}
 
 	/**
@@ -256,7 +373,7 @@ public final class ResourceUtils {
 			if (!project.isAccessible()) {
 				continue;
 			}
-			HgRoot proot = MercurialTeamProvider.hasHgRoot(project);
+			HgRoot proot = MercurialRootCache.getInstance().hasHgRoot(project, true);
 			if (proot == null) {
 				continue;
 			}
@@ -276,7 +393,7 @@ public final class ResourceUtils {
 		Map<HgRoot, List<IResource>> result = new HashMap<HgRoot, List<IResource>>();
 		if (resources != null) {
 			for (IResource resource : resources) {
-				HgRoot root = MercurialTeamProvider.hasHgRoot(resource);
+				HgRoot root = MercurialRootCache.getInstance().hasHgRoot(resource, true);
 				if (root == null) {
 					continue;
 				}
@@ -310,6 +427,8 @@ public final class ResourceUtils {
 	}
 
 	/**
+	 * Converts a HgRoot relative path to a project relative IResource. The specified hgRoot
+	 * can be higher than, deeper than, or at project level in the directory hierarchy.
 	 * @param hgRoot
 	 *            non null
 	 * @param project
@@ -320,10 +439,10 @@ public final class ResourceUtils {
 	 */
 	public static IResource convertRepoRelPath(HgRoot hgRoot, IProject project, String repoRelPath) {
 		// determine absolute path
-		IPath path = new Path(hgRoot.getAbsolutePath()).append(repoRelPath);
+		IPath path = hgRoot.toAbsolute(repoRelPath);
 
 		// determine project relative path
-		int equalSegments = path.matchingFirstSegments(project.getLocation());
+		int equalSegments = path.matchingFirstSegments(getPath(project));
 		path = path.removeFirstSegments(equalSegments);
 		return project.findMember(path);
 	}
@@ -407,7 +526,7 @@ public final class ResourceUtils {
 
 	/**
 	 * @param selection may be null
-	 * @return never null , may be ampty list containing all resources from given selection
+	 * @return never null , may be empty list containing all resources from given selection
 	 */
 	public static List<IResource> getResources(IStructuredSelection selection) {
 		List<IResource> resources = new ArrayList<IResource>();
@@ -419,5 +538,41 @@ public final class ResourceUtils {
 			}
 		}
 		return resources;
+	}
+
+	/**
+	 * This is optimized version of {@link IPath#isPrefixOf(IPath)} (30-50% faster). Main difference is
+	 * that we prefer the cheap operations first and check path segments starting from the
+	 * end of the first path (with the assumption that paths starts in most cases
+	 * with common paths segments => so we postpone redundant comparisons).
+	 * @param first non null
+	 * @param second non null
+	 * @return true if the first path is prefix of the second
+	 */
+	public static boolean isPrefixOf(IPath first, IPath second) {
+		int len = first.segmentCount();
+		if (len > second.segmentCount()) {
+			return false;
+		}
+		for (int i = len - 1; i >= 0; i--) {
+			if (!first.segment(i).equals(second.segment(i))) {
+				return false;
+			}
+		}
+		return sameDevice(first, second);
+	}
+
+	private static boolean sameDevice(IPath first, IPath second) {
+		String device = first.getDevice();
+		if (device == null) {
+			if (second.getDevice() != null) {
+				return false;
+			}
+		} else {
+			if (!device.equalsIgnoreCase(second.getDevice())) {
+				return false;
+			}
+		}
+		return true;
 	}
 }

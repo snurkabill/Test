@@ -7,13 +7,15 @@
  *
  * Contributors:
  * 	   IBM Corporation - initial API and implementation
- *     Andrei Loskutov (Intland) - adopting to hg
+ *     Andrei Loskutov - adopting to hg
  *******************************************************************************/
 package com.vectrace.MercurialEclipse.synchronize.cs;
 
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Set;
 
@@ -22,8 +24,10 @@ import org.eclipse.core.resources.IProject;
 import org.eclipse.core.resources.IResource;
 import org.eclipse.core.resources.ResourcesPlugin;
 import org.eclipse.core.resources.mapping.ResourceTraversal;
+import org.eclipse.core.runtime.IAdaptable;
 import org.eclipse.core.runtime.IPath;
 import org.eclipse.core.runtime.IProgressMonitor;
+import org.eclipse.core.runtime.Path;
 import org.eclipse.jface.util.IPropertyChangeListener;
 import org.eclipse.jface.util.PropertyChangeEvent;
 import org.eclipse.jface.viewers.ITreeContentProvider;
@@ -47,20 +51,29 @@ import org.eclipse.ui.navigator.INavigatorContentExtension;
 import org.eclipse.ui.navigator.INavigatorContentService;
 import org.eclipse.ui.navigator.INavigatorSorterService;
 
+import com.vectrace.MercurialEclipse.MercurialEclipsePlugin;
 import com.vectrace.MercurialEclipse.model.ChangeSet;
 import com.vectrace.MercurialEclipse.model.ChangeSet.Direction;
 import com.vectrace.MercurialEclipse.model.FileFromChangeSet;
 import com.vectrace.MercurialEclipse.model.WorkingChangeSet;
 import com.vectrace.MercurialEclipse.synchronize.HgSubscriberMergeContext;
 import com.vectrace.MercurialEclipse.synchronize.MercurialSynchronizeParticipant;
+import com.vectrace.MercurialEclipse.synchronize.PresentationMode;
 import com.vectrace.MercurialEclipse.team.cache.MercurialStatusCache;
+import com.vectrace.MercurialEclipse.utils.ResourceUtils;
 
 @SuppressWarnings("restriction")
-public class HgChangeSetContentProvider extends SynchronizationContentProvider /* ResourceModelContentProvider */ {
+public class HgChangeSetContentProvider extends SynchronizationContentProvider /* ResourceModelContentProvider */  {
 
 	public static final String ID = "com.vectrace.MercurialEclipse.changeSetContent";
 
 	private static final MercurialStatusCache STATUS_CACHE = MercurialStatusCache.getInstance();
+
+	private final ChangeSet.Listener changeSetListener = new ChangeSet.Listener() {
+		public void changeSetChanged(ChangeSet cs) {
+			getTreeViewer().refresh(cs);
+		}
+	};
 
 	private final class UcommittedSetListener implements IPropertyChangeListener {
 		public void propertyChange(PropertyChangeEvent event) {
@@ -78,13 +91,35 @@ public class HgChangeSetContentProvider extends SynchronizationContentProvider /
 		}
 	}
 
+	private final class PreferenceListener implements IPropertyChangeListener {
+		public void propertyChange(PropertyChangeEvent event) {
+			Object input = getTreeViewer().getInput();
+			if (event.getProperty().equals(PresentationMode.PREFERENCE_KEY)
+					&& input instanceof HgChangeSetModelProvider) {
+				Utils.asyncExec(new Runnable() {
+					public void run() {
+						TreeViewer treeViewer = getTreeViewer();
+						treeViewer.getTree().setRedraw(false);
+						treeViewer.refresh(uncommitted, true);
+						treeViewer.refresh(outgoing, true);
+						treeViewer.refresh(incoming, true);
+						treeViewer.getTree().setRedraw(true);
+					}
+				}, getTreeViewer());
+			}
+		}
+	}
+
 	private final class CollectorListener implements IChangeSetChangeListener, BatchingChangeSetManager.IChangeSetCollectorChangeListener {
 
-		public void setAdded(final org.eclipse.team.internal.core.subscribers.ChangeSet set) {
-			if (isVisibleInMode((ChangeSet) set)) {
-				final ChangesetGroup toRefresh = ((ChangeSet) set).getDirection() == Direction.INCOMING ? incoming
+		public void setAdded(final org.eclipse.team.internal.core.subscribers.ChangeSet cs) {
+			ChangeSet set = (ChangeSet)cs;
+
+			set.addListener(changeSetListener);
+			if (isVisibleInMode(set)) {
+				final ChangesetGroup toRefresh = set.getDirection() == Direction.INCOMING ? incoming
 						: outgoing;
-				boolean added = toRefresh.getChangesets().add((ChangeSet) set);
+				boolean added = toRefresh.getChangesets().add(set);
 				if(added) {
 					Utils.asyncExec(new Runnable() {
 						public void run() {
@@ -95,9 +130,12 @@ public class HgChangeSetContentProvider extends SynchronizationContentProvider /
 			}
 		}
 
-		public void setRemoved(final org.eclipse.team.internal.core.subscribers.ChangeSet set) {
-			if (isVisibleInMode((ChangeSet) set)) {
-				final ChangesetGroup toRefresh = ((ChangeSet) set).getDirection() == Direction.INCOMING ? incoming
+		public void setRemoved(final org.eclipse.team.internal.core.subscribers.ChangeSet cs) {
+			ChangeSet set = (ChangeSet)cs;
+
+			set.removeListener(changeSetListener);
+			if (isVisibleInMode(set)) {
+				final ChangesetGroup toRefresh = set.getDirection() == Direction.INCOMING ? incoming
 						: outgoing;
 				boolean removed = toRefresh.getChangesets().remove(set);
 				if(removed) {
@@ -133,6 +171,7 @@ public class HgChangeSetContentProvider extends SynchronizationContentProvider /
 	private boolean collectorInitialized;
 	private final IChangeSetChangeListener collectorListener;
 	private final IPropertyChangeListener uncommittedSetListener;
+	private final IPropertyChangeListener preferenceListener;
 	private final ChangesetGroup incoming;
 	private final ChangesetGroup outgoing;
 	private WorkbenchContentProvider provider;
@@ -143,11 +182,13 @@ public class HgChangeSetContentProvider extends SynchronizationContentProvider /
 
 	public HgChangeSetContentProvider() {
 		super();
-		collectorListener = new CollectorListener();
-		uncommittedSetListener = new UcommittedSetListener();
-		uncommittedCsManager = new UncommittedChangesetManager(this);
 		incoming = new ChangesetGroup("Incoming", Direction.INCOMING);
 		outgoing = new ChangesetGroup("Outgoing", Direction.OUTGOING);
+		collectorListener = new CollectorListener();
+		uncommittedSetListener = new UcommittedSetListener();
+		preferenceListener = new PreferenceListener();
+		MercurialEclipsePlugin.getDefault().getPreferenceStore().addPropertyChangeListener(preferenceListener);
+		uncommittedCsManager = new UncommittedChangesetManager(this);
 		uncommitted = uncommittedCsManager.getUncommittedGroup();
 	}
 
@@ -193,13 +234,10 @@ public class HgChangeSetContentProvider extends SynchronizationContentProvider /
 				// shows up.
 			}
 		}
+
 		if (parent == getModelProvider()) {
 			return getRootElements();
-		}
-		if (parent instanceof ChangeSet) {
-			return ((ChangeSet) parent).getChangesetFiles();
-		}
-		if (parent instanceof ChangesetGroup) {
+		} else if (parent instanceof ChangesetGroup) {
 			ChangesetGroup group = (ChangesetGroup) parent;
 			Direction direction = group.getDirection();
 			if (isOutgoingVisible()	&& isOutgoing(direction)) {
@@ -211,8 +249,102 @@ public class HgChangeSetContentProvider extends SynchronizationContentProvider /
 			if(direction == Direction.LOCAL){
 				return group.getChangesets().toArray();
 			}
+		} else if (parent instanceof ChangeSet) {
+			FileFromChangeSet[] files = ((ChangeSet) parent).getChangesetFiles();
+
+			if (files.length != 0) {
+				switch (PresentationMode.get()) {
+				case FLAT:
+					return files;
+				case TREE:
+					return collectTree(parent, files);
+				case COMPRESSED_TREE:
+					return collectCompressedTree(parent, files);
+				}
+			}
+		} else if (parent instanceof PathFromChangeSet) {
+			return ((PathFromChangeSet) parent).getChildren();
 		}
+
 		return new Object[0];
+	}
+
+	private Object[] collectTree(Object parent, FileFromChangeSet[] files) {
+		List<Object> out = new ArrayList<Object>(files.length * 2);
+
+		for (FileFromChangeSet file : files) {
+			IPath path = file.getPath();
+			if(path == null) {
+				out.add(Path.EMPTY);
+			} else {
+				out.add(path.removeLastSegments(1));
+			}
+			out.add(file);
+		}
+
+		return collectTree(parent, out);
+	}
+
+	private Object[] collectTree(Object parent, List<Object> files) {
+		HashMap<String, List<Object>> map = new HashMap<String, List<Object>>();
+		List<Object> out = new ArrayList<Object>();
+
+		for (Iterator<Object> it = files.iterator(); it.hasNext();) {
+			IPath path = (IPath) it.next();
+			FileFromChangeSet file = (FileFromChangeSet) it.next();
+
+			if (path == null || 0 == path.segmentCount()) {
+				out.add(file);
+			} else {
+				String seg = path.segment(0);
+				List<Object> l = map.get(seg);
+
+				if (l == null) {
+					map.put(seg, l = new ArrayList<Object>());
+				}
+
+				l.add(path.removeFirstSegments(1));
+				l.add(file);
+			}
+		}
+
+		for (String seg : map.keySet()) {
+			out.add(new TreePathFromChangeSet(parent, seg, map.get(seg)));
+		}
+
+		return out.toArray(new Object[out.size()]);
+	}
+
+	private Object[] collectCompressedTree(Object parent, FileFromChangeSet[] files) {
+		HashMap<IPath, List<FileFromChangeSet>> map = new HashMap<IPath, List<FileFromChangeSet>>();
+		List<Object> out = new ArrayList<Object>();
+
+		for (FileFromChangeSet file : files) {
+			IPath path;
+			if(file.getPath() == null) {
+				path = Path.EMPTY;
+			} else {
+				path = file.getPath().removeLastSegments(1);
+			}
+			List<FileFromChangeSet> l = map.get(path);
+
+			if (l == null) {
+				map.put(path, l = new ArrayList<FileFromChangeSet>());
+			}
+
+			l.add(file);
+		}
+
+		for (IPath path : map.keySet()) {
+			final List<FileFromChangeSet> data = map.get(path);
+			if (path.isEmpty()) {
+				out.addAll(data);
+			} else {
+				out.add(new CompressedTreePathFromChangeSet(parent, path.toString(), data));
+			}
+		}
+
+		return out.toArray(new Object[out.size()]);
 	}
 
 	private void ensureRootsAdded() {
@@ -282,29 +414,30 @@ public class HgChangeSetContentProvider extends SynchronizationContentProvider /
 			return new ResourceTraversal[] { new ResourceTraversal(resources, IResource.DEPTH_ZERO, IResource.NONE) };
 		}
 		return new ResourceTraversal[0];
-		// return super.getTraversals(context, object);
 	}
 
 	/**
-	 * Return whether the given element has children in the given
-	 * context. The children may or may not exist locally.
-	 * By default, this method returns true if the traversals for
-	 * the element contain any diffs. This could result in false
-	 * positives. Subclasses can override to provide a more
-	 * efficient or precise answer.
-	 * @param element a model element.
-	 * @return whether the given element has children in the given context
+	 * @see org.eclipse.team.ui.mapping.SynchronizationContentProvider#hasChildrenInContext(org.eclipse.team.core.mapping.ISynchronizationContext,
+	 *      java.lang.Object)
 	 */
 	@Override
 	protected boolean hasChildrenInContext(ISynchronizationContext context, Object element) {
-		return internalHasChildren(element);
-//		ResourceTraversal[] traversals = getTraversals(context, element);
-//		if (traversals == null) {
-//			return true;
-//		}
-//		return context.getDiffTree().getDiffs(traversals).length > 0;
+		if (element instanceof ChangeSet) {
+			return hasChildren((ChangeSet) element);
+		} else if (element instanceof ChangesetGroup) {
+			ChangesetGroup group = (ChangesetGroup) element;
+			Direction direction = group.getDirection();
+			if (isOutgoingVisible()	&& isOutgoing(direction)) {
+				return true;
+			}
+			if(isIncomingVisible() && direction == Direction.INCOMING){
+				return true;
+			}
+		} else if (element instanceof PathFromChangeSet) {
+			return true;
+		}
+		return false;
 	}
-
 
 	private boolean isVisibleInMode(ChangeSet cs) {
 		int mode = getConfiguration().getMode();
@@ -330,47 +463,18 @@ public class HgChangeSetContentProvider extends SynchronizationContentProvider /
 	}
 
 	private boolean hasConflicts(ChangeSet cs) {
-		// XXX implement conflicts display
-//		if (cs instanceof DiffChangeSet) {
-//			DiffChangeSet dcs = (DiffChangeSet) cs;
-//			return dcs.getDiffTree().countFor(IThreeWayDiff.CONFLICTING, IThreeWayDiff.DIRECTION_MASK) > 0;
-//		}
+		// Conflict mode not meaningful in a DVCS
 		return false;
 	}
 
 	private boolean containsConflicts(ChangeSet cs) {
-		// XXX implement conflicts display
-//		if (cs instanceof DiffChangeSet) {
-//			DiffChangeSet dcs = (DiffChangeSet) cs;
-//			return dcs.getDiffTree().hasMatchingDiffs(ResourcesPlugin.getWorkspace().getRoot().getFullPath(), ResourceModelLabelProvider.CONFLICT_FILTER);
-//		}
-		return false;
-	}
-
-
-	private boolean internalHasChildren(Object first) {
-		if (first instanceof ChangeSet) {
-			return hasChildren((ChangeSet) first);
-		}
-		if (first instanceof ChangesetGroup) {
-			ChangesetGroup group = (ChangesetGroup) first;
-			Direction direction = group.getDirection();
-			if (isOutgoingVisible()	&& isOutgoing(direction)) {
-				return true;
-			}
-			if(isIncomingVisible() && direction == Direction.INCOMING){
-				return true;
-			}
-		}
+		// Conflict mode not meaningful in a DVCS
 		return false;
 	}
 
 	private boolean hasChildren(ChangeSet changeset) {
-		return isVisibleInMode(changeset) && hasChildrenInContext(changeset);
-	}
-
-	private boolean hasChildrenInContext(ChangeSet set) {
-		return !set.getFiles().isEmpty() || set.getChangesetFiles().length > 0;
+		return isVisibleInMode(changeset)
+				&& (!changeset.getFiles().isEmpty() || changeset.getChangesetFiles().length > 0);
 	}
 
 	/**
@@ -427,6 +531,7 @@ public class HgChangeSetContentProvider extends SynchronizationContentProvider /
 			csCollector.removeListener(collectorListener);
 			csCollector.dispose();
 		}
+		MercurialEclipsePlugin.getDefault().getPreferenceStore().removePropertyChangeListener(preferenceListener);
 		uncommitted.removeListener(uncommittedSetListener);
 		STATUS_CACHE.deleteObserver(uncommitted);
 		uncommitted.dispose();
@@ -489,7 +594,12 @@ public class HgChangeSetContentProvider extends SynchronizationContentProvider /
 				continue;
 			}
 			TreeItem parentItem = treeItem.getParentItem();
-			if(parentItem != null){
+
+			while (parentItem != null && !(parentItem.getData() instanceof ChangeSet)) {
+				parentItem = parentItem.getParentItem();
+			}
+
+			if (parentItem != null) {
 				return (ChangeSet) parentItem.getData();
 			}
 		}
@@ -544,5 +654,123 @@ public class HgChangeSetContentProvider extends SynchronizationContentProvider /
 		return builder.toString();
 	}
 
+	// inner types
 
+	public abstract static class PathFromChangeSet {
+
+		private final Object parent;
+
+		private final String display;
+
+		protected IResource resource;
+
+		/**
+		 * Constructor for tree mode
+		 *
+		 * @param seg
+		 *            The leading segment
+		 */
+		protected PathFromChangeSet(Object prnt, String seg) {
+			parent = prnt;
+			display = seg;
+		}
+
+		@Override
+		public String toString() {
+			return display;
+		}
+
+		/**
+		 * @see java.lang.Object#equals(java.lang.Object)
+		 */
+		@Override
+		public boolean equals(Object other) {
+			if (other instanceof PathFromChangeSet) {
+				PathFromChangeSet o = (PathFromChangeSet)other;
+
+				if (o.display.equals(display) && o.parent.equals(parent))
+				{
+					if (o.resource == null) {
+						return resource == null;
+					}
+					return o.resource.equals(resource);
+				}
+			}
+			return false;
+		}
+
+		/**
+		 * @see java.lang.Object#hashCode()
+		 */
+		@Override
+		public int hashCode() {
+			return 73 ^ display.hashCode() + parent.hashCode();
+		}
+
+		public final Object getAdapter(@SuppressWarnings("rawtypes") Class adapter) {
+			if (IResource.class.equals(adapter)) {
+				return resource;
+			}
+			return null;
+		}
+
+		public abstract Object[] getChildren();
+	}
+
+	private class CompressedTreePathFromChangeSet extends PathFromChangeSet implements IAdaptable {
+
+		protected final List<FileFromChangeSet> data;
+
+		public CompressedTreePathFromChangeSet(Object prnt, String seg, List<FileFromChangeSet> data) {
+			super(prnt, seg);
+			this.data = data;
+
+			if (data != null && data.size() > 0) {
+				IFile file = data.get(0).getFile();
+				this.resource = file != null? file.getParent() : null;
+			}
+		}
+
+		@Override
+		public Object[] getChildren() {
+			return data.toArray(new FileFromChangeSet[data.size()]);
+		}
+	}
+
+	private class TreePathFromChangeSet extends PathFromChangeSet implements IAdaptable {
+
+		protected final List<Object> data;
+
+		public TreePathFromChangeSet(Object prnt, String seg, List<Object> data) {
+			super(prnt, seg);
+			this.data = data;
+			this.resource = getResource();
+		}
+
+		@Override
+		public Object[] getChildren() {
+			return collectTree(HgChangeSetContentProvider.this, data);
+		}
+
+		private IResource getResource() {
+			IResource result = null;
+			if (data.size() > 1) {
+				// first object must be an IPath
+				Object o1 = data.get(0);
+				// and second must be FileFromChangeSet
+				Object o2 = data.get(1);
+				if (o1 instanceof IPath && o2 instanceof FileFromChangeSet) {
+					FileFromChangeSet fcs = (FileFromChangeSet) o2;
+					IResource childResource = ResourceUtils.getResource(fcs);
+					if(childResource != null) {
+						IPath folderPath = ResourceUtils.getPath(childResource).removeLastSegments(
+								((IPath) o1).segmentCount() + 1);
+						return ResourcesPlugin.getWorkspace().getRoot().getContainerForLocation(
+								folderPath);
+					}
+				}
+			}
+			return result;
+		}
+	}
 }

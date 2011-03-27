@@ -7,7 +7,7 @@
  *
  * Contributors:
  * bastian	implementation
- *     Andrei Loskutov (Intland) - bug fixes
+ *     Andrei Loskutov - bug fixes
  *******************************************************************************/
 package com.vectrace.MercurialEclipse.operations;
 
@@ -72,7 +72,9 @@ public class CloneOperation extends HgOperation {
 		this.svn = svn;
 	}
 
-	@Override
+	/**
+	 * @see org.eclipse.jface.operation.IRunnableWithProgress#run(org.eclipse.core.runtime.IProgressMonitor)
+	 */
 	public void run(final IProgressMonitor m) throws InvocationTargetException,
 			InterruptedException {
 

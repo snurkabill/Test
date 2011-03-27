@@ -11,7 +11,7 @@
  *     Ulrich Etter, etteru@ethz.ch - 47136 Search view should show match objects
  *     Roman Fuchs, fuchsro@ethz.ch - 47136 Search view should show match objects
  *     Bastian Doetsch - adaptation for MercurialEclipse
- *     Andrei Loskutov (Intland) - bug fixes
+ *     Andrei Loskutov - bug fixes
  *     Philip Graf - Fixed bugs which FindBugs found
  *******************************************************************************/
 package com.vectrace.MercurialEclipse.search;
@@ -356,7 +356,8 @@ public class MercurialTextSearchPage extends DialogPage implements ISearchPage {
 	final void updateOKStatus() {
 		boolean regexStatus = validateRegex();
 		boolean hasFilePattern = fExtensions.getText().length() > 0;
-		getContainer().setPerformActionEnabled(regexStatus && hasFilePattern);
+		boolean hasTextPattern = fPattern.getText().length() > 0;
+		getContainer().setPerformActionEnabled(regexStatus && hasFilePattern && hasTextPattern);
 	}
 
 	// ---- Widget creation ------------------------------------------------

@@ -6,7 +6,7 @@
  * http://www.eclipse.org/legal/epl-v10.html
  *
  * Contributors:
- *     Andrei Loskutov (Intland) - implementation
+ *     Andrei Loskutov          - implementation
  *******************************************************************************/
 package com.vectrace.MercurialEclipse.synchronize.actions;
 
@@ -101,9 +101,13 @@ public class OpenAction extends Action {
 					"Diff for files external to Eclipse workspace is not supported yet!");
 			return;
 		}
+		IFile sourceFile = fcs.getCopySourceFile();
+		final IFile parentFile = sourceFile != null? sourceFile : file;
+
 		if(cs instanceof WorkingChangeSet){
 			// default: compare local file against parent changeset
 			CompareAction compareAction = new CompareAction(file);
+			compareAction.setUncommittedCompare(true);
 			compareAction.setSynchronizePageConfiguration(configuration);
 			compareAction.run(this);
 			return;
@@ -132,9 +136,9 @@ public class OpenAction extends Action {
 					if(cs.getRevision().getRevision() == 0 || parents.length == 0){
 						parentRev = new NullRevision(file, cs);
 					} else {
-						parentRev = new MercurialRevisionStorage(file, parents[0]);
+						parentRev = new MercurialRevisionStorage(parentFile, parents[0]);
 					}
-					CompareUtils.openEditor(thisRev, parentRev, false, false, configuration);
+					CompareUtils.openEditor(thisRev, parentRev, false, configuration);
 				} else {
 					// incoming
 					MercurialRevisionStorage remoteRev = new MercurialRevisionStorage(
@@ -163,9 +167,9 @@ public class OpenAction extends Action {
 							parentCs = new ParentChangeSet(parentId, cs);
 						}
 						parentRev = new MercurialRevisionStorage(
-								file, parentCs.getChangesetIndex(), parentCs.getChangeset(), parentCs);
+								parentFile, parentCs.getChangesetIndex(), parentCs.getChangeset(), parentCs);
 					}
-					CompareUtils.openEditor(remoteRev, parentRev, false, false, configuration);
+					CompareUtils.openEditor(remoteRev, parentRev, false, configuration);
 					// the line below compares the remote changeset with the local copy.
 					// it was replaced with the code above to fix the issue 10364
 					// CompareUtils.openEditor(file, cs, true, true);

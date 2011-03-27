@@ -10,8 +10,6 @@
  *******************************************************************************/
 package com.vectrace.MercurialEclipse.commands;
 
-import java.io.File;
-
 import com.vectrace.MercurialEclipse.exception.HgException;
 
 /**
@@ -19,22 +17,15 @@ import com.vectrace.MercurialEclipse.exception.HgException;
  *
  */
 public class HgConfigClient extends AbstractClient {
-	public static String getHgConfigLine(File dir, String key)
+	public static String getHgConfigLine(String key)
 			throws HgException {
-		String[] lines = getHgConfigLines(dir, key);
+		String[] lines = getHgConfigLines(key);
 		return lines[0];
 	}
 
-	/**
-	 * @param dir
-	 * @param key
-	 * @return
-	 * @throws HgException
-	 */
-	public static String[] getHgConfigLines(File dir, String key)
+	private static String[] getHgConfigLines(String key)
 			throws HgException {
-		AbstractShellCommand cmd = new HgCommand("showconfig", getWorkingDirectory(dir), //$NON-NLS-1$
-				false);
+		AbstractShellCommand cmd = new RootlessHgCommand("showconfig", "Getting configuration information");
 		cmd.addOptions(key);
 		String[] lines = cmd.executeToString().split("\n"); //$NON-NLS-1$
 		return lines;

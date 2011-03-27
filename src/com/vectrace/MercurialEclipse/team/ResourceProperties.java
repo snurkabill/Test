@@ -8,13 +8,15 @@
  * Contributors:
  *     Jerome Negre - implementation
  *     Bastian Doetsch - javadocs and new qualified name MERGE_COMMIT_OFFERED
- *     Andrei Loskutov (Intland) - bug fixes
+ *     Andrei Loskutov - bug fixes
  *******************************************************************************/
 package com.vectrace.MercurialEclipse.team;
 
+import org.eclipse.core.resources.IResource;
 import org.eclipse.core.runtime.QualifiedName;
 
 import com.vectrace.MercurialEclipse.MercurialEclipsePlugin;
+import com.vectrace.MercurialEclipse.menu.CommitMergeHandler;
 import com.vectrace.MercurialEclipse.views.MergeView;
 
 /**
@@ -31,21 +33,9 @@ public final class ResourceProperties {
 	}
 
 	/**
-	 * Qualified name for a persistent property that signifies that a project is
-	 * in merge state.
-	 *
-	 * @see MergeHandler
-	 * @see MercurialStatusCache
-	 * @see CommitMergeHandler
-	 * @see ResourceDecorator
-	 */
-	public static final QualifiedName MERGING = new QualifiedName(
-			MercurialEclipsePlugin.ID, "merging"); //$NON-NLS-1$
-
-	/**
 	 * Qualified name for a session property on a project that signifies that
-	 * the commit dialog has already been shown, so the dialog doesn't pop up
-	 * automatically anymore.
+	 * the commit dialog has already been shown by the merge view for either
+	 * a merge or rebase.
 	 *
 	 * @see MergeView
 	 * @see CommitMergeHandler

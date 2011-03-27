@@ -7,10 +7,11 @@
  *
  * Contributors:
  *     Bastian Doetsch           - implementation (with lots of stuff pulled up from HgCommand)
- *     Andrei Loskutov (Intland) - bug fixes
+ *     Andrei Loskutov           - bug fixes
  *     Adam Berkes (Intland)     - bug fixes/restructure
  *     Zsolt Koppany (Intland)   - enhancements
  *     Philip Graf               - use default timeout from preferences
+ *     John Peberdy              - refactoring
  *******************************************************************************/
 package com.vectrace.MercurialEclipse.commands;
 
@@ -28,6 +29,7 @@ import java.io.UnsupportedEncodingException;
 import java.nio.charset.Charset;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -37,6 +39,7 @@ import org.eclipse.core.runtime.Assert;
 import org.eclipse.core.runtime.IPath;
 import org.eclipse.core.runtime.IProgressMonitor;
 import org.eclipse.core.runtime.IStatus;
+import org.eclipse.core.runtime.Platform;
 import org.eclipse.core.runtime.Status;
 import org.eclipse.core.runtime.jobs.ISchedulingRule;
 import org.eclipse.core.runtime.jobs.Job;
@@ -44,10 +47,10 @@ import org.eclipse.swt.widgets.Display;
 import org.eclipse.ui.PlatformUI;
 
 import com.vectrace.MercurialEclipse.MercurialEclipsePlugin;
-import com.vectrace.MercurialEclipse.exception.HgCoreException;
 import com.vectrace.MercurialEclipse.exception.HgException;
 import com.vectrace.MercurialEclipse.model.HgRoot;
 import com.vectrace.MercurialEclipse.preferences.MercurialPreferenceConstants;
+import com.vectrace.MercurialEclipse.utils.ResourceUtils;
 
 /**
  * @author bastian
@@ -55,6 +58,11 @@ import com.vectrace.MercurialEclipse.preferences.MercurialPreferenceConstants;
 public abstract class AbstractShellCommand extends AbstractClient {
 
 	private static final int BUFFER_SIZE = 32768;
+
+	/**
+	 * File encoding to use. If not specified falls back to {@link HgRoot}'s encoding.
+	 */
+	private String encoding = null;
 
 	/**
 	 * See http://msdn.microsoft.com/en-us/library/ms682425(VS.85).aspx The maximum command line
@@ -226,10 +234,25 @@ public abstract class AbstractShellCommand extends AbstractClient {
 	}
 
 	protected String command;
-	protected List<String> commands;
-	protected boolean escapeFiles;
+
+	/**
+	 * Calculated commands. See {@link #getCommands()}
+	 */
+	private List<String> commands;
+
+	/**
+	 * Whether files should be preceded by "--" on the command line.
+	 * @see #files
+	 */
+	private final boolean escapeFiles;
+
 	protected List<String> options;
-	protected File workingDir;
+
+	/**
+	 * The working directory. May be null for default working directory.
+	 */
+	protected final File workingDir;
+
 	protected final List<String> files;
 	private String timeoutConstant;
 	private ProzessWrapper processWrapper;
@@ -238,27 +261,52 @@ public abstract class AbstractShellCommand extends AbstractClient {
 	private final boolean isDebugging;
 	private final boolean debugExecTime;
 
-	private HgRoot hgRoot;
+	/**
+	 * Though this command might not invoke hg, it might get encoding information from it. May be
+	 * null.
+	 */
+	protected final HgRoot hgRoot;
 
 	private DefaultExecutionRule executionRule;
 
-	protected AbstractShellCommand() {
+	/**
+	 * Human readable name for this operation
+	 */
+	private final String uiName;
+
+	// constructors
+
+	/**
+	 * @param uiName
+	 *            Human readable name for this command
+	 * @param hgRoot
+	 *            Though this command might not invoke hg, it might get encoding information from
+	 *            it. May be null.
+	 */
+	protected AbstractShellCommand(String uiName, HgRoot hgRoot, File workingDir, boolean escapeFiles) {
 		super();
+		this.hgRoot = hgRoot;
+		this.workingDir = workingDir;
+		this.escapeFiles = escapeFiles;
+		this.uiName = uiName;
 		options = new ArrayList<String>();
 		files = new ArrayList<String>();
 		showOnConsole = true;
-		isDebugging = MercurialEclipsePlugin.getDefault().isDebugging();
+		isDebugging = Boolean.valueOf(Platform.getDebugOption(MercurialEclipsePlugin.ID + "/debug/commands")).booleanValue();
 		debugMode = Boolean.valueOf(HgClients.getPreference(PREF_CONSOLE_DEBUG, "false")).booleanValue(); //$NON-NLS-1$
 		debugExecTime = Boolean.valueOf(HgClients.getPreference(PREF_CONSOLE_DEBUG_TIME, "false")).booleanValue(); //$NON-NLS-1$
 		timeoutConstant = MercurialPreferenceConstants.DEFAULT_TIMEOUT;
+
+		Assert.isNotNull(uiName);
 	}
 
-	protected AbstractShellCommand(List<String> commands, File workingDir, boolean escapeFiles) {
-		this();
-		this.escapeFiles = escapeFiles;
-		this.workingDir = workingDir;
+	protected AbstractShellCommand(String uiName, HgRoot hgRoot, List<String> commands, File workingDir, boolean escapeFiles) {
+		this(uiName, hgRoot, workingDir, escapeFiles);
+
 		this.commands = commands;
 	}
+
+	// operations
 
 	/**
 	 * Per default, a non-exclusive rule is created
@@ -282,12 +330,7 @@ public abstract class AbstractShellCommand extends AbstractClient {
 	}
 
 	public byte[] executeToBytes() throws HgException {
-		int timeout;
-		if (timeoutConstant == null) {
-			timeoutConstant = MercurialPreferenceConstants.DEFAULT_TIMEOUT;
-		}
-		timeout = HgClients.getTimeOut(timeoutConstant);
-		return executeToBytes(timeout);
+		return executeToBytes(getTimeOut());
 	}
 
 	public byte[] executeToBytes(int timeout) throws HgException {
@@ -308,10 +351,8 @@ public abstract class AbstractShellCommand extends AbstractClient {
 		return null;
 	}
 
-	protected boolean executeToStream(OutputStream output, int timeout, boolean expectPositiveReturnValue)
+	protected final boolean executeToStream(OutputStream output, int timeout, boolean expectPositiveReturnValue)
 			throws HgException {
-
-		hgRoot = setupHgRoot();
 
 		List<String> cmd = getCommands();
 
@@ -321,7 +362,7 @@ public abstract class AbstractShellCommand extends AbstractClient {
 
 		// I see sometimes that hg has errors if it runs in parallel
 		// using a job with exclusive rule here serializes all hg access from plugin.
-		processWrapper = createProcessWrapper(output, jobName, builder);
+		processWrapper = createProcessWrapper(output, uiName, builder);
 
 		logConsoleCommandInvoked(jobName);
 
@@ -395,6 +436,9 @@ public abstract class AbstractShellCommand extends AbstractClient {
 			env.put("HGENCODING", charset.name()); //$NON-NLS-1$
 		}
 
+		// removing to allow using eclipse merge editor
+		builder.environment().remove("HGMERGE");
+
 		builder.redirectErrorStream(true); // makes my life easier
 		if (workingDir != null) {
 			builder.directory(workingDir);
@@ -416,18 +460,6 @@ public abstract class AbstractShellCommand extends AbstractClient {
 		cmd.add(1, "ui.fallbackencoding=" + hgRoot.getFallbackencoding().name()); //$NON-NLS-1$
 		cmd.add(1, "--config"); //$NON-NLS-1$
 		return charset;
-	}
-
-	private HgRoot setupHgRoot() {
-		if (workingDir == null) {
-			return null;
-		}
-		try {
-			return HgClients.getHgRoot(workingDir);
-		} catch (HgCoreException e) {
-			// no hg root found
-			return null;
-		}
 	}
 
 	private void waitForConsumer(int timeout) throws InterruptedException {
@@ -476,8 +508,7 @@ public abstract class AbstractShellCommand extends AbstractClient {
 		} else if (output instanceof ByteArrayOutputStream) {
 			ByteArrayOutputStream baos = (ByteArrayOutputStream) output;
 			try {
-				String encoding = getEncoding();
-				msg = baos.toString(encoding);
+				msg = baos.toString(getEncoding());
 			} catch (UnsupportedEncodingException e) {
 				logError(e);
 				msg = baos.toString();
@@ -490,20 +521,31 @@ public abstract class AbstractShellCommand extends AbstractClient {
 	}
 
 	/**
+	 * Sets the command output charset if the charset is available in the VM.
+	 */
+	public void setEncoding(String charset) {
+		encoding = charset;
+	}
+	/**
 	 * @return never returns null
 	 */
 	private String getEncoding() {
-		String encoding = null;
-		if (hgRoot != null) {
-			encoding = hgRoot.getEncoding().name();
-		} else {
-			encoding = getDefaultEncoding().name();
+		if(encoding == null){
+			if (hgRoot != null) {
+				encoding = hgRoot.getEncoding().name();
+			} else {
+				encoding = getDefaultEncoding().name();
+			}
 		}
 		return encoding;
 	}
 
 	public String executeToString() throws HgException {
-		byte[] bytes = executeToBytes();
+		return executeToString(true);
+	}
+
+	public String executeToString(boolean expectPositiveReturnValue) throws HgException {
+		byte[] bytes = executeToBytes(getTimeOut(), expectPositiveReturnValue);
 		if (bytes != null && bytes.length > 0) {
 			try {
 				return new String(bytes, getEncoding());
@@ -545,7 +587,7 @@ public abstract class AbstractShellCommand extends AbstractClient {
 		}
 	}
 
-	protected List<String> getCommands() {
+	private List<String> getCommands() {
 		if (commands != null) {
 			return commands;
 		}
@@ -557,31 +599,70 @@ public abstract class AbstractShellCommand extends AbstractClient {
 			result.add("--"); //$NON-NLS-1$
 		}
 		result.addAll(files);
+
+		customizeCommands(result);
+
 		// TODO check that length <= MAX_PARAMS
-		return result;
+		return commands = result;
+	}
+
+	/**
+	 * Can be used after execution to get a list of paths needed to be updated
+	 * @return a copy of file paths affected by this command, if any. Never returns null,
+	 * but may return empty list. The elements of the set are absolute file paths.
+	 */
+	public Set<String> getAffectedFiles(){
+		Set<String> fileSet = new HashSet<String>();
+		fileSet.addAll(files);
+		return fileSet;
+	}
+
+	/**
+	 * Template method to customize the commands to execute
+	 * @param cmd The list of commands to execute.
+	 */
+	protected void customizeCommands(List<String> cmd) {
 	}
 
 	protected abstract String getExecutable();
 
-	public void addFiles(String... myFiles) {
-		for (String file : myFiles) {
-			files.add(file);
+	/**
+	 * Add a file. Need not be canonical, but will try transform to canonical.
+	 *
+	 * @param myfiles The files to add
+	 */
+	public void addFiles(Collection<File> myfiles) {
+		for (File file : myfiles) {
+			addFile(file);
 		}
 	}
 
-	public void addFiles(Collection<String> myFiles) {
-		files.addAll(myFiles);
+	/**
+	 * Add a file. Need not be canonical, but will try transform to canonical.
+	 *
+	 * @param file The file to add
+	 */
+	public void addFile(File file) {
+		String sfile;
+		try {
+			sfile = file.getCanonicalPath();
+		} catch (IOException e) {
+			MercurialEclipsePlugin.logError(e);
+			sfile = file.getAbsolutePath();
+		}
+
+		files.add(sfile);
 	}
 
 	public void addFiles(IResource... resources) {
 		for (IResource resource : resources) {
-			files.add(resource.getLocation().toOSString());
+			addResource(resource);
 		}
 	}
 
 	public void addFiles(List<? extends IResource> resources) {
 		for (IResource resource : resources) {
-			files.add(resource.getLocation().toOSString());
+			addResource(resource);
 		}
 	}
 
@@ -591,14 +672,18 @@ public abstract class AbstractShellCommand extends AbstractClient {
 	public void addFilesWithoutFolders(List<? extends IResource> resources) {
 		for (IResource resource : resources) {
 			if (resource.getType() == IResource.FILE) {
-				files.add(resource.getLocation().toOSString());
+				addResource(resource);
 			}
 		}
 	}
 
-	public void addFiles(Set<IPath> paths) {
-		for (IPath path : paths) {
-			files.add(path.toOSString());
+	private void addResource(IResource resource) {
+		// TODO This can be done faster without any file system calls by saving uncanonicalized hg
+		// root locations (?).
+		// files.add(resource.getLocation().toOSString());
+		IPath location = ResourceUtils.getPath(resource);
+		if(!location.isEmpty()) {
+			addFile(location.toFile());
 		}
 	}
 
@@ -695,5 +780,14 @@ public abstract class AbstractShellCommand extends AbstractClient {
 		}
 		builder.append("]");
 		return builder.toString();
+	}
+
+	private int getTimeOut() {
+		int timeout;
+		if (timeoutConstant == null) {
+			timeoutConstant = MercurialPreferenceConstants.DEFAULT_TIMEOUT;
+		}
+		timeout = HgClients.getTimeOut(timeoutConstant);
+		return timeout;
 	}
 }

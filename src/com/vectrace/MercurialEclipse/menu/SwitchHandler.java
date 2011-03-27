@@ -7,7 +7,7 @@
  *
  * Contributors:
  *     Jerome Negre - implementation
- *     Andrei Loskutov (Intland) - bug fixes
+ *     Andrei Loskutov - bug fixes
  *******************************************************************************/
 package com.vectrace.MercurialEclipse.menu;
 
@@ -35,7 +35,7 @@ public class SwitchHandler extends RootHandler {
 				Messages.getString("SwitchHandler.switchTo"), hgRoot); //$NON-NLS-1$
 		int result = dialog.open();
 		if (result == IDialogConstants.OK_ID) {
-			new UpdateJob(dialog.getRevision(), true, hgRoot).schedule();
+			new UpdateJob(dialog.getRevision(), true, hgRoot, false).schedule();
 		}
 	}
 

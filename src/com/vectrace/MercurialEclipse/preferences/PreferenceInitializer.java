@@ -9,7 +9,7 @@
  *     VecTrace (Zingo Andersen) - implementation
  *     Jérôme Nègre              - adding label decorator section
  *     Stefan C                  - Code cleanup
- *     Andrei Loskutov (Intland) - bug fixes
+ *     Andrei Loskutov           - bug fixes
  *     Zsolt Koppany (intland)   - bug fixes
  *     Philip Graf               - use default timeout from preferences
  *******************************************************************************/
@@ -21,6 +21,7 @@ import static com.vectrace.MercurialEclipse.preferences.MercurialPreferenceConst
 import java.io.File;
 import java.io.IOException;
 import java.net.URL;
+import java.util.StringTokenizer;
 
 import org.eclipse.core.runtime.FileLocator;
 import org.eclipse.core.runtime.IPath;
@@ -30,15 +31,18 @@ import org.eclipse.core.runtime.Path;
 import org.eclipse.core.runtime.Status;
 import org.eclipse.core.runtime.jobs.Job;
 import org.eclipse.core.runtime.preferences.AbstractPreferenceInitializer;
+import org.eclipse.jface.dialogs.MessageDialogWithToggle;
 import org.eclipse.jface.preference.IPreferenceStore;
 
 import com.vectrace.MercurialEclipse.MercurialEclipsePlugin;
+import com.vectrace.MercurialEclipse.synchronize.PresentationMode;
 import com.vectrace.MercurialEclipse.team.MercurialUtilities;
 
 /**
  * Class used to initialize default preference values.
  */
 public class PreferenceInitializer extends AbstractPreferenceInitializer {
+	private static final boolean IS_WINDOWS = MercurialUtilities.isWindows();
 
 	@Override
 	public void initializeDefaultPreferences() {
@@ -52,17 +56,23 @@ public class PreferenceInitializer extends AbstractPreferenceInitializer {
 
 		store.setDefault(PREF_AUTO_SHARE_PROJECTS, true);
 
+		store.setDefault(PREF_SYNC_ALL_PROJECTS_IN_REPO, true);
+		store.setDefault(PREF_SYNC_ONLY_CURRENT_BRANCH, true);
+		store.setDefault(PREF_SYNC_PRESENTATION_MODE, PresentationMode.COMPRESSED_TREE.name());
+
+		// currently this reduces performance 2x => so disable per default
+		store.setDefault(PREF_ENABLE_SUBREPO_SUPPORT, false);
+
 		// "Highest" importance should be default, like "merge conflict"
 		// when having 2 different statuses in a folder it should have the more important one
 		store.setDefault(LABELDECORATOR_LOGIC, LABELDECORATOR_LOGIC_HB);
 
-		store.setDefault(RESOURCE_DECORATOR_COMPUTE_DEEP_STATUS, true);
 		store.setDefault(RESOURCE_DECORATOR_SHOW_CHANGESET, false);
 		store.setDefault(RESOURCE_DECORATOR_SHOW_INCOMING_CHANGESET, false);
 
 		store.setDefault(SYNC_COMPUTE_FULL_REMOTE_FILE_STATUS, true);
 
-		store.setDefault(LOG_BATCH_SIZE, 200);
+		store.setDefault(LOG_BATCH_SIZE, 500);
 		store.setDefault(STATUS_BATCH_SIZE, 10);
 		store.setDefault(COMMIT_MESSAGE_BATCH_SIZE, 10);
 		store.setDefault(ENABLE_FULL_GLOG, true);
@@ -81,11 +91,13 @@ public class PreferenceInitializer extends AbstractPreferenceInitializer {
 		store.setDefault(PREF_DECORATE_WITH_COLORS, true);
 		store.setDefault(PREF_SHOW_COMMENTS, true);
 		store.setDefault(PREF_SHOW_PATHS, true);
-		store.setDefault(PREF_SHOW_ALL_TAGS, true);
+		store.setDefault(PREF_SHOW_DIFFS, true);
+		store.setDefault(PREF_SHOW_ALL_TAGS, false);
+		store.setDefault(PREF_SHOW_GOTO_TEXT, true);
 		store.setDefault(PREF_AFFECTED_PATHS_LAYOUT, LAYOUT_HORIZONTAL);
 		store.setDefault(PREF_SIGCHECK_IN_HISTORY, false);
 
-		store.setDefault(PREF_HISTORY_MERGE_CHANGESET_BACKGROUND, "222,222,222");
+		store.setDefault(PREF_HISTORY_MERGE_CHANGESET_BACKGROUND, "255,210,210");
 		store.setDefault(PREF_HISTORY_MERGE_CHANGESET_FOREGROUND, "0,0,0");
 
 
@@ -121,7 +133,58 @@ public class PreferenceInitializer extends AbstractPreferenceInitializer {
 			job.setSystem(true);
 			job.schedule();
 		}
-		store.setDefault(PREF_USE_MERCURIAL_USERNAME, true);
+		store.setDefault(PREF_USE_MERCURIAL_USERNAME, false);
+		store.setDefault(PREF_DEFAULT_REBASE_KEEP_BRANCHES, false);
+		store.setDefault(PREF_USE_EXTERNAL_MERGE, false);
+		store.setDefault(PREF_DEFAULT_TRANSPLANT_FROM_LOCAL_BRANCHES, false);
+		store.setDefault(PREF_CLONE_UNCOMPRESSED, false);
+		if(MercurialEclipsePlugin.DISABLED_OPTIONS.contains("--new-branch")) {
+			store.setDefault(PREF_PUSH_NEW_BRANCH, false);
+			store.setValue(PREF_PUSH_NEW_BRANCH, false);
+		} else {
+			store.setDefault(PREF_PUSH_NEW_BRANCH, true);
+		}
+
+		store.setDefault(PREF_PRESELECT_UNTRACKED_IN_COMMIT_DIALOG, false);
+
+		store.setDefault(PREF_SHOW_PULL_WARNING_DIALOG, MessageDialogWithToggle.PROMPT);
+		store.setDefault(PREF_SHOW_MULTIPLE_PROJECTS_DIALOG, MessageDialogWithToggle.PROMPT);
+	}
+
+	private File checkForPossibleHgExecutables() {
+		File hgExecutable = null;
+
+		String envPath = System.getenv("PATH");
+
+		if (envPath != null) {
+			String pathSeparator = String.valueOf(File.pathSeparatorChar);
+			String execSuffix = IS_WINDOWS ? ".exe" : "";
+			for (StringTokenizer st = new StringTokenizer(envPath, pathSeparator, false); st.hasMoreElements(); ) {
+				String execPath = st.nextToken() + "/hg" + execSuffix;
+				File file = new File(execPath);
+				if (file.isFile()) {
+					hgExecutable = file;
+					break;
+				}
+			}
+		}
+
+		if (hgExecutable == null && !IS_WINDOWS) {
+			String extraPath[] = {
+				"/usr/bin/hg",
+				"/usr/local/bin/hg",	// default on MacOS
+				"/opt/local/bin/hg",	// if installed via MacPorts
+			};
+
+			for (String fileName : extraPath) {
+				File file = new File(fileName);
+				if (file.isFile()) {
+					hgExecutable = file;
+					break;
+				}
+			}
+		}
+		return hgExecutable;
 	}
 
 	private void detectAndSetHgExecutable(IPreferenceStore store) {
@@ -130,7 +193,10 @@ public class PreferenceInitializer extends AbstractPreferenceInitializer {
 		File hgExecutable = getIntegratedHgExecutable();
 		String defaultExecPath;
 		String existingValue = store.getString(MERCURIAL_EXECUTABLE);
-		if(hgExecutable == null) {
+		if (hgExecutable == null) {
+			hgExecutable = checkForPossibleHgExecutables();
+		}
+		if (hgExecutable == null) {
 			defaultExecPath = "hg";
 			if(existingValue != null && !new File(existingValue).isFile()){
 				store.setValue(MERCURIAL_EXECUTABLE, defaultExecPath);
@@ -148,13 +214,12 @@ public class PreferenceInitializer extends AbstractPreferenceInitializer {
 	/**
 	 * @return an full absolute path to the embedded hg executable from the (fragment)
 	 * plugin. This path is guaranteed to point to an <b>existing</b> file. Returns null
-	 * if the file cann ot be found, does not exists or is not a file at all.
+	 * if the file cannot be found, does not exists or is not a file at all.
 	 */
 	public static File getIntegratedHgExecutable(){
-		boolean isWindows = MercurialUtilities.isWindows();
-		IPath path = isWindows ? new Path("$os$/hg.exe") : new Path("$os$/hg");
+		IPath path = IS_WINDOWS ? new Path("$os$/hg.exe") : new Path("$os$/hg");
 		URL url = FileLocator.find(MercurialEclipsePlugin.getDefault().getBundle(), path, null);
-		if(url == null){
+		if(url == null) {
 			return null;
 		}
 		try {

@@ -7,21 +7,32 @@
  *
  * Contributors:
  *     Jerome Negre - implementation
- *     Andrei Loskutov (Intland) - bug fixes
+ *     Andrei Loskutov - bug fixes
  *******************************************************************************/
 package com.vectrace.MercurialEclipse.menu;
 
 import org.eclipse.jface.dialogs.MessageDialog;
 import org.eclipse.swt.widgets.Display;
 
+import com.vectrace.MercurialEclipse.HgRevision;
 import com.vectrace.MercurialEclipse.commands.HgStatusClient;
+import com.vectrace.MercurialEclipse.dialogs.Messages;
 import com.vectrace.MercurialEclipse.exception.HgException;
 import com.vectrace.MercurialEclipse.model.HgRoot;
 
-public class UpdateHandler extends RootHandler {
+public class UpdateHandler extends RunnableHandler {
 
 	private String revision;
 	private boolean cleanEnabled;
+	private boolean handleCrossBranches = true;
+
+	public UpdateHandler() {
+
+	}
+
+	public UpdateHandler(boolean handleCrossBranches) {
+		this.handleCrossBranches = handleCrossBranches;
+	}
 
 	/**
 	 * @param hgRoot
@@ -32,7 +43,7 @@ public class UpdateHandler extends RootHandler {
 	public void run(HgRoot hgRoot) throws HgException {
 		boolean dirty = HgStatusClient.isDirty(hgRoot);
 		if (dirty && cleanEnabled) {
-			final String message = "Your working directory contains uncommited changes.\nDo you really want to continue and discard them?";
+			final String message = Messages.getString("RevertDialog.uncommitedChanges");
 			final boolean[] result = new boolean[1];
 			if (Display.getCurrent() == null) {
 				Display.getDefault().syncExec(new Runnable() {
@@ -49,7 +60,7 @@ public class UpdateHandler extends RootHandler {
 				return;
 			}
 		}
-		new UpdateJob(revision, cleanEnabled, hgRoot).schedule();
+		new UpdateJob(revision, cleanEnabled, hgRoot, handleCrossBranches).schedule();
 	}
 
 	/**
@@ -58,6 +69,10 @@ public class UpdateHandler extends RootHandler {
 	 */
 	public void setRevision(String revision) {
 		this.revision = revision;
+	}
+
+	public void setRevision(HgRevision rev) {
+		this.revision = rev.getChangeset();
 	}
 
 	/**

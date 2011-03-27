@@ -7,7 +7,7 @@
  *
  * Contributors:
  * 		bastian					  - implementation
- * 		Andrei Loskutov (Intland) - bugfixes
+ * 		Andrei Loskutov           - bugfixes
  *******************************************************************************/
 package com.vectrace.MercurialEclipse.wizards;
 
@@ -57,7 +57,9 @@ public class OutgoingPage extends IncomingPage {
 			return Messages.getString("OutgoingPage.getOutgoingOperation.description"); //$NON-NLS-1$
 		}
 
-		@Override
+		/**
+		 * @see org.eclipse.jface.operation.IRunnableWithProgress#run(org.eclipse.core.runtime.IProgressMonitor)
+		 */
 		public void run(IProgressMonitor monitor)
 				throws InvocationTargetException, InterruptedException {
 			monitor.beginTask(Messages.getString("OutgoingPage.getOutgoingOperation.beginTask"), 1); //$NON-NLS-1$
@@ -121,10 +123,16 @@ public class OutgoingPage extends IncomingPage {
 
 				if(cs.getRevision().getRevision() == 0 || parents.length == 0){
 					parentRev = new NullRevision(file, cs);
-				} else {
+
+				} else if(clickedFileStatus.isCopied()){
+					IPath fileCopySrcPath = cs.getHgRoot().toAbsolute(clickedFileStatus.getRootRelativeCopySourcePath());
+					IFile copySrc = ResourceUtils.getFileHandle(fileCopySrcPath);
+					parentRev = new MercurialRevisionStorage(copySrc, parents[0]);
+
+				}else{
 					parentRev = new MercurialRevisionStorage(file, parents[0]);
 				}
-				CompareUtils.openEditor(thisRev, parentRev, true, false);
+				CompareUtils.openEditor(thisRev, parentRev, true);
 			} else {
 				// It is possible that file has been removed or part of the
 				// repository but not the project (and has incoming changes)

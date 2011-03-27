@@ -6,7 +6,7 @@
  * http://www.eclipse.org/legal/epl-v10.html
  *
  * Contributors:
- * Andrei Loskutov (Intland) - bugfixes
+ * Andrei Loskutov - bugfixes
  *******************************************************************************/
 package com.vectrace.MercurialEclipse.wizards;
 
@@ -28,7 +28,6 @@ import org.eclipse.jface.viewers.IDoubleClickListener;
 import org.eclipse.jface.viewers.ISelectionChangedListener;
 import org.eclipse.jface.viewers.IStructuredSelection;
 import org.eclipse.jface.viewers.ITableLabelProvider;
-import org.eclipse.jface.viewers.LabelProvider;
 import org.eclipse.jface.viewers.SelectionChangedEvent;
 import org.eclipse.jface.viewers.TableViewer;
 import org.eclipse.swt.SWT;
@@ -39,17 +38,17 @@ import org.eclipse.swt.widgets.Composite;
 import org.eclipse.swt.widgets.Group;
 import org.eclipse.swt.widgets.Table;
 import org.eclipse.swt.widgets.TableColumn;
-import org.eclipse.ui.ISharedImages;
 import org.eclipse.ui.PlatformUI;
 
 import com.vectrace.MercurialEclipse.MercurialEclipsePlugin;
 import com.vectrace.MercurialEclipse.actions.HgOperation;
 import com.vectrace.MercurialEclipse.exception.HgException;
+import com.vectrace.MercurialEclipse.history.SimpleLabelImageProvider;
 import com.vectrace.MercurialEclipse.model.ChangeSet;
+import com.vectrace.MercurialEclipse.model.ChangeSet.ParentChangeSet;
 import com.vectrace.MercurialEclipse.model.FileStatus;
 import com.vectrace.MercurialEclipse.model.HgRoot;
 import com.vectrace.MercurialEclipse.model.IHgRepositoryLocation;
-import com.vectrace.MercurialEclipse.model.ChangeSet.ParentChangeSet;
 import com.vectrace.MercurialEclipse.team.MercurialRevisionStorage;
 import com.vectrace.MercurialEclipse.team.NullRevision;
 import com.vectrace.MercurialEclipse.team.cache.IncomingChangesetCache;
@@ -80,7 +79,9 @@ public class IncomingPage extends HgWizardPage {
 			return Messages.getString("IncomingPage.getIncomingOperation.description"); //$NON-NLS-1$
 		}
 
-		@Override
+		/**
+		 * @see org.eclipse.jface.operation.IRunnableWithProgress#run(org.eclipse.core.runtime.IProgressMonitor)
+		 */
 		public void run(IProgressMonitor monitor)
 				throws InvocationTargetException, InterruptedException {
 			monitor.beginTask(Messages.getString("IncomingPage.getIncomingOperation.beginTask"), 1); //$NON-NLS-1$
@@ -111,17 +112,17 @@ public class IncomingPage extends HgWizardPage {
 	protected class IncomingDoubleClickListener implements IDoubleClickListener {
 		public void doubleClick(DoubleClickEvent event) {
 			ChangeSet cs = getSelectedChangeSet();
-			IStructuredSelection sel = (IStructuredSelection) event
-					.getSelection();
-			FileStatus clickedFileStatus = (FileStatus) sel
-					.getFirstElement();
+			IStructuredSelection sel = (IStructuredSelection) event.getSelection();
+			FileStatus clickedFileStatus = (FileStatus) sel.getFirstElement();
+
 			if (cs != null && clickedFileStatus != null) {
-				IPath fileRelPath = clickedFileStatus.getRootRelativePath();
-				IPath fileAbsPath = hgRoot.toAbsolute(fileRelPath);
+				IPath fileAbsPath = hgRoot.toAbsolute(clickedFileStatus.getRootRelativePath());
 				IFile file = ResourceUtils.getFileHandle(fileAbsPath);
+
 				if (file != null) {
 					MercurialRevisionStorage remoteRev = new MercurialRevisionStorage(
 							file, cs.getChangesetIndex(), cs.getChangeset(), cs);
+
 					MercurialRevisionStorage parentRev;
 					String[] parents = cs.getParents();
 					if(cs.getRevision().getRevision() == 0 || parents.length == 0){
@@ -139,10 +140,18 @@ public class IncomingPage extends HgWizardPage {
 						if(parentCs == null) {
 							parentCs = new ParentChangeSet(parentId, cs);
 						}
-						parentRev = new MercurialRevisionStorage(
-								file, parentCs.getChangesetIndex(), parentCs.getChangeset(), parentCs);
+						if(clickedFileStatus.isCopied()){
+							IPath fileCopySrcPath = hgRoot.toAbsolute(clickedFileStatus.getRootRelativeCopySourcePath());
+							IFile copySrc = ResourceUtils.getFileHandle(fileCopySrcPath);
+							parentRev = new MercurialRevisionStorage(
+									copySrc, parentCs.getChangesetIndex(), parentCs.getChangeset(), parentCs);
+
+						}else{
+							parentRev = new MercurialRevisionStorage(
+									file, parentCs.getChangesetIndex(), parentCs.getChangeset(), parentCs);
+						}
 					}
-					CompareUtils.openEditor(remoteRev, parentRev, true, false);
+					CompareUtils.openEditor(remoteRev, parentRev, true);
 					// the line below compares the remote changeset with the local copy.
 					// it was replaced with the code above to fix the issue 10364
 					// CompareUtils.openEditor(file, cs, true, true);
@@ -274,28 +283,6 @@ public class IncomingPage extends HgWizardPage {
 				});
 
 		fileStatusViewer.addDoubleClickListener(getDoubleClickListener());
-	}
-
-	private static final class SimpleLabelImageProvider extends LabelProvider {
-
-		private final Image fileImg;
-
-		public SimpleLabelImageProvider() {
-			fileImg = PlatformUI.getWorkbench().getSharedImages().getImage(ISharedImages.IMG_OBJ_FILE);
-		}
-
-		@Override
-		public Image getImage(Object element) {
-			return fileImg;
-		}
-
-		@Override
-		public String getText(Object element) {
-			if (!(element instanceof FileStatus)) {
-				return null;
-			}
-			return " " + ((FileStatus) element).getRootRelativePath().toOSString();
-		}
 	}
 
 	private static final class FileStatusLabelProvider extends DecoratingLabelProvider implements

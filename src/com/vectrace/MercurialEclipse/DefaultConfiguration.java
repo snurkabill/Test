@@ -7,25 +7,19 @@
  *
  * Contributors:
  *     Stefan                    - implementation
- *     Andrei Loskutov (Intland) - bug fixes
+ *     Andrei Loskutov           - bug fixes
  *     Philip Graf               - use default timeout from preferences
  *******************************************************************************/
 package com.vectrace.MercurialEclipse;
 
-import java.io.File;
-
-import org.eclipse.core.runtime.CoreException;
 import org.eclipse.core.runtime.IStatus;
 import org.eclipse.core.runtime.Status;
 
 import com.vectrace.MercurialEclipse.commands.IConfiguration;
 import com.vectrace.MercurialEclipse.commands.IConsole;
 import com.vectrace.MercurialEclipse.commands.IErrorHandler;
-import com.vectrace.MercurialEclipse.exception.HgCoreException;
-import com.vectrace.MercurialEclipse.model.HgRoot;
 import com.vectrace.MercurialEclipse.preferences.MercurialPreferenceConstants;
 import com.vectrace.MercurialEclipse.preferences.TimeoutPreferencePage;
-import com.vectrace.MercurialEclipse.team.MercurialTeamProvider;
 import com.vectrace.MercurialEclipse.team.MercurialUtilities;
 import com.vectrace.MercurialEclipse.views.console.HgConsoleHolder;
 
@@ -77,14 +71,6 @@ public class DefaultConfiguration implements IConsole, IErrorHandler, IConfigura
 		return timeout;
 	}
 
-	public HgRoot getHgRoot(File file) throws HgCoreException {
-		try {
-			return MercurialTeamProvider.getHgRoot(file);
-		} catch (CoreException e) {
-			throw new HgCoreException(e);
-		}
-	}
-
 	/*
 	 * ======================================================
 	 *
@@ -93,48 +79,34 @@ public class DefaultConfiguration implements IConsole, IErrorHandler, IConfigura
 	 * ======================================================
 	 */
 	public void commandCompleted(final int exitCode, final long timeInMillis, final String message, final Throwable error) {
-		MercurialEclipsePlugin.getStandardDisplay().asyncExec(new Runnable() {
-			public void run() {
-				int severity = IStatus.OK;
-				switch (exitCode) {
-				case 0:
-					severity = IStatus.OK;
-					break;
-				case 1:
-					severity = IStatus.OK;
-					break;
-				default:
-					severity = IStatus.ERROR;
-				}
-				HgConsoleHolder.getInstance().getConsole().commandCompleted(timeInMillis,
+		int severity = IStatus.OK;
+		switch (exitCode) {
+		case 0:
+			severity = IStatus.OK;
+			break;
+		case 1:
+			severity = IStatus.OK;
+			break;
+		default:
+			severity = IStatus.ERROR;
+		}
+		HgConsoleHolder
+				.getInstance()
+				.getConsole()
+				.commandCompleted(timeInMillis,
 						new Status(severity, MercurialEclipsePlugin.ID, message), error);
-			}
-		});
 	}
 
 	public void commandInvoked(final String command) {
-		MercurialEclipsePlugin.getStandardDisplay().asyncExec(new Runnable() {
-			public void run() {
-				HgConsoleHolder.getInstance().getConsole().commandInvoked(command);
-			}
-		});
+		HgConsoleHolder.getInstance().getConsole().commandInvoked(command);
 	}
 
 	public void printError(final String message, final Throwable root) {
-		MercurialEclipsePlugin.getStandardDisplay().asyncExec(new Runnable() {
-			public void run() {
-				HgConsoleHolder.getInstance().getConsole().errorLineReceived(root.getMessage());
-			}
-		});
+		HgConsoleHolder.getInstance().getConsole().errorLineReceived(root.getMessage());
 	}
 
 	public void printMessage(final String message, final Throwable root) {
-		MercurialEclipsePlugin.getStandardDisplay().asyncExec(new Runnable() {
-			public void run() {
-				HgConsoleHolder.getInstance().getConsole().messageLineReceived(message);
-			}
-		});
+		HgConsoleHolder.getInstance().getConsole().messageLineReceived(message);
 	}
-
 
 }

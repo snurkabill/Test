@@ -6,7 +6,7 @@
  * http://www.eclipse.org/legal/epl-v10.html
  *
  * Contributors:
- * 		Andrei Loskutov (Intland) - implementation
+ * 		Andrei Loskutov - implementation
  *******************************************************************************/
 package com.vectrace.MercurialEclipse.synchronize.cs;
 
@@ -120,7 +120,7 @@ public class UncommittedChangesetGroup extends ChangesetGroup implements Observe
 		}
 		if(added) {
 			// update files in the default changeset
-			ucsManager.getDefaultChangeset().addFile(file);
+			ucsManager.getDefaultChangeset().add(file);
 
 			// we need only one event
 			if(cachingOn){

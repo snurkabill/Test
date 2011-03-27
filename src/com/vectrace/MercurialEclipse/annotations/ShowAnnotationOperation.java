@@ -8,11 +8,10 @@
  * Contributors:
  *     Charles O'Farrell - implementation (based on subclipse)
  *     StefanC           - jobs framework, code cleanup
- *     Andrei Loskutov (Intland) - bug fixes
+ *     Andrei Loskutov   - bug fixes
  *******************************************************************************/
 package com.vectrace.MercurialEclipse.annotations;
 
-import java.io.File;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.text.DateFormat;
@@ -24,7 +23,6 @@ import org.eclipse.core.resources.IFile;
 import org.eclipse.core.resources.IResource;
 import org.eclipse.core.runtime.IProgressMonitor;
 import org.eclipse.core.runtime.IStatus;
-import org.eclipse.core.runtime.Path;
 import org.eclipse.jface.action.IAction;
 import org.eclipse.jface.resource.JFaceResources;
 import org.eclipse.jface.text.IInformationControl;
@@ -36,6 +34,9 @@ import org.eclipse.swt.SWT;
 import org.eclipse.swt.graphics.RGB;
 import org.eclipse.swt.widgets.Shell;
 import org.eclipse.team.ui.TeamOperation;
+import org.eclipse.team.ui.TeamUI;
+import org.eclipse.team.ui.history.IHistoryPage;
+import org.eclipse.team.ui.history.IHistoryView;
 import org.eclipse.ui.IEditorDescriptor;
 import org.eclipse.ui.IEditorPart;
 import org.eclipse.ui.IEditorReference;
@@ -50,13 +51,13 @@ import org.eclipse.ui.texteditor.AbstractDecoratedTextEditor;
 import com.vectrace.MercurialEclipse.MercurialEclipsePlugin;
 import com.vectrace.MercurialEclipse.SafeUiJob;
 import com.vectrace.MercurialEclipse.exception.HgException;
+import com.vectrace.MercurialEclipse.history.MercurialHistoryPage;
 import com.vectrace.MercurialEclipse.model.ChangeSet;
 import com.vectrace.MercurialEclipse.team.cache.LocalChangesetCache;
 import com.vectrace.MercurialEclipse.team.cache.MercurialStatusCache;
-import com.vectrace.MercurialEclipse.utils.ResourceUtils;
 
 public class ShowAnnotationOperation extends TeamOperation {
-	private static final class MercurialRevision extends Revision {
+	public static final class MercurialRevision extends Revision {
 		private final CommitterColors colors;
 
 		private final ChangeSet entry;
@@ -75,9 +76,16 @@ public class ShowAnnotationOperation extends TeamOperation {
 
 		@Override
 		public Object getHoverInfo() {
-			return block.getUser()
+			return entry.getUser()
 					+ " " + string + " " + DateFormat.getDateTimeInstance(DateFormat.MEDIUM, DateFormat.SHORT).format(block.getDate()) + "\n\n" + //$NON-NLS-1$ //$NON-NLS-2$ //$NON-NLS-3$
 					(entry != null ? entry.getComment() : ""); //$NON-NLS-1$
+		}
+
+		/**
+		 * @return the entry
+		 */
+		public ChangeSet getChangeSet() {
+			return entry;
 		}
 
 		@Override
@@ -102,28 +110,22 @@ public class ShowAnnotationOperation extends TeamOperation {
 	}
 
 	private static final String DEFAULT_TEXT_EDITOR_ID = EditorsUI.DEFAULT_TEXT_EDITOR_ID;
-	private final File remoteFile;
 	private final IResource res;
 
-	public ShowAnnotationOperation(IWorkbenchPart part, File remoteFile)
-			throws HgException {
+	public ShowAnnotationOperation(IWorkbenchPart part, IResource remoteFile) {
 		super(part);
-		this.remoteFile = remoteFile;
-		this.res = ResourceUtils.convert(remoteFile);
+		this.res = remoteFile;
 	}
 
 	public void run(IProgressMonitor monitor) throws InvocationTargetException,
 			InterruptedException {
 		monitor.beginTask(null, 100);
 		try {
-			if (!MercurialStatusCache.getInstance().isSupervised(
-					res,
-					new Path(remoteFile.getCanonicalPath()))) {
+			if (!MercurialStatusCache.getInstance().isSupervised(res)) {
 				return;
 			}
 
-			final AnnotateBlocks annotateBlocks = new AnnotateCommand(
-					remoteFile).execute();
+			final AnnotateBlocks annotateBlocks = new AnnotateCommand(res).execute();
 
 			// this is not needed if there is no live annotate
 			final RevisionInformation information = createRevisionInformation(
@@ -141,7 +143,9 @@ public class ShowAnnotationOperation extends TeamOperation {
 								.showRevisionInformation(
 										information,
 										HgPristineCopyQuickDiffProvider.HG_REFERENCE_PROVIDER);
-
+						final IWorkbenchPage page= getPart().getSite().getPage();
+						showHistoryView(page, editor);
+						page.activate(editor);
 					}
 					moni.done();
 					return super.runSafe(moni);
@@ -154,6 +158,31 @@ public class ShowAnnotationOperation extends TeamOperation {
 			monitor.done();
 		}
 	}
+
+	/**
+	 * Shows the history view, creating it if necessary, but does not give it focus.
+	 *
+	 * @param page the workbench page to operate in
+	 * @param editor the editor that is showing the file
+	 * @return the history view
+	 * @throws PartInitException
+	 */
+	private IHistoryView showHistoryView(IWorkbenchPage page, AbstractDecoratedTextEditor editor) {
+		Object object = res;
+		if (object == null) {
+			object = editor.getEditorInput();
+		}
+		IHistoryView historyView= TeamUI.showHistoryFor(page, object, null);
+		IHistoryPage historyPage = historyView.getHistoryPage();
+		if (historyPage instanceof MercurialHistoryPage){
+			MercurialHistoryPage mercurialHistoryPage = (MercurialHistoryPage) historyPage;
+			// We need to call link to ensure that the history page gets linked
+			// even if the page input did not change
+			mercurialHistoryPage.linkWithEditor();
+		}
+		return historyView;
+	}
+
 
 	@Override
 	protected IAction getGotoAction() {

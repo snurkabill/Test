@@ -6,8 +6,9 @@
  * http://www.eclipse.org/legal/epl-v10.html
  *
  * Contributors:
- * bastian	     implementation
- * Philip Graf   load current commit text
+ *     bastian                  - implementation
+ *     Philip Graf              - load current commit text
+ *     Andrei Loskutov          - bug fixes
  *******************************************************************************/
 package com.vectrace.MercurialEclipse.wizards.mq;
 
@@ -23,7 +24,8 @@ import com.vectrace.MercurialEclipse.actions.HgOperation;
 import com.vectrace.MercurialEclipse.commands.extensions.mq.HgQHeaderClient;
 import com.vectrace.MercurialEclipse.commands.extensions.mq.HgQRefreshClient;
 import com.vectrace.MercurialEclipse.exception.HgException;
-import com.vectrace.MercurialEclipse.team.cache.MercurialStatusCache;
+import com.vectrace.MercurialEclipse.team.MercurialTeamProvider;
+import com.vectrace.MercurialEclipse.team.cache.RefreshRootJob;
 import com.vectrace.MercurialEclipse.views.PatchQueueView;
 import com.vectrace.MercurialEclipse.wizards.HgWizard;
 
@@ -44,7 +46,9 @@ public class QRefreshWizard extends HgWizard {
 			return Messages.getString("QRefreshWizard.actionDescription"); //$NON-NLS-1$
 		}
 
-		@Override
+		/**
+		 * @see org.eclipse.jface.operation.IRunnableWithProgress#run(org.eclipse.core.runtime.IProgressMonitor)
+		 */
 		public void run(IProgressMonitor monitor)
 				throws InvocationTargetException, InterruptedException {
 			monitor
@@ -65,8 +69,7 @@ public class QRefreshWizard extends HgWizard {
 								.getUserTextField().getText(), page.getDate()
 								.getText());
 				monitor.worked(1);
-				MercurialStatusCache.getInstance().refreshStatus(
-						resource.getProject(), monitor);
+				new RefreshRootJob(MercurialTeamProvider.getHgRoot(resource), RefreshRootJob.LOCAL_AND_OUTGOING).schedule();
 				monitor.done();
 			} catch (HgException e) {
 				throw new InvocationTargetException(e, e.getLocalizedMessage());

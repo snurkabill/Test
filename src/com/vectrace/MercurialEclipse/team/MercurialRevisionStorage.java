@@ -9,7 +9,7 @@
  *     VecTrace (Zingo Andersen) - implementation
  *     Stefan C                  - Code cleanup
  *     Bastian Doetsch           - additions for sync
- *     Andrei Loskutov (Intland) - bug fixes
+ *     Andrei Loskutov           - bug fixes
  *******************************************************************************/
 package com.vectrace.MercurialEclipse.team;
 
@@ -36,6 +36,7 @@ import com.vectrace.MercurialEclipse.model.HgRoot;
 import com.vectrace.MercurialEclipse.model.ChangeSet.Direction;
 import com.vectrace.MercurialEclipse.team.cache.LocalChangesetCache;
 import com.vectrace.MercurialEclipse.team.cache.MercurialStatusCache;
+import com.vectrace.MercurialEclipse.utils.ResourceUtils;
 
 /**
  * @author zingo
@@ -55,29 +56,47 @@ public class MercurialRevisionStorage implements IStorage {
 	protected class ContentHolder {
 		private final byte[] bytes;
 		private final String string;
+		private final String encoding;
 		private Throwable error;
 
-		private ContentHolder(byte [] b, String str, Throwable t) {
+		private ContentHolder(byte [] b, String str, Throwable t, String encoding) {
 			bytes = b;
 			string = str;
 			error = t;
+			this.encoding = encoding;
 		}
 
 		public ContentHolder(byte [] bytes) {
-			this(bytes, null, null);
+			this(bytes, null, null, null);
 		}
 
 		public ContentHolder(String string) {
-			this(null, string, null);
+			this(null, string, null, null);
+		}
+
+		public ContentHolder(String string, String encoding) {
+			this(null, string, null, encoding);
 		}
 
 		public ContentHolder(Throwable t) {
-			this(null, null, t);
+			this(null, null, t, null);
 		}
 
 		private InputStream createStreamContent(String result) throws HgException {
 			try {
+				if(encoding != null) {
+					return new ByteArrayInputStream(result.getBytes(encoding));
+				}
+
 				HgRoot root = MercurialTeamProvider.getHgRoot(resource);
+				if(root == null){
+					// core API ignores exceptions from this method, so we need to log them here
+					error = new UnsupportedOperationException("No hg root found for file: "
+							+ result);
+					MercurialEclipsePlugin.logWarning("Failed to get revision content for "
+							+ MercurialRevisionStorage.this.toString(), error);
+					return EMPTY_STREAM;
+				}
 				return new ByteArrayInputStream(result.getBytes(root.getEncoding().name()));
 			} catch (UnsupportedEncodingException e) {
 				error = e;
@@ -171,7 +190,7 @@ public class MercurialRevisionStorage implements IStorage {
 		this.parent = parent;
 	}
 
-	@SuppressWarnings("unchecked")
+	@SuppressWarnings("rawtypes")
 	public Object getAdapter(Class adapter) {
 		if (adapter.equals(IResource.class)) {
 			return resource;
@@ -215,7 +234,7 @@ public class MercurialRevisionStorage implements IStorage {
 	private ContentHolder fetchContent(IFile file) throws CoreException {
 		if (changeSet == null) {
 			// no changeset known
-			return new ContentHolder(HgCatClient.getContent(file, null));
+			return new ContentHolder(HgCatClient.getContent(file, null), ResourceUtils.getFileEncoding(file));
 		}
 		String result;
 		// Setup and run command
@@ -224,7 +243,7 @@ public class MercurialRevisionStorage implements IStorage {
 			try {
 				result = HgCatClient.getContentFromBundle(file,
 						changeSet.getRevision().getChangeset(),
-						changeSet.getBundleFile().getCanonicalPath());
+						changeSet.getBundleFile());
 			} catch (IOException e) {
 				throw new HgException("Unable to determine canonical path for " + changeSet.getBundleFile(), e);
 			}
@@ -236,7 +255,7 @@ public class MercurialRevisionStorage implements IStorage {
 			}
 			result = HgCatClient.getContent(file, Integer.valueOf(changeSet.getChangesetIndex()).toString());
 		}
-		return new ContentHolder(result);
+		return new ContentHolder(result, ResourceUtils.getFileEncoding(file));
 	}
 
 	public IPath getFullPath() {
@@ -322,18 +341,19 @@ public class MercurialRevisionStorage implements IStorage {
 		try {
 			// hoping the cache is up-to-date!!!
 			LocalChangesetCache cache = LocalChangesetCache.getInstance();
-			ChangeSet tip = cache.getNewestChangeSet(res);
-			if (tip == null) {
-				HgRoot hgRoot = MercurialTeamProvider.getHgRoot(res);
-				cache.refreshAllLocalRevisions(hgRoot, true);
-				tip = cache.getNewestChangeSet(res.getProject());
+
+			HgRoot hgRoot = MercurialTeamProvider.getHgRoot(res);
+			if (hgRoot == null) {
+				return; 	// TODO returning incompletely initialized object is not reliable!
 			}
+			ChangeSet tip = cache.getNewestChangeSet(hgRoot);
+
 			boolean localKnown = tip.getChangesetIndex() >= rev;
-			if(!localKnown){
+			if (!localKnown) {
 				return;
 			}
 			this.changeSet = cache.getOrFetchChangeSetById(res, String.valueOf(rev));
-			if(changeSet != null){
+			if (changeSet != null) {
 				this.revision = changeSet.getChangesetIndex();
 				this.global = changeSet.getChangeset();
 			}

@@ -6,8 +6,8 @@
  * http://www.eclipse.org/legal/epl-v10.html
  *
  * Contributors:
- * Bastian Doetsch	implementation
- * Andrei Loskutov (Intland) - bugfixes
+ *     Bastian Doetsch	        - implementation
+ *     Andrei Loskutov          - bugfixes
  *******************************************************************************/
 package com.vectrace.MercurialEclipse.team.cache;
 
@@ -28,7 +28,6 @@ import org.eclipse.core.runtime.IPath;
 import org.eclipse.jface.preference.IPreferenceStore;
 
 import com.vectrace.MercurialEclipse.MercurialEclipsePlugin;
-import com.vectrace.MercurialEclipse.commands.AbstractClient;
 import com.vectrace.MercurialEclipse.commands.HgIdentClient;
 import com.vectrace.MercurialEclipse.commands.HgLogClient;
 import com.vectrace.MercurialEclipse.exception.HgException;
@@ -61,8 +60,18 @@ public final class LocalChangesetCache extends AbstractCache {
 
 	private static LocalChangesetCache instance;
 
+	/**
+	 * Contains all the loaded changesets for each of the paths (resources)
+	 */
 	private final Map<IPath, SortedSet<ChangeSet>> localChangeSets;
+	/**
+	 * Stores all changesets for each project. changesets can be retreived by its rev:node or rev:shortnode strings. Only actually used for reading in
+	 * getChangesetById(Project, String) which is private. This can probably be removed without adverse effect.
+	 */
 	private final Map<IProject, Map<String, ChangeSet>> changesets;
+	/**
+	 * Stores the latest changeset for each root
+	 */
 	private final Map<HgRoot, ChangeSet> latestChangesets;
 
 	private int logBatchSize;
@@ -109,10 +118,12 @@ public final class LocalChangesetCache extends AbstractCache {
 	@Deprecated
 	public void clear(IResource resource, boolean notify) {
 		Set<IResource> members = ResourceUtils.getMembers(resource);
-		members.add(resource);
+		if(resource instanceof IProject && !resource.exists()) {
+			members.remove(resource);
+		}
 		synchronized(localChangeSets){
 			for (IResource member : members) {
-				localChangeSets.remove(member.getLocation());
+				localChangeSets.remove(ResourceUtils.getPath(member));
 			}
 		}
 		if(resource instanceof IProject){
@@ -132,7 +143,10 @@ public final class LocalChangesetCache extends AbstractCache {
 	 * @return never null, but possibly empty set
 	 */
 	public SortedSet<ChangeSet> getOrFetchChangeSets(IResource resource) throws HgException {
-		IPath location = resource.getLocation();
+		IPath location = ResourceUtils.getPath(resource);
+		if(location.isEmpty()) {
+			return EMPTY_SET;
+		}
 
 		SortedSet<ChangeSet> revisions;
 		synchronized(localChangeSets){
@@ -190,6 +204,16 @@ public final class LocalChangesetCache extends AbstractCache {
 		return null;
 	}
 
+	public ChangeSet getNewestChangeSet(HgRoot hgRoot) throws HgException {
+		SortedSet<ChangeSet> revisions = getOrFetchChangeSets(hgRoot);
+		if (revisions.size() > 0) {
+			return revisions.last();
+		}
+
+		return null;
+	}
+
+
 	/**
 	 * Refreshes all local revisions. If limit is set, it looks up the default
 	 * number of revisions to get and fetches the topmost till limit is reached.
@@ -230,7 +254,7 @@ public final class LocalChangesetCache extends AbstractCache {
 			boolean withFiles) throws HgException {
 		Assert.isNotNull(res);
 		IProject project = res.getProject();
-		if (project.isAccessible() && MercurialTeamProvider.isHgTeamProviderFor(project)) {
+		if (MercurialTeamProvider.isHgTeamProviderFor(project)) {
 			clear(res, false);
 			int versionLimit = getLogBatchSize();
 			if(withFiles && versionLimit > 1) {
@@ -424,7 +448,7 @@ public final class LocalChangesetCache extends AbstractCache {
 		if (!project.isOpen() || !STATUS_CACHE.isSupervised(res)) {
 			return;
 		}
-		HgRoot root = AbstractClient.getHgRoot(res);
+		HgRoot root = MercurialTeamProvider.getHgRoot(res);
 
 		Map<IPath, Set<ChangeSet>> revisions;
 		// now we may change cache state, so lock
@@ -438,12 +462,11 @@ public final class LocalChangesetCache extends AbstractCache {
 				return;
 			}
 
-			// every changeset is at least stored for the repository root
 			if (res.getType() != IResource.PROJECT) {
-//				IPath rootPath = new Path(root.getAbsolutePath());
-				// Strange code...
-				// localChangeSets.put(res.getLocation(), new TreeSet<ChangeSet>(revisions.get(rootPath)));
 				IPath location = ResourceUtils.getPath(res);
+				if(location.isEmpty()) {
+					return;
+				}
 				Set<ChangeSet> csets = revisions.get(location);
 				if(csets != null) {
 					localChangeSets.put(location, new TreeSet<ChangeSet>(csets));

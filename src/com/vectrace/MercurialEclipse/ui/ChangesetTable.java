@@ -8,12 +8,15 @@
  * Contributors:
  *     Jerome Negre              - implementation
  *     Bastian Doetsch           - support for multi-select tables
- *     Andrei Loskutov (Intland) - bug fixes
+ *     Andrei Loskutov           - bug fixes
  *     Philip Graf               - bug fix
+ *     Ilya Ivanov (Intland)     - modifications
  *******************************************************************************/
 package com.vectrace.MercurialEclipse.ui;
 
+import java.util.Arrays;
 import java.util.Collections;
+import java.util.List;
 import java.util.SortedSet;
 import java.util.TreeSet;
 
@@ -56,7 +59,8 @@ public class ChangesetTable extends Composite {
 	private int logBatchSize;
 	private boolean autoFetch;
 
-	private boolean bottomNotFetched;
+	private int smallestKnownVersion;
+	private int lastRequestedVersion;
 
 	private HgRoot hgRoot;
 
@@ -89,7 +93,7 @@ public class ChangesetTable extends Composite {
 		this.resource = resource;
 		this.autoFetch = autoFetch;
 		changesets = new ChangeSet[0];
-		bottomNotFetched = true;
+		smallestKnownVersion = -1;
 		this.logBatchSize = LocalChangesetCache.getInstance().getLogBatchSize();
 		// limit log to allow "smooth" scrolling (not too small and not too big)
 		// - but only if not set in preferences
@@ -128,8 +132,6 @@ public class ChangesetTable extends Composite {
 				if (table.isEnabled()
 						&& tableItem.equals(table.getItems()[table.getItemCount() - 1])
 						&& cs.getChangesetIndex() > 0) {
-					// limit log to allow "smooth" scrolling (not too small and not too big)
-					logBatchSize = 200;
 					try {
 						int startRev = cs.getChangesetIndex() - 1;
 						updateTable(startRev);
@@ -158,41 +160,49 @@ public class ChangesetTable extends Composite {
 
 	/**
 	 * Updates the table data if autofetch is enabled
-	 * @param startRev -1 to fetch data from the beginning
+	 * @param startRev Integer.MAX_VALUE to fetch data from the beginning
 	 * @throws HgException
 	 */
 	private void updateTable(int startRev) throws HgException {
 		if (!isAutoFetchEnabled()) {
 			return;
 		}
+
 		LocalChangesetCache cache = LocalChangesetCache.getInstance();
-		if (startRev - logBatchSize > 0 || bottomNotFetched) {
-			if(resource != null) {
-				cache.fetchRevisions(resource, true, logBatchSize, startRev, false);
-			} else {
-				cache.fetchRevisions(hgRoot, true, logBatchSize, startRev, false);
-			}
-		}
 		SortedSet<ChangeSet> set;
 		if(resource != null) {
 			set = cache.getOrFetchChangeSets(resource);
 		} else {
 			set = cache.getOrFetchChangeSets(hgRoot);
 		}
-
-		// only fetch rev 0:0+logbatchsize once
-		if (set.size() == 0 || set.first().getChangesetIndex() == 0) {
-			bottomNotFetched = false;
+		if(!set.isEmpty()) {
+			int smallestInCache = set.first().getChangesetIndex();
+			boolean needMoreData = startRev > 0 && smallestInCache > startRev && lastRequestedVersion != startRev;
+			if (smallestKnownVersion < 0 || smallestKnownVersion != smallestInCache || needMoreData) {
+				if(resource != null) {
+					cache.fetchRevisions(resource, true, logBatchSize, startRev, false);
+					set = cache.getOrFetchChangeSets(resource);
+				} else if(smallestInCache > 0) {
+					cache.fetchRevisions(hgRoot, true, logBatchSize, startRev, false);
+					set = cache.getOrFetchChangeSets(hgRoot);
+				}
+				lastRequestedVersion = startRev;
+			}
+			smallestKnownVersion = set.first().getChangesetIndex();
 		}
 
-		/*
-		 * TODO filter changesets to only display the so far requested revs.
-		 * else, if the cache is already filled, we display all, which is a huge
-		 * UI performance bottleneck.
-		 */
 		SortedSet<ChangeSet> reverseOrderSet = new TreeSet<ChangeSet>(Collections.reverseOrder());
 		reverseOrderSet.addAll(set);
-		setChangesets(reverseOrderSet.toArray(new ChangeSet[reverseOrderSet.size()]));
+		List<ChangeSet> shownSets;
+		if(changesets != null) {
+			shownSets = Arrays.asList(changesets);
+		} else {
+			shownSets = Collections.emptyList();
+		}
+		reverseOrderSet.removeAll(shownSets);
+		addChangesets(reverseOrderSet.toArray(new ChangeSet[reverseOrderSet.size()]));
+		reverseOrderSet.addAll(shownSets);
+		changesets = reverseOrderSet.toArray(new ChangeSet[reverseOrderSet.size()]);
 	}
 
 	/**
@@ -205,7 +215,11 @@ public class ChangesetTable extends Composite {
 	public void setChangesets(ChangeSet[] sets) {
 		this.changesets = sets;
 		// table.removeAll();
-		for (int i = Math.max(0, table.getItemCount()); i < sets.length; i++) {
+		addChangesets(sets);
+	}
+
+	private void addChangesets(ChangeSet[] sets) {
+		for (int i = 0; i < sets.length; i++) {
 			ChangeSet rev = sets[i];
 			TableItem row = new TableItem(table, SWT.NONE);
 			if (parents != null && isParent(rev.getChangesetIndex())) {
@@ -220,8 +234,36 @@ public class ChangesetTable extends Composite {
 			row.setText(6, rev.getSummary());
 			row.setData(rev);
 		}
-		table.setItemCount(sets.length);
+	}
 
+	public void setSelection(ChangeSet selection) {
+		if (selection == null) {
+			return;
+		}
+		boolean found = false;
+		TableItem[] items = table.getItems();
+		int lastSize = items.length;
+		do {
+			for (TableItem tItem : items) {
+				if (selection.compareTo((ChangeSet) tItem.getData()) == 0) {
+					table.setSelection(tItem);
+					found = true;
+					break;
+				}
+			}
+			if(!found && selection.getChangesetIndex() >= 0) {
+				// table does not always contain all revisions, so
+				// force table updates until the revision can be shown
+				lastSize = items.length;
+				try {
+					updateTable(selection.getChangesetIndex());
+				} catch (HgException e) {
+					MercurialEclipsePlugin.logError(e);
+					break;
+				}
+				items = table.getItems();
+			}
+		} while (!found && lastSize < items.length);
 	}
 
 	public void clearTable() {
@@ -262,7 +304,7 @@ public class ChangesetTable extends Composite {
 		table.setEnabled(enabled);
 		try {
 			if (enabled) {
-				updateTable(-1);
+				updateTable(Integer.MAX_VALUE);
 			}
 		} catch (HgException e) {
 			MercurialEclipsePlugin.logError(e);

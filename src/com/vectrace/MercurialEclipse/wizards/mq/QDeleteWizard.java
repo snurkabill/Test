@@ -52,13 +52,10 @@ public class QDeleteWizard extends HgWizard {
 			return Messages.getString("QDeleteWizard.deleteAction.description"); //$NON-NLS-1$
 		}
 
-		/*
-		 * (non-Javadoc)
-		 *
-		 * @see com.vectrace.MercurialEclipse.actions.HgOperation#run(org.eclipse.core.runtime.IProgressMonitor)
+		/**
+		 * @see org.eclipse.jface.operation.IRunnableWithProgress#run(org.eclipse.core.runtime.IProgressMonitor)
 		 */
 		@SuppressWarnings("unchecked")
-		@Override
 		public void run(IProgressMonitor monitor)
 				throws InvocationTargetException, InterruptedException {
 			monitor.beginTask(Messages.getString("QDeleteWizard.deleteAction.beginTask"), 2); //$NON-NLS-1$
@@ -69,7 +66,7 @@ public class QDeleteWizard extends HgWizard {
 				IStructuredSelection selection = (IStructuredSelection) page
 						.getPatchViewer().getSelection();
 				List<Patch> patches = selection.toList();
-				HgQDeleteClient.delete(resource, false, page
+				HgQDeleteClient.delete(resource, page.getKeepCheckBox().getSelection(), page
 						.getChangesetTable().getSelection(), patches);
 				monitor.worked(1);
 				monitor.done();

@@ -6,7 +6,8 @@
  * http://www.eclipse.org/legal/epl-v10.html
  *
  * Contributors:
- * Andrei Loskutov (Intland) - bug fixes
+ * Andrei Loskutov - bug fixes
+ * Zsolt Koppany   (Intland)
  *******************************************************************************/
 package com.vectrace.MercurialEclipse.commands;
 
@@ -28,9 +29,16 @@ import com.vectrace.MercurialEclipse.team.cache.RemoteKey;
 import com.vectrace.MercurialEclipse.utils.StringUtils;
 
 public class HgBranchClient extends AbstractClient {
-
-	private static final Pattern GET_BRANCHES_PATTERN = Pattern
-			.compile("^(.+[^ ]) +([0-9]+):([a-f0-9]+)( +(.+))?$"); //$NON-NLS-1$
+	/**
+	 * matches branch names which may also contain spaces or consist of only one letter.
+	 * Valid examples:
+	 * "a test                         3:066ee3f79d2a"
+	 * "*                              2:5a953790aa12 (inactive)"
+	 * "default                        0:fd83cc49d230 (inactive)"
+	 */
+	private static final Pattern GET_BRANCHES_PATTERN = Pattern.compile(
+		// (branch name) (version):(hash) (optional "inactive" flag)
+		"^(.*[^ ]+) +([0-9]+):([a-f0-9]+)( +(.+))?$"); //$NON-NLS-1$
 
 	private static final Map<RemoteKey, Boolean> KNOWN_BRANCHES = new ConcurrentHashMap<RemoteKey, Boolean>();
 
@@ -41,7 +49,7 @@ public class HgBranchClient extends AbstractClient {
 	 * @throws HgException
 	 */
 	public static Branch[] getBranches(HgRoot hgRoot) throws HgException {
-		AbstractShellCommand command = new HgCommand("branches", hgRoot, false); //$NON-NLS-1$
+		AbstractShellCommand command = new HgCommand("branches", "Listing branches", hgRoot, false); //$NON-NLS-1$
 		command.addOptions("-v"); //$NON-NLS-1$
 		String[] lines = command.executeToString().split("\n"); //$NON-NLS-1$
 		List<Branch> branches = new ArrayList<Branch>();
@@ -49,16 +57,26 @@ public class HgBranchClient extends AbstractClient {
 			if(StringUtils.isEmpty(line)){
 				continue;
 			}
-			Matcher m = GET_BRANCHES_PATTERN.matcher(line);
-			if (m.matches()) {
-				Branch branch = new Branch(m.group(1), Integer.parseInt(m.group(2)), m
-						.group(3), !"(inactive)".equals(m.group(5))); //$NON-NLS-1$
+
+			Branch branch = parseBranch(line);
+			if (branch != null) {
 				branches.add(branch);
 			} else {
-				throw new HgException("Failed to parse branch from: '" + line + "'"); //$NON-NLS-1$ //$NON-NLS-2$
+				HgException ex = new HgException("Failed to parse branch from '" + line + "'"); //$NON-NLS-1$ //$NON-NLS-2$
+				MercurialEclipsePlugin.logWarning("Failed to parse branch", ex); //$NON-NLS-1$
 			}
 		}
 		return branches.toArray(new Branch[branches.size()]);
+	}
+
+	protected static Branch parseBranch(String line) {
+		Matcher m = GET_BRANCHES_PATTERN.matcher(line.trim());
+		if (m.matches()) {
+			Branch branch = new Branch(m.group(1), Integer.parseInt(m.group(2)), m.group(3), !"(inactive)".equals(m.group(5))); //$NON-NLS-1$
+			return branch;
+		}
+
+		return null;
 	}
 
 	/**
@@ -66,9 +84,8 @@ public class HgBranchClient extends AbstractClient {
 	 *            if null, uses the default user
 	 * @throws HgException
 	 */
-	public static String addBranch(HgRoot hgRoot, String name,
-			String user, boolean force) throws HgException {
-		HgCommand command = new HgCommand("branch", hgRoot, false); //$NON-NLS-1$
+	public static String addBranch(HgRoot hgRoot, String name, String user, boolean force) throws HgException {
+		HgCommand command = new HgCommand("branch", "Creating branch " + name, hgRoot, false); //$NON-NLS-1$
 		command.setExecutionRule(new AbstractShellCommand.ExclusiveExecutionRule(hgRoot));
 		if (force) {
 			command.addOptions("-f"); //$NON-NLS-1$
@@ -87,7 +104,7 @@ public class HgBranchClient extends AbstractClient {
 	 *             if a hg error occurred
 	 */
 	public static String getActiveBranch(HgRoot workingDir) throws HgException {
-		AbstractShellCommand command = new HgCommand("branch", workingDir, false); //$NON-NLS-1$
+		AbstractShellCommand command = new HgCommand("branch", "Retrieving current branch name", workingDir, false); //$NON-NLS-1$
 		return command.executeToString().replaceAll("\n", "");
 	}
 
@@ -109,8 +126,8 @@ public class HgBranchClient extends AbstractClient {
 		// we are using "hg incoming" to check if remote repository knows the given branch
 		// unfortunately I didn't found more elegant way to get this infor from hg for
 		// REMOTE repository, because neither "hg branch" nor "hg branches" works then
-		AbstractShellCommand command = new HgCommand("incoming", key.getRoot(), //$NON-NLS-1$
-				false);
+		AbstractShellCommand command = new HgCommand("incoming", //$NON-NLS-1$
+				"Querying remote branch existence", key.getRoot(), false);
 		command.setUsePreferenceTimeout(MercurialPreferenceConstants.PULL_TIMEOUT);
 
 		// limit to one version
@@ -145,8 +162,7 @@ public class HgBranchClient extends AbstractClient {
 			// Incoming responds with an exception if there are no incoming changesets...
 			// but exception is different if no branch exists on remote. So trying to
 			// distinguish between "no changesets" and "unknown branch (== unknown revision)"
-			if (message.contains("no changes found") && !message.contains("unknown revision")
-					&& e.getStatus().getCode() == 1) {
+			if (message.contains("no changes found") && !message.contains("unknown revision") && e.getStatus().getCode() == 1) {
 				KNOWN_BRANCHES.put(key, Boolean.TRUE);
 				return true;
 			}

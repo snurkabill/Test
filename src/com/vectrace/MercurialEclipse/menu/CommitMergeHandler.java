@@ -6,7 +6,7 @@
  * http://www.eclipse.org/legal/epl-v10.html
  *
  * Contributors:
- *     Andrei Loskutov (Intland) - bug fixes
+ *     Andrei Loskutov - bug fixes
  *******************************************************************************/
 package com.vectrace.MercurialEclipse.menu;
 
@@ -15,19 +15,19 @@ import org.eclipse.core.runtime.CoreException;
 import org.eclipse.swt.widgets.Shell;
 
 import com.vectrace.MercurialEclipse.commands.HgCommitClient;
-import com.vectrace.MercurialEclipse.commands.HgStatusClient;
 import com.vectrace.MercurialEclipse.dialogs.CommitDialog;
 import com.vectrace.MercurialEclipse.dialogs.MergeDialog;
 import com.vectrace.MercurialEclipse.exception.HgException;
 import com.vectrace.MercurialEclipse.model.HgRoot;
+import com.vectrace.MercurialEclipse.team.cache.MercurialStatusCache;
 
-public class CommitMergeHandler extends RootHandler {
+public class CommitMergeHandler extends RunnableHandler {
 
 	/**
 	 * run the commit merge handler
 	 */
 	@Override
-	protected void run(HgRoot hgRoot) throws HgException {
+	public void run(HgRoot hgRoot) throws HgException {
 		commitMergeWithCommitDialog(hgRoot, getShell());
 	}
 
@@ -41,7 +41,7 @@ public class CommitMergeHandler extends RootHandler {
 	public String commitMergeWithCommitDialog(HgRoot hgRoot, Shell shell) throws HgException {
 		Assert.isNotNull(hgRoot);
 		String changesetMessage = Messages.getString("CommitMergeHandler.mergeWith");
-		String mergeChangesetId = HgStatusClient.getMergeChangesetId(hgRoot);
+		String mergeChangesetId = MercurialStatusCache.getInstance().getMergeChangesetId(hgRoot);
 		if(mergeChangesetId != null) {
 			changesetMessage += " " + mergeChangesetId;
 		} else {
@@ -70,7 +70,6 @@ public class CommitMergeHandler extends RootHandler {
 
 		// do hg call
 		String result = HgCommitClient.commit(hgRoot, commitName, message);
-		HgStatusClient.clearMergeStatus(hgRoot);
 		return result;
 	}
 

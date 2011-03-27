@@ -7,7 +7,7 @@
  *
  * Contributors:
  *     Bastian Doetsch           - implementation
- *     Andrei Loskutov (Intland) - bug fixes
+ *     Andrei Loskutov           - bug fixes
  *     Adam Berkes (Intland)     - bug fixes
  *******************************************************************************/
 package com.vectrace.MercurialEclipse.commands;
@@ -16,11 +16,14 @@ import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import org.eclipse.core.resources.IFile;
 import org.eclipse.core.resources.IProject;
 import org.eclipse.core.resources.IResource;
 import org.eclipse.core.runtime.CoreException;
+import org.eclipse.core.runtime.IPath;
 import org.eclipse.core.runtime.Path;
 
 import com.vectrace.MercurialEclipse.MercurialEclipsePlugin;
@@ -37,11 +40,12 @@ public class HgResolveClient extends AbstractClient {
 	 * List merge state of files after merge
 	 */
 	public static List<FlaggedAdaptable> list(IResource res) throws HgException {
-		AbstractShellCommand command = new HgCommand("resolve", getWorkingDirectory(res), //$NON-NLS-1$
-				false);
+		AbstractShellCommand command = new HgCommand("resolve", //$NON-NLS-1$
+				"Calculating conflict status for resource", res, false);
 		command
 				.setUsePreferenceTimeout(MercurialPreferenceConstants.IMERGE_TIMEOUT);
 		command.addOptions("-l"); //$NON-NLS-1$
+
 		String[] lines = command.executeToString().split("\n"); //$NON-NLS-1$
 		List<FlaggedAdaptable> result = new ArrayList<FlaggedAdaptable>();
 		if (lines.length != 1 || !"".equals(lines[0])) { //$NON-NLS-1$
@@ -49,8 +53,8 @@ public class HgResolveClient extends AbstractClient {
 			IProject project = res.getProject();
 			for (String line : lines) {
 				// Status line is always hg root relative. For those projects
-				// which has different project root (always deeper than hg root)
-				// hg root relative path must be converted
+				// which has different project root hg root relative path must
+				// be converted to project relative
 				IResource iFile = ResourceUtils.convertRepoRelPath(hgRoot, project, line.substring(2));
 				if(iFile != null){
 					FlaggedAdaptable fa = new FlaggedAdaptable(iFile, line.charAt(0));
@@ -65,7 +69,7 @@ public class HgResolveClient extends AbstractClient {
 	 * List merge state of files after merge
 	 */
 	public static List<FlaggedAdaptable> list(HgRoot hgRoot) throws HgException {
-		AbstractShellCommand command = new HgCommand("resolve", hgRoot, false);
+		AbstractShellCommand command = new HgCommand("resolve", "Listing conflict status", hgRoot, false);
 		command.setUsePreferenceTimeout(MercurialPreferenceConstants.IMERGE_TIMEOUT);
 		command.addOptions("-l"); //$NON-NLS-1$
 		String[] lines = command.executeToString().split("\n"); //$NON-NLS-1$
@@ -77,8 +81,10 @@ public class HgResolveClient extends AbstractClient {
 				// hg root relative path must be converted
 				String repoRelPath = line.substring(2);
 				IResource iFile = ResourceUtils.getFileHandle(hgRoot.toAbsolute(new Path(repoRelPath)));
-				FlaggedAdaptable fa = new FlaggedAdaptable(iFile, line.charAt(0));
-				result.add(fa);
+				if(iFile != null){
+					FlaggedAdaptable fa = new FlaggedAdaptable(iFile, line.charAt(0));
+					result.add(fa);
+				}
 			}
 		}
 		return result;
@@ -90,7 +96,7 @@ public class HgResolveClient extends AbstractClient {
 	public static String markResolved(IFile ifile) throws HgException {
 		File file = ResourceUtils.getFileHandle(ifile);
 		HgCommand command = new HgCommand("resolve", //$NON-NLS-1$
-				getWorkingDirectory(file), false);
+				"Marking resource as resolved", ifile, false);
 		command.setExecutionRule(new AbstractShellCommand.ExclusiveExecutionRule(command
 				.getHgRoot()));
 		command.setUsePreferenceTimeout(MercurialPreferenceConstants.IMERGE_TIMEOUT);
@@ -120,38 +126,16 @@ public class HgResolveClient extends AbstractClient {
 	}
 
 	/**
-	 * Try to resolve all unresolved files
-	 */
-	public static String resolveAll(IResource res) throws HgException {
-		File file = res.getLocation().toFile();
-		HgCommand command = new HgCommand("resolve", getWorkingDirectory(file), //$NON-NLS-1$
-				false);
-		command.setExecutionRule(new AbstractShellCommand.ExclusiveExecutionRule(command.getHgRoot()));
-		boolean useExternalMergeTool = Boolean.valueOf(
-				HgClients.getPreference(
-						MercurialPreferenceConstants.PREF_USE_EXTERNAL_MERGE,
-						"false")).booleanValue(); //$NON-NLS-1$
-		if (!useExternalMergeTool) {
-			// we use an non-existent UI Merge tool, so no tool is started. We
-			// need this option, though, as we still want the Mercurial merge to
-			// take place.
-			command.addOptions("--config", "ui.merge=simplemerge"); //$NON-NLS-1$ //$NON-NLS-2$
-		}
-		command
-				.setUsePreferenceTimeout(MercurialPreferenceConstants.IMERGE_TIMEOUT);
-		String result = command.executeToString();
-		refreshStatus(res);
-		return result;
-
-	}
-
-	/**
 	 * Mark a resource as unresolved ("U")
 	 */
 	public static String markUnresolved(IFile ifile) throws HgException {
-		File file = ifile.getLocation().toFile();
+		IPath path = ResourceUtils.getPath(ifile);
+		if(path.isEmpty()) {
+			throw new HgException("Failed to unresolve: location is unknown: " + ifile);
+		}
+		File file = path.toFile();
 		HgCommand command = new HgCommand("resolve", //$NON-NLS-1$
-				getWorkingDirectory(file), false);
+				"Marking resource as unresolved", ifile, false);
 		command.setExecutionRule(new AbstractShellCommand.ExclusiveExecutionRule(command
 				.getHgRoot()));
 		command.setUsePreferenceTimeout(MercurialPreferenceConstants.IMERGE_TIMEOUT);
@@ -168,6 +152,51 @@ public class HgResolveClient extends AbstractClient {
 	private static void refreshStatus(IResource res) throws HgException {
 		MercurialStatusCache.getInstance().refreshStatus(res, null);
 		ResourceUtils.touch(res);
+	}
+
+	/**
+	 * Executes resolve command to find change sets necessary for merging
+	 * <p>
+	 * WARNING: This method potentially reverts changes!
+	 * <p>
+	 * Future: We should write some python to interface with the Mercurial API directly to get this
+	 * info so we don't have to do operations with side effects or rely on --debug output.
+	 *
+	 * @param file
+	 *            The file to consider
+	 * @return An array of length 3 of changeset ids: result[0] - 'my' result[1] - 'other' result[2]
+	 *         - 'base'
+	 * @throws HgException
+	 */
+	public static String[] restartMergeAndGetChangeSetsForCompare(IFile file) throws HgException {
+		String[] results = new String[3];
+		HgCommand command = new HgCommand("resolve", "Invoking resolve to find parent information", file, false);
+
+		command.addOptions("--config", "ui.merge=internal:mustfail", "--debug");
+		command.addFiles(file);
+
+		String stringResult = "";
+		try {
+			command.executeToString();
+		} catch (HgException e) {
+			// exception is expected here
+			stringResult = e.getMessage();
+		}
+
+		String filename = file.getName();
+		String patternString = "my .*" + filename + "@?([0-9a-fA-F]*)\\+?[\\s]"
+			+ "other .*" + filename + "@?([0-9a-fA-F]*)\\+?[\\s]"
+			+ "ancestor .*" + filename + "@?([0-9a-fA-F]*)\\+?[\\s]";
+
+		Matcher matcher = Pattern.compile(patternString).matcher(stringResult);
+
+		if (matcher.find() && matcher.groupCount() == 3) {
+			results[0] = matcher.group(1);	// my
+			results[1] = matcher.group(2);	// other
+			results[2] = matcher.group(3);	// ancestor
+		}
+
+		return results;
 	}
 
 }
