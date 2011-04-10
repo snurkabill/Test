@@ -111,6 +111,8 @@ public final class MercurialStatusCache extends AbstractCache implements IResour
 				HgRoot projectRoot = resources.rootOf(project);
 				if(projectRoot == null){
 					projectRoot = MercurialTeamProvider.getHgRoot(project);
+				}
+				if(projectRoot != null) {
 					resources.clear();
 					resources.add(projectRoot, project);
 				}
@@ -1314,17 +1316,14 @@ public final class MercurialStatusCache extends AbstractCache implements IResour
 	 * @param project
 	 *            not null. The project which resources state has to be updated
 	 */
-	private Set<IResource> refreshStatus(final RootResourceSet<IResource> resources, IProject project) throws HgException {
+	private void refreshStatus(final RootResourceSet<IResource> resources, IProject project) throws HgException {
 		if (resources == null || resources.isEmpty()) {
-			return Collections.emptySet();
+			return;
 		}
 		// project status wanted, no batching needed
-		if(resources.contains(project)){
-			resources.remove(project);
-			if(resources.isEmpty()){
-				return Collections.emptySet();
+		if(resources.remove(project) && resources.isEmpty()){
+			return;
 			}
-		}
 
 		Set<IResource> changed = new HashSet<IResource>();
 		for(Map.Entry<HgRoot, Set<IResource>> entry : resources.entrySet()){
@@ -1335,7 +1334,7 @@ public final class MercurialStatusCache extends AbstractCache implements IResour
 			changed.addAll(checkForConflict(project));
 		}
 		notifyChanged(changed, false);
-		return changed;
+		return;
 	}
 
 	private Set<IResource> updateStatusInRoot(IProject project, HgRoot root,
