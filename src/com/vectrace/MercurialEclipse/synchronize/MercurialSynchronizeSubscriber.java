@@ -479,10 +479,15 @@ public class MercurialSynchronizeSubscriber extends Subscriber /*implements Obse
 			if (!repoLocationProjects.contains(project)) {
 				continue;
 			}
-			monitor.beginTask(getName(), 4);
 			// clear caches in any case, but refresh them only if project exists
+			HgRoot hgRoot = MercurialTeamProvider.getHgRoot(project);
+
+			if(repositoryLocation.isLocal() && hgRoot.equals(repositoryLocation)) {
+				continue;
+			}
+			monitor.beginTask(getName(), 2);
 			boolean forceRefresh = project.exists();
-			String syncBranch = getSyncBranch(MercurialTeamProvider.getHgRoot(project));
+			String syncBranch = getSyncBranch(hgRoot);
 
 			try {
 				CACHE_SEMA.acquire();
@@ -551,7 +556,7 @@ public class MercurialSynchronizeSubscriber extends Subscriber /*implements Obse
 		return changeEvents;
 	}
 
-	private void refreshIncoming(int flag, Set<IResource> resourcesToRefresh, IProject project,
+	private static void refreshIncoming(int flag, Set<IResource> resourcesToRefresh, IProject project,
 			IHgRepositoryLocation repositoryLocation, boolean forceRefresh, String branch) throws HgException {
 
 		if(forceRefresh && flag != HgSubscriberScopeManager.OUTGOING){
@@ -569,7 +574,7 @@ public class MercurialSynchronizeSubscriber extends Subscriber /*implements Obse
 		}
 	}
 
-	private void refreshOutgoing(int flag, Set<IResource> resourcesToRefresh, IProject project,
+	private static void refreshOutgoing(int flag, Set<IResource> resourcesToRefresh, IProject project,
 			IHgRepositoryLocation repositoryLocation, boolean forceRefresh, String branch) throws HgException {
 
 		if(forceRefresh && flag != HgSubscriberScopeManager.INCOMING){
