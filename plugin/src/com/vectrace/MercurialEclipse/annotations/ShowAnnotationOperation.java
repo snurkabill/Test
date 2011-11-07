@@ -13,7 +13,6 @@
 package com.vectrace.MercurialEclipse.annotations;
 
 import java.lang.reflect.InvocationTargetException;
-import java.lang.reflect.Method;
 import java.text.DateFormat;
 import java.util.Date;
 import java.util.HashMap;
@@ -52,6 +51,7 @@ import org.eclipse.ui.texteditor.ITextEditorExtension4;
 
 import com.vectrace.MercurialEclipse.MercurialEclipsePlugin;
 import com.vectrace.MercurialEclipse.SafeUiJob;
+import com.vectrace.MercurialEclipse.commands.HgAnnotateClient;
 import com.vectrace.MercurialEclipse.commands.HgLogClient;
 import com.vectrace.MercurialEclipse.exception.HgException;
 import com.vectrace.MercurialEclipse.history.MercurialHistoryPage;
@@ -136,7 +136,7 @@ public class ShowAnnotationOperation extends TeamOperation {
 				return;
 			}
 
-			final AnnotateBlocks annotateBlocks = new AnnotateCommand(res).execute();
+			final AnnotateBlocks annotateBlocks = HgAnnotateClient.execute(res);
 
 			// this is not needed if there is no live annotate
 			final RevisionInformation information = createRevisionInformation(
@@ -263,7 +263,6 @@ public class ShowAnnotationOperation extends TeamOperation {
 		return null;
 	}
 
-	@SuppressWarnings("unchecked")
 	private RevisionInformation createRevisionInformation(
 			final AnnotateBlocks annotateBlocks, IProgressMonitor monitor)
 			throws HgException {
@@ -280,37 +279,22 @@ public class ShowAnnotationOperation extends TeamOperation {
 
 		RevisionInformation info = new RevisionInformation();
 
-		try {
-			Class infoClass = info.getClass();
-			Class[] paramTypes = { IInformationControlCreator.class };
-			Method method1 = infoClass.getMethod("setHoverControlCreator", //$NON-NLS-1$
-					paramTypes);
-			Method method2 = infoClass.getMethod(
-					"setInformationPresenterControlCreator", paramTypes); //$NON-NLS-1$
+		final class AnnotationControlCreator implements IInformationControlCreator {
+			private final String statusFieldText;
 
-			final class AnnotationControlCreator implements
-					IInformationControlCreator {
-				private final String statusFieldText;
-
-				public AnnotationControlCreator(String statusFieldText) {
-					this.statusFieldText = statusFieldText;
-				}
-
-				public IInformationControl createInformationControl(Shell parent) {
-					return new SourceViewerInformationControl(parent, SWT.TOOL,
-							SWT.NONE, JFaceResources.DEFAULT_FONT,
-							statusFieldText);
-				}
+			public AnnotationControlCreator(String statusFieldText) {
+				this.statusFieldText = statusFieldText;
 			}
 
-			method1.invoke(info, new Object[] { new AnnotationControlCreator(
-					Messages.getString("ShowAnnotationOperation.pressF2ForFocus")) }); //$NON-NLS-1$
-			method2.invoke(info, new Object[] { new AnnotationControlCreator(
-					null) });
-
-		} catch (Exception e) {
-			MercurialEclipsePlugin.logError(e);
+			public IInformationControl createInformationControl(Shell parent) {
+				return new SourceViewerInformationControl(parent, SWT.TOOL, SWT.NONE,
+						JFaceResources.DEFAULT_FONT, statusFieldText);
+			}
 		}
+
+		info.setHoverControlCreator(new AnnotationControlCreator(Messages
+				.getString("ShowAnnotationOperation.pressF2ForFocus"))); //$NON-NLS-1$
+		info.setInformationPresenterControlCreator(new AnnotationControlCreator(null));
 
 		final CommitterColors colors = CommitterColors.getDefault();
 
