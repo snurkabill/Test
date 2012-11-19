@@ -1,0 +1,26 @@
+
+syntax: regexp
+^plugin/bin$
+^plugin/out$
+
+syntax: regexp
+^@dot$
+
+syntax: regexp
+^plugin/\.settings/org\.eclipse\.jdt\.core\.prefs\.orig$
+^plugin/javaCompiler\.\.\.args$
+^plugin/scratchpad\.txt$
+
+syntax: regexp
+^plugin/\.settings/org\.eclipse\.jdt\.ui\.prefs$
+
+syntax: regexp
+\.orig$
+^com.vectrace.MercurialEclipse_[0-9.]*.zip$
+^com.vectrace.MercurialEclipse_[0-9.]*.jar$
+^src.zip$
+
+syntax: regexp
+^plugin/[\w0-9\.\-]*\.jar$
+^plugin/\.classpath$
+^plugin/\.project$
