@@ -55,7 +55,7 @@ public final class HgClients {
 		cfg.setHgBin(executable);
 		cfg.setConcurrency(3);
 		cfg.setCommandWaitTimeout(Integer.MAX_VALUE);
-		cfg.setServerIdleTime(30);
+		cfg.setServerIdleTime(1);
 		cfg.setCodingErrorAction(CodingErrorAction.REPLACE);
 		cfg.getEnvironment().put("HGE_RUNDIR", AbstractShellCommand.getRunDir(executable));
 
