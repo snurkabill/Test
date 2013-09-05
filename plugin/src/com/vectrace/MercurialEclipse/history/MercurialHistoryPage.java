@@ -423,7 +423,7 @@ public class MercurialHistoryPage extends HistoryPage {
 				} else {
 					mercurialHistory = null;
 				}
-				linkWithEditor();
+				//linkWithEditor();
 				refresh();
 			}
 			return true;
@@ -438,7 +438,7 @@ public class MercurialHistoryPage extends HistoryPage {
 			} else {
 				mercurialHistory = null;
 			}
-			linkWithEditor();
+			//linkWithEditor();
 			refresh();
 		}
 		return true;
