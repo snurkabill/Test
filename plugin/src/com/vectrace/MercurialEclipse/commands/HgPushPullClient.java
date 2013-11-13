@@ -10,6 +10,7 @@
  *     Bastian Doetsch           - added authentication to push
  *     Andrei Loskutov           - bug fixes
  *     Ilya Ivanov (Intland) 	 - bug fixes
+ *     Josh Tam                  - large files support
  *******************************************************************************/
 package com.vectrace.MercurialEclipse.commands;
 
@@ -154,7 +155,7 @@ public class HgPushPullClient extends AbstractClient {
 
 		if (update) {
 			try {
-				HgUpdateClient.updateWithoutRefreshAndAutoResolve(hgRoot, null, false);
+				HgUpdateClient.updateWithoutRefreshAndAutoResolve(hgRoot, null, false, null);
 			} catch (HgException e) {
 				if (HgUpdateClient.isCrossesBranchError(e)) {
 					UpdateJob.handleMultipleHeads(hgRoot, false);

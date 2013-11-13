@@ -7,6 +7,7 @@
  *
  * Contributors:
  * 		Andrei Loskutov - implementation
+ * 		Josh Tam        - large files support
  *******************************************************************************/
 package com.vectrace.MercurialEclipse.wizards;
 
@@ -17,6 +18,7 @@ import java.util.List;
 
 import org.eclipse.jface.dialogs.IPageChangingListener;
 import org.eclipse.jface.dialogs.PageChangingEvent;
+import org.eclipse.jface.wizard.IWizard;
 import org.eclipse.jface.wizard.IWizardContainer;
 import org.eclipse.jface.wizard.IWizardPage;
 import org.eclipse.jface.wizard.WizardDialog;
@@ -30,6 +32,7 @@ import com.vectrace.MercurialEclipse.dialogs.RevisionChooserPanel.Settings;
 import com.vectrace.MercurialEclipse.exception.HgException;
 import com.vectrace.MercurialEclipse.model.ChangeSet;
 import com.vectrace.MercurialEclipse.model.HgRoot;
+import com.vectrace.MercurialEclipse.model.IHgRepositoryCredentials;
 import com.vectrace.MercurialEclipse.model.JHgChangeSet;
 import com.vectrace.MercurialEclipse.operations.UpdateOperation;
 import com.vectrace.MercurialEclipse.storage.DataLoader;
@@ -170,8 +173,29 @@ public class SelectRevisionPage extends WizardPage {
 
 		try {
 			// run update
-			UpdateOperation updateOperation = new UpdateOperation(getContainer(), hgRoot, revision,
-					false, false);
+			IHgRepositoryCredentials credentials = null;
+			IWizard wizard = getWizard();
+			if (wizard instanceof CloneRepoWizard) {
+				ClonePage clonePg = (ClonePage)((CloneRepoWizard)wizard).getStartingPage();
+				final String location = clonePg.getUrlText();
+				final String user = clonePg.getUserText();
+				final String password = clonePg.getPasswordText();
+				credentials = new IHgRepositoryCredentials() {
+					public String getUser() {
+						return user;
+					}
+
+					public String getPassword() {
+						return password;
+					}
+
+					public String getLocation() {
+						return location;
+					}
+				};
+			}
+
+			UpdateOperation updateOperation = new UpdateOperation(getContainer(), hgRoot, revision, false, false, credentials);
 			getContainer().run(true, true, updateOperation);
 		} catch (InvocationTargetException e) {
 			return handle(e);

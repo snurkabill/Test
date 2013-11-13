@@ -9,6 +9,7 @@
  * 	   Bastian	implementation
  *     Andrei Loskutov - bug fixes
  *     Adam Berkes (Intland) - bug fixes
+ *     Josh Tam - large files support
  *******************************************************************************/
 package com.vectrace.MercurialEclipse.commands;
 
@@ -16,6 +17,7 @@ import java.io.IOException;
 import java.io.InputStream;
 
 import com.aragost.javahg.Repository;
+import com.aragost.javahg.commands.CatCommand;
 import com.aragost.javahg.commands.flags.CatCommandFlags;
 import com.vectrace.MercurialEclipse.model.ChangeSet;
 import com.vectrace.MercurialEclipse.model.HgFile;
@@ -31,7 +33,9 @@ public class HgCatClient extends AbstractClient {
 		HgRoot hgRoot = hgfile.getHgRoot();
 		ChangeSet cs = hgfile.getChangeSet();
 		Repository repo = CommandServerCache.getInstance().get(hgRoot, cs.getBundleFile());
+		CatCommand command = CatCommandFlags.on(repo).rev(cs.getNode()).decode();
+		addAuthToHgCommand(hgRoot, command);
 
-		return CatCommandFlags.on(repo).rev(cs.getNode()).decode().execute(hgfile.getIPath().toOSString());
+		return command.execute(hgfile.getIPath().toOSString());
 	}
 }

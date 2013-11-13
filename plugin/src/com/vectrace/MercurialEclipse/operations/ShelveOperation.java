@@ -8,6 +8,7 @@
  * Contributors:
  * bastian	implementation
  *     Andrei Loskutov - bug fixes
+ *     Josh Tam        - large files support
  *******************************************************************************/
 package com.vectrace.MercurialEclipse.operations;
 
@@ -98,7 +99,7 @@ public class ShelveOperation extends HgOperation {
 				HgPatchClient.exportPatch(hgRoot, resources, shelveFile, null);
 				monitor.worked(2);
 				monitor.subTask(Messages.getString("ShelveOperation.cleaningDirtyFiles")); //$NON-NLS-1$
-				HgUpdateClient.cleanUpdate(hgRoot, ".");
+				HgUpdateClient.cleanUpdate(hgRoot, ".", null);
 			}
 		} catch (HgCoreException e) {
 			throw new InvocationTargetException(e, e.getLocalizedMessage());

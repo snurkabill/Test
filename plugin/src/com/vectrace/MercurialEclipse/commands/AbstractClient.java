@@ -10,6 +10,7 @@
  *     Andrei Loskutov           - bug fixes
  *     Adam Berkes (Intland)     - bug fixes
  *     Philip Graf               - proxy support
+ *     Josh Tam                  - large files support
  *******************************************************************************/
 package com.vectrace.MercurialEclipse.commands;
 
@@ -26,13 +27,16 @@ import org.eclipse.core.resources.IResource;
 import org.eclipse.core.runtime.Assert;
 import org.eclipse.core.runtime.IPath;
 
+import com.aragost.javahg.internals.AbstractCommand;
 import com.vectrace.MercurialEclipse.MercurialEclipsePlugin;
 import com.vectrace.MercurialEclipse.exception.HgException;
 import com.vectrace.MercurialEclipse.model.HgRoot;
+import com.vectrace.MercurialEclipse.model.IHgRepositoryCredentials;
 import com.vectrace.MercurialEclipse.model.IHgRepositoryLocation;
 import com.vectrace.MercurialEclipse.preferences.MercurialPreferenceConstants;
 import com.vectrace.MercurialEclipse.team.cache.MercurialRootCache;
 import com.vectrace.MercurialEclipse.utils.ResourceUtils;
+import com.vectrace.MercurialEclipse.utils.StringUtils;
 
 /**
  * Base client class
@@ -309,6 +313,25 @@ public abstract class AbstractClient {
 				command.cmdAppend("--config", "http_proxy.passwd=" //$NON-NLS-1$ //$NON-NLS-2$
 						+ proxy.getPassword());
 			}
+		}
+	}
+
+	public static void addAuthToHgCommand(IHgRepositoryCredentials credentials, AbstractCommand command) {
+		String location = credentials.getLocation();
+		String user = credentials.getUser();
+		String password = credentials.getPassword();
+		if (!StringUtils.isEmpty(location) && !StringUtils.isEmpty(user) && !StringUtils.isEmpty(password)) {
+			command.cmdAppend("--config", "auth.hge.prefix=" + location);
+			command.cmdAppend("--config", "auth.hge.username=" + user);
+			command.cmdAppend("--config", "auth.hge.password=" + password);
+			command.cmdAppend("--config", "auth.hge.schemes=http https");
+		}
+	}
+
+	public static void addAuthToHgCommand(HgRoot hgRoot, AbstractCommand command) {
+		IHgRepositoryLocation location = MercurialEclipsePlugin.getRepoManager().getDefaultRepoLocation(hgRoot);
+		if (location != null) {
+			addAuthToHgCommand(location, command);
 		}
 	}
 

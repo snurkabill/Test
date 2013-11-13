@@ -7,6 +7,7 @@
  *
  * Contributors:
  *     Andrei Loskutov - bug fixes
+ *     Josh Tam        - large files support
  *******************************************************************************/
 package com.vectrace.MercurialEclipse.commands;
 
@@ -19,6 +20,7 @@ import com.aragost.javahg.commands.UpdateResult;
 import com.aragost.javahg.commands.flags.UpdateCommandFlags;
 import com.vectrace.MercurialEclipse.exception.HgException;
 import com.vectrace.MercurialEclipse.model.HgRoot;
+import com.vectrace.MercurialEclipse.model.IHgRepositoryCredentials;
 import com.vectrace.MercurialEclipse.preferences.MercurialPreferenceConstants;
 import com.vectrace.MercurialEclipse.team.cache.RefreshRootJob;
 import com.vectrace.MercurialEclipse.team.cache.RefreshWorkspaceStatusJob;
@@ -32,18 +34,18 @@ public class HgUpdateClient extends AbstractClient {
 	 * Perform a clean update and refresh the workspace. Handles unresolved conflicts and shows the
 	 * user a message.
 	 */
-	public static void cleanUpdate(final HgRoot hgRoot, String revision) throws HgException
+	public static void cleanUpdate(final HgRoot hgRoot, String revision, IHgRepositoryCredentials credentials) throws HgException
 	{
-		update(hgRoot, revision, true);
+		update(hgRoot, revision, true, credentials);
 	}
 
 	/**
 	 * Perform an update and refresh the workspace. Handles unresolved conflicts and shows the user a message
 	 */
-	public static void update(final HgRoot hgRoot, String revision, boolean clean)
+	public static void update(final HgRoot hgRoot, String revision, boolean clean, IHgRepositoryCredentials credentials)
 			throws HgException {
 		try {
-			updateWithoutRefreshAndAutoResolve(hgRoot, revision, clean);
+			updateWithoutRefreshAndAutoResolve(hgRoot, revision, clean, credentials);
 		} finally {
 			new RefreshWorkspaceStatusJob(hgRoot, RefreshRootJob.LOCAL).schedule();
 		}
@@ -62,8 +64,8 @@ public class HgUpdateClient extends AbstractClient {
 	/**
 	 * Perform an update. Handles unresolved conflicts and shows the user a message.
 	 */
-	public static void updateWithoutRefreshAndAutoResolve(HgRoot hgRoot, String revision, boolean clean) throws HgException {
-		updateWithoutRefresh(hgRoot, revision, clean);
+	public static void updateWithoutRefreshAndAutoResolve(HgRoot hgRoot, String revision, boolean clean, IHgRepositoryCredentials credentials) throws HgException {
+		updateWithoutRefresh(hgRoot, revision, clean, credentials);
 
 		if (!HgResolveClient.autoResolve(hgRoot)) {
 			showConflictMessage();
@@ -81,7 +83,7 @@ public class HgUpdateClient extends AbstractClient {
 	 *            Whether a clean update should be done
 	 * @return The result of the invocation
 	 */
-	private static UpdateResult updateWithoutRefresh(HgRoot hgRoot, String revision, boolean clean) throws HgException {
+	private static UpdateResult updateWithoutRefresh(HgRoot hgRoot, String revision, boolean clean, IHgRepositoryCredentials credentials) throws HgException {
 		final UpdateCommand command = UpdateCommandFlags.on(hgRoot.getRepository());
 
 		if (revision != null && revision.trim().length() > 0) {
@@ -90,6 +92,12 @@ public class HgUpdateClient extends AbstractClient {
 
 		if (clean) {
 			command.clean();
+		}
+
+		if (credentials != null) {
+			addAuthToHgCommand(credentials, command);
+		} else {
+			addAuthToHgCommand(hgRoot, command);
 		}
 
 		// Caller must call HgResolveClient#autoResolve(HgRoot)

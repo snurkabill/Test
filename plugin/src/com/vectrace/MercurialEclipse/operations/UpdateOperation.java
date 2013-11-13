@@ -7,6 +7,7 @@
  *
  * Contributors:
  *     Andrei Loskutov - implementation
+ *     Josh Tam        - large files support
  *******************************************************************************/
 package com.vectrace.MercurialEclipse.operations;
 
@@ -22,6 +23,7 @@ import com.vectrace.MercurialEclipse.actions.HgOperation;
 import com.vectrace.MercurialEclipse.commands.HgUpdateClient;
 import com.vectrace.MercurialEclipse.exception.HgException;
 import com.vectrace.MercurialEclipse.model.HgRoot;
+import com.vectrace.MercurialEclipse.model.IHgRepositoryCredentials;
 import com.vectrace.MercurialEclipse.wizards.Messages;
 
 /**
@@ -34,18 +36,21 @@ public class UpdateOperation extends HgOperation {
 	private final boolean svn;
 	private final HgRoot hgRoot;
 
+	private final IHgRepositoryCredentials credentials;
+
 	/**
 	 * @param context
 	 * @param rev the LAST revision which will be at the cloned repo, all subsequent revisions will be present
 	 * @param forest true to use forest extension
 	 * @param svn to use svn extension
 	 */
-	public UpdateOperation(IRunnableContext context, HgRoot hgRoot, String rev, boolean forest, boolean svn) {
+	public UpdateOperation(IRunnableContext context, HgRoot hgRoot, String rev, boolean forest, boolean svn, IHgRepositoryCredentials credentials) {
 		super(context);
 		this.hgRoot = hgRoot;
 		this.rev = rev;
 		this.forest = forest;
 		this.svn = svn;
+		this.credentials = credentials;
 	}
 
 	/**
@@ -77,7 +82,7 @@ public class UpdateOperation extends HgOperation {
 			} else if (forest) {
 				throw new IllegalArgumentException("Forest update not supported yet!");
 			} else {
-				HgUpdateClient.cleanUpdate(hgRoot, rev);
+				HgUpdateClient.cleanUpdate(hgRoot, rev, credentials);
 			}
 			m.worked(1);
 		} catch (HgException e) {

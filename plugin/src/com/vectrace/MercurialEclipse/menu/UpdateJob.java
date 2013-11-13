@@ -10,6 +10,7 @@
  *     Andrei Loskutov - bug fixes
  *     Ilya Ivanov (Intland) - modifications
  *     Zsolt Koppany (Intland)
+ *     Josh Tam - large files support
  *******************************************************************************/
 package com.vectrace.MercurialEclipse.menu;
 
@@ -80,7 +81,7 @@ public class UpdateJob extends Job {
 			}
 			monitor.worked(1);
 
-			HgUpdateClient.update(hgRoot, revision, cleanEnabled);
+			HgUpdateClient.update(hgRoot, revision, cleanEnabled, null);
 			monitor.worked(1);
 
 			// if revision != null then it's an update operation to particular change set,

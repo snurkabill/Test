@@ -7,6 +7,7 @@
  *
  * Contributors:
  * 		Andrei Loskutov	- implementation
+ * 		Josh Tam        - large files support
  *******************************************************************************/
 package com.vectrace.MercurialEclipse.model;
 
@@ -22,21 +23,11 @@ import com.vectrace.MercurialEclipse.exception.HgException;
  * Interface for hg repository, which might be either local (file) or remote (url)
  * @author Andrei
  */
-public interface IHgRepositoryLocation extends IWorkbenchAdapter, IAdaptable {
+public interface IHgRepositoryLocation extends IWorkbenchAdapter, IAdaptable, IHgRepositoryCredentials {
 
 	int compareTo(IHgRepositoryLocation loc);
 
 	int compareTo(File loc);
-
-	/**
-	 * @return might return null
-	 */
-	String getUser();
-
-	/**
-	 * @return might return null
-	 */
-	String getPassword();
 
 	/**
 	 * Return unsafe (with password) URI for repository location if possible
@@ -44,11 +35,6 @@ public interface IHgRepositoryLocation extends IWorkbenchAdapter, IAdaptable {
 	 * @throws HgException unable to parse to URI or location is invalid.
 	 */
 	URI getUri() throws HgException;
-
-	/**
-	 * @return might return null
-	 */
-	String getLocation();
 
 	/**
 	 * @return might return null

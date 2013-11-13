@@ -7,6 +7,7 @@
  *
  * Contributors:
  *     Andrei Loskutov          - implementation
+ *     Josh Tam                 - large files support
  *******************************************************************************/
 package com.vectrace.MercurialEclipse.commands;
 
@@ -57,6 +58,7 @@ public class HgRevertClient extends AbstractClient {
 		String node = cs == null ? "." : cs.getNode();
 		RevertCommand command = RevertCommandFlags.on(hgRoot.getRepository()).noBackup().rev(node);
 		IResource firstFile = resources.get(0);
+		addAuthToHgCommand(hgRoot, command);
 
 		// TODO: need to handle reverting to renamed revisions generally
 		if (resources.size() == 1 && cs != null && (cs.isMoved(firstFile) || cs.isRemoved(firstFile))) {
@@ -78,7 +80,7 @@ public class HgRevertClient extends AbstractClient {
 			}
 		}
 
-		command.rev(node).execute(toFileArray(resources));
+		command.execute(toFileArray(resources));
 		fileSet.addAll(resources);
 		monitor.worked(1);
 
@@ -86,8 +88,9 @@ public class HgRevertClient extends AbstractClient {
 	}
 
 	public static void performRevertAll(IProgressMonitor monitor, HgRoot hgRoot) {
-		RevertCommandFlags.on(hgRoot.getRepository()).noBackup().all().execute();
-
+		RevertCommand command = RevertCommandFlags.on(hgRoot.getRepository()).noBackup().all();
+		addAuthToHgCommand(hgRoot, command);
+		command.execute();
 		MercurialUtilities.setOfferAutoCommitMerge(true);
 	}
 }
