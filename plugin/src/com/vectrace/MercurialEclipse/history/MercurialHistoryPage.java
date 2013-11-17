@@ -132,8 +132,15 @@ import com.vectrace.MercurialEclipse.wizards.Messages;
 
 public class MercurialHistoryPage extends HistoryPage {
 
-	private static final boolean ECLISPE_BEFORE_38 = HgFeatures.doCompare(
-			Platform.getBundle("org.eclipse.ui.ide").getVersion(), new Version(3, 8, 0)) < 0;
+	private static final boolean ECLISPE_BEFORE_38;
+
+	private static final boolean ECLISPE_BEFORE_431;
+
+	static {
+		Version ver = Platform.getBundle("org.eclipse.ui.ide").getVersion();
+		ECLISPE_BEFORE_431 = HgFeatures.doCompare(ver, new Version(4, 3, 1)) < 0;
+		ECLISPE_BEFORE_38 = HgFeatures.doCompare(ver, new Version(3, 8, 0)) < 0;
+	}
 
 	// attributes
 
@@ -423,7 +430,9 @@ public class MercurialHistoryPage extends HistoryPage {
 				} else {
 					mercurialHistory = null;
 				}
-				//linkWithEditor();
+				if (!ECLISPE_BEFORE_431) {
+					linkWithEditor();
+				}
 				refresh();
 			}
 			return true;
@@ -438,7 +447,9 @@ public class MercurialHistoryPage extends HistoryPage {
 			} else {
 				mercurialHistory = null;
 			}
-			//linkWithEditor();
+			if (!ECLISPE_BEFORE_431) {
+				linkWithEditor();
+			}
 			refresh();
 		}
 		return true;
