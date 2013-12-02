@@ -103,6 +103,9 @@ public class HgUpdateClient extends AbstractClient {
 		// Caller must call HgResolveClient#autoResolve(HgRoot)
 		command.cmdAppend("--config", "ui.merge=internal:fail");
 
+		// TODO: JavaHg should not hang if creds are waiting
+		command.cmdAppend("-y");
+
 		return new JavaHgCommandJob<UpdateResult>(command, makeDescription(revision, clean)) {
 			@Override
 			protected UpdateResult run() throws Exception {
