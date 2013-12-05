@@ -137,6 +137,10 @@ public class MercurialTeamProvider extends RepositoryProvider {
 		if (hgDir != null) {
 			setTeamPrivate(hgDir);
 		}
+		final IResource hglfDir = project.getFolder(".hglf"); //$NON-NLS-1$
+		if (hglfDir != null) {
+			setTeamPrivate(hglfDir);
+		}
 		if(!MercurialStatusCache.getInstance().isStatusKnown(project)) {
 			new RefreshStatusJob("Initializing hg cache for: " + hgRoot.getName(), project, hgRoot)
 					.schedule(50);
@@ -253,7 +257,8 @@ public class MercurialTeamProvider extends RepositoryProvider {
 
 		// TODO: The .hg folder should always be team private, but support for this is not
 		// implemented for repositories not at project root.
-		if ((resource instanceof IFolder && ".hg".equals(resource.getName()))
+		String resName = resource.getName();
+		if ((resource instanceof IFolder && (".hg".equals(resName) || ".hglf".equals(resName)))
 				|| resource.isTeamPrivateMember()) {
 			return false;
 		}
