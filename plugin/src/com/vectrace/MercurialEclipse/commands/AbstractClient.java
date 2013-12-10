@@ -320,11 +320,14 @@ public abstract class AbstractClient {
 		String location = credentials.getLocation();
 		String user = credentials.getUser();
 		String password = credentials.getPassword();
-		if (!StringUtils.isEmpty(location) && !StringUtils.isEmpty(user) && !StringUtils.isEmpty(password)) {
+		if (!StringUtils.isEmpty(location)) {
 			command.cmdAppend("--config", "auth.hge.prefix=" + location);
-			command.cmdAppend("--config", "auth.hge.username=" + user);
-			command.cmdAppend("--config", "auth.hge.password=" + password);
+			if (!StringUtils.isEmpty(user) && !StringUtils.isEmpty(password)) {
+				command.cmdAppend("--config", "auth.hge.username=" + user);
+				command.cmdAppend("--config", "auth.hge.password=" + password);
+			}
 			command.cmdAppend("--config", "auth.hge.schemes=http https");
+			command.cmdAppend("--config", "paths.default=" + location);
 		}
 	}
 
