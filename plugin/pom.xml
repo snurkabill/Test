@@ -111,6 +111,11 @@
 			<artifactId>javahg-ext-mq</artifactId>
 			<version>0.6</version>
 		</dependency>
+		<dependency>
+         <groupId>com.aragost.javahg</groupId>
+         <artifactId>javahg-ext-largefiles</artifactId>
+         <version>0.1-SNAPSHOT</version>
+      </dependency>
 	</dependencies>
 	<repositories>
 		<repository>

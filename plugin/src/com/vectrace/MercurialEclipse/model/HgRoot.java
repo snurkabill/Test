@@ -340,4 +340,22 @@ public class HgRoot extends HgPath implements IHgRepositoryLocation {
 	public IPath getRelativePath(IResource res) {
 		return ResourceUtils.getPath(res).makeRelativeTo(getIPath());
 	}
+
+	/**
+	 * @return Whether this is a largefiles enabled repository
+	 */
+	public boolean hasLargeFiles() {
+		return new File(this, ".hglf").exists();
+	}
+
+	/**
+	 * @param repo The repository location to compare.
+	 * @return true if repo has the same credentials as the default repository location.
+	 */
+	public boolean isDefaultLocation(IHgRepositoryCredentials repo) {
+		IHgRepositoryCredentials defaultCreds = MercurialEclipsePlugin.getRepoManager().getDefaultRepoLocation(this);
+		return StringUtils.equalIgnoreNull(defaultCreds.getLocation(), repo.getLocation()) &&
+				StringUtils.equalIgnoreNull(defaultCreds.getUser(), repo.getUser()) &&
+				StringUtils.equalIgnoreNull(defaultCreds.getPassword(), repo.getPassword());
+	}
 }

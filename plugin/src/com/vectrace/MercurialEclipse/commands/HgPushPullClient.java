@@ -17,6 +17,8 @@ package com.vectrace.MercurialEclipse.commands;
 import java.util.List;
 
 import org.eclipse.core.runtime.IProgressMonitor;
+import org.eclipse.core.runtime.IStatus;
+import org.eclipse.core.runtime.Status;
 import org.eclipse.core.runtime.jobs.Job;
 
 import com.aragost.javahg.Changeset;
@@ -24,6 +26,8 @@ import com.aragost.javahg.commands.PullCommand;
 import com.aragost.javahg.commands.PushCommand;
 import com.aragost.javahg.commands.flags.PullCommandFlags;
 import com.aragost.javahg.commands.flags.PushCommandFlags;
+import com.aragost.javahg.ext.largefiles.LfpullCommand;
+import com.aragost.javahg.ext.largefiles.flags.LfpullCommandFlags;
 import com.aragost.javahg.ext.rebase.merge.RebaseConflictResolvingContext;
 import com.vectrace.MercurialEclipse.MercurialEclipsePlugin;
 import com.vectrace.MercurialEclipse.commands.extensions.HgRebaseClient;
@@ -98,7 +102,7 @@ public class HgPushPullClient extends AbstractClient {
 	/**
 	 * Does a pull, then if any of update, rebase, or merge are true does subsequent calls.
 	 */
-	public static void pull(HgRoot hgRoot, ChangeSet changeset, IHgRepositoryLocation repo,
+	public static void pull(final HgRoot hgRoot, ChangeSet changeset, IHgRepositoryLocation repo,
 			boolean update, boolean rebase, boolean force, boolean useTimeout, boolean merge,
 			String branch, IProgressMonitor progress) throws HgException {
 		final PullCommand command = PullCommandFlags.on(hgRoot.getRepository());
@@ -120,6 +124,7 @@ public class HgPushPullClient extends AbstractClient {
 		}
 
 		// Do the pull
+		final List<Changeset> pulled;
 		{
 			final String remote = setupForRemote(repo, command);
 
@@ -127,7 +132,7 @@ public class HgPushPullClient extends AbstractClient {
 					.getTimeOut(MercurialPreferenceConstants.PULL_TIMEOUT) : Integer.MAX_VALUE;
 			String description = makeDescription("Pulling", changeset, branch);
 
-			List<Changeset> pulled = new JavaHgCommandJob<List<Changeset>>(command, description) {
+			pulled = new JavaHgCommandJob<List<Changeset>>(command, description) {
 				@Override
 				protected List<Changeset> run() throws Exception {
 					return command.execute(remote);
@@ -178,6 +183,23 @@ public class HgPushPullClient extends AbstractClient {
 				refreshJob.addJobChangeListener(MergeView.makeConflictJobChangeListener(hgRoot,
 						null, true));
 			}
+		}
+
+		if (hgRoot.hasLargeFiles() && !hgRoot.isDefaultLocation(repo)) {
+			Job job = new Job("Largefiles download for " + repo.getLocation()) {
+
+				@Override
+				protected IStatus run(IProgressMonitor monitor) {
+					final LfpullCommand lfcommand = LfpullCommandFlags.on(hgRoot.getRepository());
+					for(Changeset cs : pulled) {
+						lfcommand.rev(cs.getNode());
+					}
+					lfcommand.execute();
+					return Status.OK_STATUS;
+				}
+
+			};
+			job.schedule();
 		}
 
 		refreshJob.schedule();

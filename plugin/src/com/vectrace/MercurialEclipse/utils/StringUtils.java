@@ -51,4 +51,14 @@ public final class StringUtils {
 	public static boolean isEmpty(String text){
 		return text == null || text.trim().length() == 0;
 	}
+
+	/**
+	 * @param s1 The first string. Can be null.
+	 * @param s2 The second string. Can be null.
+	 * @return True if the two strings are equal. Empty string and null are treated as equal.
+	 */
+	public static boolean equalIgnoreNull(String s1, String s2)
+	{
+		return (isEmpty(s1) && isEmpty(s2)) || (s1 == null ? false : s1.equals(s2));
+	}
 }
