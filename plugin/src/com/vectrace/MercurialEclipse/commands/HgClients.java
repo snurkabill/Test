@@ -16,10 +16,12 @@ import java.util.ArrayList;
 
 import com.aragost.javahg.MercurialExtension;
 import com.aragost.javahg.RepositoryConfiguration;
+import com.aragost.javahg.ext.largefiles.LargefilesExtension;
 import com.aragost.javahg.ext.mq.MQExtension;
 import com.aragost.javahg.ext.rebase.RebaseExtension;
 import com.google.common.collect.Lists;
 import com.vectrace.MercurialEclipse.MercurialEclipsePlugin;
+import com.vectrace.MercurialEclipse.model.HgRoot;
 
 /**
  * @author Stefan
@@ -49,7 +51,7 @@ public final class HgClients {
 		return config.getExecutable();
 	}
 
-	public static RepositoryConfiguration getRepoConfig() {
+	public static RepositoryConfiguration getRepoConfig(HgRoot root) {
 		RepositoryConfiguration cfg = new RepositoryConfiguration();
 		String executable = HgClients.getExecutable();
 		cfg.setHgBin(executable);
@@ -66,6 +68,9 @@ public final class HgClients {
 		ArrayList<Class<? extends MercurialExtension>> extList = Lists.newArrayList();
 		extList.add(RebaseExtension.class);
 		extList.add(MQExtension.class);
+		if (root.hasLargeFiles()) {
+			extList.add(LargefilesExtension.class);
+		}
 		cfg.setExtensionClasses(extList);
 
 		return cfg;

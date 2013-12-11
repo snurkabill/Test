@@ -18,6 +18,9 @@ import com.vectrace.MercurialEclipse.exception.HgException;
 import com.vectrace.MercurialEclipse.model.IHgRepositoryLocation;
 import com.vectrace.MercurialEclipse.preferences.MercurialPreferenceConstants;
 
+/**
+ * TODO: support cloning largefiles without externally enabling largefiles
+ */
 public class HgCloneClient extends AbstractClient {
 
 	public static void clone(File parentDirectory, IHgRepositoryLocation repo,

@@ -127,7 +127,7 @@ public class CommandServerCache {
 	private final class BaseCacheLoader extends CacheLoader<HgRoot, BaseRepository> {
 		@Override
 		public BaseRepository load(HgRoot root) throws Exception {
-			return Repository.open(HgClients.getRepoConfig(), root);
+			return Repository.open(HgClients.getRepoConfig(root), root);
 		}
 	}
 
