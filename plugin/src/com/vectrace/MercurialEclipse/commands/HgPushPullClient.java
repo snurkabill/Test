@@ -102,7 +102,7 @@ public class HgPushPullClient extends AbstractClient {
 	/**
 	 * Does a pull, then if any of update, rebase, or merge are true does subsequent calls.
 	 */
-	public static void pull(final HgRoot hgRoot, ChangeSet changeset, IHgRepositoryLocation repo,
+	public static void pull(final HgRoot hgRoot, ChangeSet changeset, final IHgRepositoryLocation repo,
 			boolean update, boolean rebase, boolean force, boolean useTimeout, boolean merge,
 			String branch, IProgressMonitor progress) throws HgException {
 		final PullCommand command = PullCommandFlags.on(hgRoot.getRepository());
@@ -194,6 +194,7 @@ public class HgPushPullClient extends AbstractClient {
 					for(Changeset cs : pulled) {
 						lfcommand.rev(cs.getNode());
 					}
+					AbstractClient.addAuthToHgCommand(repo, lfcommand);
 					lfcommand.execute();
 					return Status.OK_STATUS;
 				}

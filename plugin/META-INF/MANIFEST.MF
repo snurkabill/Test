@@ -67,7 +67,7 @@ Export-Package: com.vectrace.MercurialEclipse,
  com.vectrace.MercurialEclipse.wizards.mq
 Bundle-RequiredExecutionEnvironment: J2SE-1.5
 Bundle-ClassPath: .,
- javahg-0.7.jar,
+ javahg-0.8-SNAPSHOT.jar,
  javahg-ext-largefiles-0.1-SNAPSHOT.jar,
  javahg-ext-mq-0.6.jar,
  javahg-ext-rebase-0.7.jar,

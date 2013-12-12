@@ -59,6 +59,6 @@ public final class StringUtils {
 	 */
 	public static boolean equalIgnoreNull(String s1, String s2)
 	{
-		return (isEmpty(s1) && isEmpty(s2)) || (s1 == null ? false : s1.equals(s2));
+		return isEmpty(s1) ? isEmpty(s2) : s1.equals(s2);
 	}
 }
