@@ -8,6 +8,7 @@
  * Andrei Loskutov - bugfixes
  * Zsolt Koppany (Intland)
  * Ilya Ivanov (Intland)
+ * Josh Tam - bugfixes
  ******************************************************************************/
 
 package com.vectrace.MercurialEclipse.commands;
@@ -26,12 +27,15 @@ import com.aragost.javahg.commands.ExecutionException;
 import com.aragost.javahg.commands.LogCommand;
 import com.aragost.javahg.commands.flags.HeadsCommandFlags;
 import com.aragost.javahg.commands.flags.LogCommandFlags;
+import com.vectrace.MercurialEclipse.MercurialEclipsePlugin;
 import com.vectrace.MercurialEclipse.exception.HgException;
 import com.vectrace.MercurialEclipse.model.ChangeSet;
 import com.vectrace.MercurialEclipse.model.ChangeSet.Direction;
+import com.vectrace.MercurialEclipse.model.HgFile;
 import com.vectrace.MercurialEclipse.model.HgRoot;
 import com.vectrace.MercurialEclipse.model.IHgRepositoryLocation;
 import com.vectrace.MercurialEclipse.model.JHgChangeSet;
+import com.vectrace.MercurialEclipse.model.NullHgFile;
 import com.vectrace.MercurialEclipse.preferences.MercurialPreferenceConstants;
 import com.vectrace.MercurialEclipse.team.cache.CommandServerCache;
 import com.vectrace.MercurialEclipse.team.cache.LocalChangesetCache;
@@ -118,6 +122,7 @@ public class HgLogClient extends AbstractClient {
 		boolean isFile = res.getType() == IResource.FILE;
 		IPath path = ResourceUtils.getPath(res);
 		String sPath = path.toOSString();
+		IPath relPath = root.getRelativePath(res);
 		LogCommand command = addRange(LogCommandFlags.on(root.getRepository()), startRev, limitNumber, isFile);
 		List<Changeset> c;
 
@@ -127,7 +132,7 @@ public class HgLogClient extends AbstractClient {
 				// Return the union of --follow and --removed. Need to show transplanted revisions on other branches
 				TreeSet<Changeset> set = new TreeSet<Changeset>(CS_COMPARATOR);
 
-				if (canFollow(root, path)) {
+				if (canFollow(root, relPath)) {
 					command.follow();
 					set.addAll(command.execute(sPath));
 					command = addRange(LogCommandFlags.on(root.getRepository()), startRev, limitNumber, isFile);
@@ -136,14 +141,14 @@ public class HgLogClient extends AbstractClient {
 				command.removed();
 				set.addAll(command.execute(sPath));
 
-				while(set.size() > limitNumber) {
+				while (set.size() > limitNumber) {
 					// Could use descendingIterator but that requires 1.6
 					set.remove(set.last());
 				}
 
 				c = new ArrayList<Changeset>(set);
 			} else {
-				if (canFollow(root, path)) {
+				if (canFollow(root, relPath)) {
 					command.follow();
 				}
 				c = command.execute(sPath);
@@ -157,11 +162,13 @@ public class HgLogClient extends AbstractClient {
 		return getChangeSets(root, c);
 	}
 
-	/**
-	 * TODO: This is not correct: should be whether path exists in working directory parent
-	 */
-	private static boolean canFollow(HgRoot root, IPath path) {
-		return path.toFile().exists();
+	private static boolean canFollow(HgRoot root, IPath relPath) {
+		try {
+			return !(HgFile.locate(LocalChangesetCache.getInstance().getCurrentChangeSet(root), relPath) instanceof NullHgFile);
+		} catch (HgException e) {
+			MercurialEclipsePlugin.logError(e);
+			return false;
+		}
 	}
 
 	public static List<JHgChangeSet> getRootLog(HgRoot root, int limitNumber, int startRev) {
