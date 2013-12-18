@@ -33,6 +33,8 @@ public class HgMergeClient extends AbstractClient {
 			command.force();
 		}
 
+		addAuthToHgCommand(hgRoot, command);
+
 		try {
 			return command.execute();
 		} catch (IOException e) {

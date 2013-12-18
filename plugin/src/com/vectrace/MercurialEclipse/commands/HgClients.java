@@ -66,11 +66,11 @@ public final class HgClients {
 
 		// Extensions
 		ArrayList<Class<? extends MercurialExtension>> extList = Lists.newArrayList();
-		extList.add(RebaseExtension.class);
-		extList.add(MQExtension.class);
 		if (root.hasLargeFiles()) {
 			extList.add(LargefilesExtension.class);
 		}
+		extList.add(RebaseExtension.class);
+		extList.add(MQExtension.class);
 		cfg.setExtensionClasses(extList);
 
 		return cfg;

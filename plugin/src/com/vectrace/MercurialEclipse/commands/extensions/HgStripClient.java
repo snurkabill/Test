@@ -13,6 +13,7 @@ package com.vectrace.MercurialEclipse.commands.extensions;
 
 import com.aragost.javahg.ext.mq.StripCommand;
 import com.aragost.javahg.ext.mq.flags.StripCommandFlags;
+import com.vectrace.MercurialEclipse.commands.AbstractClient;
 import com.vectrace.MercurialEclipse.extensionpoint.definition.handlers.ActionListenerContributionDispatcher;
 import com.vectrace.MercurialEclipse.model.ChangeSet;
 import com.vectrace.MercurialEclipse.model.HgRoot;
@@ -55,6 +56,7 @@ public final class HgStripClient {
 			command.force();
 		}
 		command.rev(changeset);
+		AbstractClient.addAuthToHgCommand(hgRoot, command);
 
 		// Future: should not care about the result
 		String result;
