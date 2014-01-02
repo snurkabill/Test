@@ -63,10 +63,10 @@ public class AddToWorkspaceAction extends WorkspaceModifyOperation {
 			 * iterate over all reference strings and use them to create
 			 * projects in the current workspace.
 			 *
-			 * A reference string uses underscore as delimiter and looks like
+			 * A reference string uses | as delimiter and looks like
 			 * this:
 			 *
-			 * "MercurialEclipseProjectSet|ProjectName|RepositoryURLForClone"
+			 * "MercurialEclipseProjectSet|ProjectName|RepositoryURLForClone|RepositorySubDirectoryForProject"
 			 *
 			 */
 			for (String reference : referenceStrings) {
