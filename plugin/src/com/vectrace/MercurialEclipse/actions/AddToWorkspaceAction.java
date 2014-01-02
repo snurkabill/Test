@@ -13,12 +13,16 @@ package com.vectrace.MercurialEclipse.actions;
 
 import java.lang.reflect.InvocationTargetException;
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
+import java.util.Set;
 
 import org.eclipse.core.resources.IProject;
+import org.eclipse.core.resources.IProjectDescription;
 import org.eclipse.core.resources.IResource;
 import org.eclipse.core.resources.IWorkspaceRoot;
 import org.eclipse.core.resources.ResourcesPlugin;
 import org.eclipse.core.runtime.CoreException;
+import org.eclipse.core.runtime.IPath;
 import org.eclipse.core.runtime.IProgressMonitor;
 import org.eclipse.core.runtime.jobs.ISchedulingRule;
 import org.eclipse.team.core.RepositoryProvider;
@@ -69,18 +73,29 @@ public class AddToWorkspaceAction extends WorkspaceModifyOperation {
 			 * "MercurialEclipseProjectSet|ProjectName|RepositoryURLForClone|RepositorySubDirectoryForProject"
 			 *
 			 */
+
+			// Clone first
+			HgRepositoryLocationManager repoManager = MercurialEclipsePlugin.getRepoManager();
+			for (String repo : getRepositoriesToClone()) {
+				if (monitor.isCanceled()) {
+					break;
+				}
+				IHgRepositoryLocation location = repoManager.getRepoLocation(repo, null, null);
+				HgCloneClient.clone(wsRoot.getLocation().toFile(), location, false, false, false,
+						false, null, null);
+				monitor.worked(1);
+			}
+
+			// Now add projects
 			for (String reference : referenceStrings) {
 				if (monitor.isCanceled()) {
 					break;
 				}
-
 				MercurialProjectSetCapability psc = MercurialProjectSetCapability.getInstance();
 
-				// Project name is stored in part 1
 				String projectName = psc.getProject(reference);
 				IProject proj = wsRoot.getProject(projectName);
 
-				// only new projects
 				if (proj.exists() || proj.getLocation() != null) {
 					MercurialEclipsePlugin.logInfo("Project" + proj.getName()
 							+ " not imported. Already exists.", null);
@@ -88,24 +103,20 @@ public class AddToWorkspaceAction extends WorkspaceModifyOperation {
 					continue;
 				}
 
+				IProjectDescription newProjectDescription = wsRoot.getWorkspace().newProjectDescription(projectName);
+				// Set the project to be rooted at the appropriate sub-directory of its HG clone
+				// For single-project repos, this may be the root.
 				String rootRelativePath = psc.getRootRelativePath(reference);
-				if(rootRelativePath != null){
-					MercurialEclipsePlugin.logInfo("Project" + proj.getName()
-							+ " not imported, as it was only a part of the hg repo.", null);
-					// TODO somehow allow to clone multiple projects from ONE hg root
-					break;
+				IHgRepositoryLocation repositoryRoot = repoManager.getRepoLocation(psc.getPullRepo(reference), null, null);
+				IPath projectDirectory = repositoryRoot.toHgRoot().getIPath();
+				if (rootRelativePath != null) {
+				  projectDirectory = projectDirectory.append(rootRelativePath);
 				}
-
-				// Repository-URL is stored in part 2
-				HgRepositoryLocationManager repoManager = MercurialEclipsePlugin.getRepoManager();
+				newProjectDescription.setLocation(projectDirectory);
+				proj.create(newProjectDescription, monitor);
+				proj.open(monitor);
 				IHgRepositoryLocation location = repoManager.getRepoLocation(psc
 						.getPullRepo(reference), null, null);
-
-				HgCloneClient.clone(wsRoot.getLocation().toFile(), location, false, false, false,
-						false, null, projectName);
-
-				proj.create(monitor);
-				proj.open(monitor);
 
 				// Register the project with Team.
 				RepositoryProvider.map(proj, MercurialTeamProvider.class.getName());
@@ -129,6 +140,15 @@ public class AddToWorkspaceAction extends WorkspaceModifyOperation {
 		} finally {
 			monitor.done();
 		}
+	}
+
+	private Set<String> getRepositoriesToClone() {
+		Set<String> result = new LinkedHashSet<String>();
+		MercurialProjectSetCapability psc = MercurialProjectSetCapability.getInstance();
+		for (String rs : referenceStrings) {
+			result.add(psc.getPullRepo(rs));
+		}
+		return result;
 	}
 
 	public String[] getReferenceStrings() {
