@@ -1,0 +1,179 @@
+/*******************************************************************************
+ * Copyright (c) 2005-2008 Bastian Doetsch and others.
+ * All rights reserved. This program and the accompanying materials
+ * are made available under the terms of the Eclipse Public License v1.0
+ * which accompanies this distribution, and is available at
+ * http://www.eclipse.org/legal/epl-v10.html
+ *
+ * Contributors:
+ *     Bastian Doetsch           - implementation
+ *     Andrei Loskutov           - bug fixes
+ *     Josh Tam                  - bug fixes for largefiles support
+ *******************************************************************************/
+package com.vectrace.MercurialEclipse.commands.extensions;
+
+import java.io.File;
+
+import com.aragost.javahg.ext.rebase.RebaseCommand;
+import com.aragost.javahg.ext.rebase.flags.RebaseCommandFlags;
+import com.aragost.javahg.ext.rebase.merge.RebaseConflictResolvingContext;
+import com.vectrace.MercurialEclipse.commands.AbstractClient;
+import com.vectrace.MercurialEclipse.commands.HgClients;
+import com.vectrace.MercurialEclipse.commands.HgStatusClient;
+import com.vectrace.MercurialEclipse.commands.JavaHgCommandJob;
+import com.vectrace.MercurialEclipse.exception.HgException;
+import com.vectrace.MercurialEclipse.extensionpoint.definition.handlers.ActionListenerContributionDispatcher;
+import com.vectrace.MercurialEclipse.menu.UpdateJob;
+import com.vectrace.MercurialEclipse.model.HgRoot;
+import com.vectrace.MercurialEclipse.preferences.MercurialPreferenceConstants;
+import com.vectrace.MercurialEclipse.team.MercurialUtilities;
+import com.vectrace.MercurialEclipse.team.cache.RefreshRootJob;
+import com.vectrace.MercurialEclipse.team.cache.RefreshWorkspaceStatusJob;
+
+/**
+ * @author bastian
+ */
+public class HgRebaseClient extends AbstractClient {
+
+	/**
+	 * Helper method to call
+	 * {@link #rebase(HgRoot, int, int, int, boolean, boolean, boolean, boolean, String)}
+	 */
+	public static RebaseConflictResolvingContext rebaseCurrentOnTip(HgRoot hgRoot) throws HgException {
+		return HgRebaseClient.rebase(hgRoot, null, null, null, false, false, false, false, null);
+	}
+
+	/**
+	 * Calls hg rebase.
+	 * <p>
+	 * Doesn't support supplying custom commit messages for collapse and continued collapse.
+	 *
+	 * @param hgRoot
+	 *            a hg root that is to be rebased.
+	 * @param sourceNode
+	 *            --source option, -1 if not set
+	 * @param baseNode
+	 *            --base option, -1 if not set
+	 * @param destNode
+	 *            --dest option, -1 if not set
+	 * @param collapse
+	 *            true, if --collapse is to be used
+	 * @param cont
+	 *            true, if --continue is to be used
+	 * @param keepBranches
+	 * @param user
+	 *            The user to use for collapse and continued collapse. May be null
+	 * @return the output of the command
+	 * @throws HgException
+	 */
+	public static RebaseConflictResolvingContext rebase(HgRoot hgRoot, final String sourceNode,
+			final String baseNode, String destNode, boolean collapse, final boolean cont,
+			boolean keepBranches, boolean keep, String user) throws HgException {
+
+		final RebaseCommand c = RebaseCommandFlags.on(hgRoot.getRepository());
+
+		if (!isUseExternalMergeTool()) {
+			// Do not invoke external editor for commit message
+			c.cmdAppend("--config", "ui.editor=echo"); //$NON-NLS-1$ //$NON-NLS-2$
+		}
+
+		// User is only applicable for collapse and continued collapse invocations
+		if (user != null) {
+			c.cmdAppend("--config", "ui.username=" + user); //$NON-NLS-1$ //$NON-NLS-2$
+		}
+
+		if (!cont) {
+			String source = null;
+			String dest = null;
+
+			// Source or base or neither is set
+			if (sourceNode != null && baseNode == null) {
+				source = sourceNode;
+				c.source(sourceNode);
+			} else if (baseNode != null && sourceNode == null) {
+				source = baseNode;
+				c.base(baseNode);
+			}
+
+			if (destNode != null) {
+				dest = destNode;
+				c.dest(destNode);
+			}
+
+			if (collapse) {
+				c.collapse();
+			}
+
+			ActionListenerContributionDispatcher.onBeforeRebase(source, dest);
+		}
+
+		if (keepBranches) {
+			c.keepbranches();
+		}
+		if (keep) {
+			c.keep();
+		}
+
+		MercurialUtilities.setOfferAutoCommitMerge(true);
+		addAuthToHgCommand(hgRoot, c);
+
+		final boolean[] hasNoConflicts = new boolean[1];
+		RebaseConflictResolvingContext ctx = new JavaHgCommandJob<RebaseConflictResolvingContext>(c, "Rebasing") {
+			@Override
+			protected RebaseConflictResolvingContext run() throws Exception {
+				RebaseConflictResolvingContext result;
+				if (cont) {
+					result = c.executeContinue();
+				} else {
+					result = c.execute();
+				}
+
+				hasNoConflicts[0] = result.getFlagConflicts().size() == 0 &&
+						result.getKeepDeleteConflicts().size() == 0 && result.getMergeConflicts().size() == 0;
+
+				if (hasNoConflicts[0]) {
+					ActionListenerContributionDispatcher.onRebase(result.getLocal().getNode());
+				}
+
+				return result;
+			}
+		}.execute(HgClients.getTimeOut(MercurialPreferenceConstants.PULL_TIMEOUT)).getValue();
+
+		// Workaround for rebase + largefiles bug (see http://bz.selenic.com/show_bug.cgi?id=3861)
+		if (hgRoot.hasLargeFiles() && hasNoConflicts[0] && !HgStatusClient.getDeleted(hgRoot, ".").isEmpty()) {
+			UpdateJob job = new UpdateJob(".", true, hgRoot, false);
+			job.setDataLossConfirmed(true);
+			job.schedule();
+		}
+
+		return ctx;
+	}
+
+	/**
+	 * Invoke hg rebase --abort. Note: Refreshes the workspace.
+	 *
+	 * @param hgRoot
+	 *            The hg root to use
+	 * @throws HgException
+	 *             On error
+	 */
+	public static void abortRebase(HgRoot hgRoot) throws HgException {
+		try {
+			RebaseCommandFlags.on(hgRoot.getRepository()).abort();
+		} finally {
+			new RefreshWorkspaceStatusJob(hgRoot, RefreshRootJob.ALL).schedule();
+		}
+	}
+
+	/**
+	 * Check to see if we are in the middle of a rebase. <br/>
+	 * Assume the presence of the <code>/.hg/rebasestate</code> file means that we are
+	 *
+	 * @param hgRoot
+	 * @return <code>true</code> if we are currently rebasing
+	 */
+	public static boolean isRebasing(HgRoot hgRoot) {
+		return hgRoot.getRepository().workingCopy().getParent2() != null
+				&& new File(hgRoot, ".hg" + File.separator + "rebasestate").exists();
+	}
+}
