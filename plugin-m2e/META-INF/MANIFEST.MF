@@ -1,7 +1,7 @@
 Manifest-Version: 1.0
 Bundle-ManifestVersion: 2
 Bundle-Name: MercurialEclipseMaven
-Bundle-SymbolicName: MercurialEclipseMaven-plugin;singleton:=true
+Bundle-SymbolicName: com.nexj.oss.MercurialEclipseMaven;singleton:=true
 Bundle-Version: 1.1.0.qualifier
 Bundle-Activator: com.nexj.oss.MercurialEclipseMaven.MercurialEclipseMavenPlugin
 Bundle-Vendor: MercurialEclipse project
