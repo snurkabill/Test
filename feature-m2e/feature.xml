@@ -3,7 +3,8 @@
       id="com.nexj.oss.MercurialEclipseMaven.feature"
       label="MercurialEclipseMaven"
       version="1.0.0.qualifier"
-      provider-name="MercurialEclipse project">
+      provider-name="MercurialEclipse project"
+      plugin="com.vectrace.MercurialEclipse">
 
    <description>
       Maven support for Mercurial using MercurialEclipse
@@ -112,6 +113,7 @@ This Agreement is governed by the laws of the State of New York and the intellec
       <import plugin="org.eclipse.team.ui"/>
       <import plugin="org.eclipse.equinox.security"/>
       <import plugin="org.eclipse.osgi"/>
+      <import feature="mercurialeclipse" version="2.1.1.qualifier"/>
    </requires>
 
    <plugin

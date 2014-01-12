@@ -2060,11 +2060,4 @@
             id="com.vectrace.MercurialEclipse.Perspective">
       </perspective>
    </extension>
-   <extension
-         point="org.eclipse.m2e.scm.scmHandlers">
-      <handler
-            class="com.vectrace.MercurialEclipse.m2e.scm.scmHandlers.MercurialHandler"
-            type="hg">
-      </handler>
-   </extension>
 </plugin>
