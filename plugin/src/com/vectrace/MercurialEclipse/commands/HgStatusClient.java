@@ -70,6 +70,16 @@ public class HgStatusClient extends AbstractClient {
 				.deleted().unknown().clean().lines(toFileArray(files));
 	}
 
+	public static List<StatusLine> getDeleted(HgRoot root, String revision) {
+		StatusCommand command = StatusCommandFlags.on(root.getRepository()).deleted();
+
+		if (revision != null && revision != "") {
+			command.rev(revision);
+		}
+
+		return command.lines();
+	}
+
 	public static List<StatusLine> getStatusMARDU(HgRoot root, String revision, String inPattern) {
 		StatusCommand command = StatusCommandFlags.on(root.getRepository()).modified().added()
 				.removed().deleted().unknown();

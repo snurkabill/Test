@@ -9,24 +9,33 @@ MercurialEclipse uses Maven. MercurialEclipse depends on JavaHg and extensions f
 
 2. Get the source code
     * Clone MercurialEclipse into your workspace as two projects - one for /feature and one for /plugin 
-    * Clone JavaHg projects (recommended)
+    * Clone JavaHg projects
+        * https://bitbucket.org/aragost/javahg-parent
         * https://bitbucket.org/aragost/javahg 
         * https://bitbucket.org/aragost/javahg-ext-mq
         * https://bitbucket.org/aragost/javahg-ext-rebase
-        * https://bitbucket.org/aragost/javahg-parent
+        * https://bitbucket.org/nexj/javahg-ext-largefiles
+        
+3. Install JavaHg dependencies into local Maven repository: for each of the JavaHg projects:
+	* Update to the appropriate Mercurial tag for the version that's needed
+	   * See /plugin/pom.xml dependencies section for the current version
+	* Run `mvn install` from the working directory. This runs unit tests before installing into Maven
+	* (Option) Run `mvn eclipse:eclipse` from the working directory. This makes it easier to use in Eclipse
 
-3. Set up the projects for build (Using m2eclipse)
-    * In your run configuration dropdown there will be a 'MercurialEclipse-MavenInit' launch - select the 
-      plugin project in the navigator view and then run this launch.
+3. Cause MercurialEclipse to use above build dependencies:
+    * If you have m2eclipse installed, in your run configuration dropdown there will be 
+      a 'MercurialEclipse-MavenInit' launch - select the plugin project in the navigator view and 
+      then run this launch.
     * This will download dependencies and generate .classpath and other files
+    * As an alternative to running the launch you can run `mvn clean eclipse:eclipse` on the command line
     * If there are Java errors related to Mylyn install the Mylyn plugin into your Eclipse
-    * For each of the JavaHg projects invoke the maven 'eclipse:eclipse' goal. This sets them up so Eclipse 
-      will build them  (like MercurialEclipse-MavenInit does).
-        * Create a new 'Maven Build' run configuration for that project with 'eclipse:eclipse' as the Goal.
-        * Refresh the projects after running this 
-    * So that MercurialEclipse uses the JavaHg code from your workspace use the Maven 'install' goal. 
-        * Create and invoke 'Maven build' launches with 'install' goal
-        * Re-run MercurialEclipse-MavenInit launch
+    
+# Troubleshooting
+  
+* After running any maven command, (including 'MercurialEclipse-MavenInit') refresh the appropriate 
+  project in the navigator view.
+* If MercurialEclipse doesn't load when debugging but there are no Errors in the problems view, 
+  clean the plugin project.
 
 # Building releases
   
