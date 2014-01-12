@@ -34,7 +34,9 @@ MercurialEclipse uses Maven. MercurialEclipse depends on JavaHg and extensions f
   
 * After running any maven command, (including 'MercurialEclipse-MavenInit') refresh the appropriate 
   project in the navigator view.
-    
+* If MercurialEclipse doesn't load when debugging but there are no Errors in the problems view, 
+  clean the plugin project.
+
 # Building releases
   
 1. Update to the appropriate tag
