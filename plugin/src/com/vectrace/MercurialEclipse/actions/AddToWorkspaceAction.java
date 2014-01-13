@@ -107,8 +107,12 @@ public class AddToWorkspaceAction extends WorkspaceModifyOperation {
 				// Set the project to be rooted at the appropriate sub-directory of its HG clone
 				// For single-project repos, this may be the root.
 				String rootRelativePath = psc.getRootRelativePath(reference);
-				IHgRepositoryLocation repositoryRoot = repoManager.getRepoLocation(psc.getPullRepo(reference), null, null);
-				IPath projectDirectory = repositoryRoot.toHgRoot().getIPath();
+
+				// The checkout will be at workspace-root/foo where foo is the last component of the HG URL
+				String repoURL = psc.getPullRepo(reference);
+				String repoDirectoryName = repoURL.substring(repoURL.lastIndexOf("/") + 1);
+				IPath projectDirectory = wsRoot.getLocation().append(repoDirectoryName);
+
 				if (rootRelativePath != null) {
 				  projectDirectory = projectDirectory.append(rootRelativePath);
 				}
