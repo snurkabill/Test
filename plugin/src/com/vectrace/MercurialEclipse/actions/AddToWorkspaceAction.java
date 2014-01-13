@@ -59,7 +59,7 @@ public class AddToWorkspaceAction extends WorkspaceModifyOperation {
 			InvocationTargetException, InterruptedException {
 
 		try {
-			monitor.beginTask("Adding projects to workspace...", referenceStrings.length);
+			monitor.beginTask("Cloning mercurial roots...", referenceStrings.length);
 			IWorkspaceRoot wsRoot = ResourcesPlugin.getWorkspace().getRoot();
 			ArrayList<IProject> projects = new ArrayList<IProject>(referenceStrings.length);
 
@@ -88,6 +88,7 @@ public class AddToWorkspaceAction extends WorkspaceModifyOperation {
 
 			// Now add projects
 			for (String reference : referenceStrings) {
+				monitor.beginTask("Adding projects to workspace...", referenceStrings.length);
 				if (monitor.isCanceled()) {
 					break;
 				}
