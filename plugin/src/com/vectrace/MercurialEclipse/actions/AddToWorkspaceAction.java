@@ -13,8 +13,8 @@ package com.vectrace.MercurialEclipse.actions;
 
 import java.lang.reflect.InvocationTargetException;
 import java.util.ArrayList;
-import java.util.LinkedHashSet;
-import java.util.Set;
+import java.util.LinkedHashMap;
+import java.util.Map;
 
 import org.eclipse.core.resources.IProject;
 import org.eclipse.core.resources.IProjectDescription;
@@ -76,13 +76,13 @@ public class AddToWorkspaceAction extends WorkspaceModifyOperation {
 
 			// Clone first
 			HgRepositoryLocationManager repoManager = MercurialEclipsePlugin.getRepoManager();
-			for (String repo : getRepositoriesToClone()) {
+			for (Map.Entry<String, String> repo : getRepositoriesToClone().entrySet()) {
 				if (monitor.isCanceled()) {
 					break;
 				}
-				IHgRepositoryLocation location = repoManager.getRepoLocation(repo, null, null);
+				IHgRepositoryLocation location = repoManager.getRepoLocation(repo.getKey(), null, null);
 				HgCloneClient.clone(wsRoot.getLocation().toFile(), location, false, false, false,
-						false, null, null);
+						false, null, repo.getValue());
 				monitor.worked(1);
 			}
 
@@ -109,15 +109,14 @@ public class AddToWorkspaceAction extends WorkspaceModifyOperation {
 				// For single-project repos, this may be the root.
 				String rootRelativePath = psc.getRootRelativePath(reference);
 
-				// The checkout will be at workspace-root/foo where foo is the last component of the HG URL
-				String repoURL = psc.getPullRepo(reference);
-				String repoDirectoryName = repoURL.substring(repoURL.lastIndexOf("/") + 1);
-				IPath projectDirectory = wsRoot.getLocation().append(repoDirectoryName);
-
 				if (rootRelativePath != null) {
-				  projectDirectory = projectDirectory.append(rootRelativePath);
+					// For non-root projects, the checkout will be at workspace-root/foo where foo is the last component of the HG URL
+					String repoURL = psc.getPullRepo(reference);
+					String repoDirectoryName = repoURL.substring(repoURL.lastIndexOf("/") + 1);
+					IPath projectDirectory = wsRoot.getLocation().append(repoDirectoryName);
+					projectDirectory = projectDirectory.append(rootRelativePath);
+					newProjectDescription.setLocation(projectDirectory);
 				}
-				newProjectDescription.setLocation(projectDirectory);
 				proj.create(newProjectDescription, monitor);
 				proj.open(monitor);
 				IHgRepositoryLocation location = repoManager.getRepoLocation(psc
@@ -147,11 +146,17 @@ public class AddToWorkspaceAction extends WorkspaceModifyOperation {
 		}
 	}
 
-	private Set<String> getRepositoriesToClone() {
-		Set<String> result = new LinkedHashSet<String>();
+	/**
+	 * @return Map of URL -> clone target directory name.
+	 */
+	private Map<String, String> getRepositoriesToClone() {
+		Map<String, String> result = new LinkedHashMap<String, String>();
 		MercurialProjectSetCapability psc = MercurialProjectSetCapability.getInstance();
 		for (String rs : referenceStrings) {
-			result.add(psc.getPullRepo(rs));
+			// Repositories which are singleton projects should be cloned to directories named after the root project.
+			final boolean isSingletonProject = null == psc.getRootRelativePath(rs);
+			String targetDirectory = isSingletonProject ? psc.getProject(rs) : null;
+			result.put(psc.getPullRepo(rs), targetDirectory);
 		}
 		return result;
 	}
