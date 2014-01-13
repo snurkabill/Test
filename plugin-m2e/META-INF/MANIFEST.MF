@@ -1,0 +1,16 @@
+Manifest-Version: 1.0
+Bundle-ManifestVersion: 2
+Bundle-Name: MercurialEclipseMaven
+Bundle-SymbolicName: com.nexj.oss.MercurialEclipseMaven;singleton:=true
+Bundle-Version: 1.1.0.qualifier
+Bundle-Activator: com.nexj.oss.MercurialEclipseMaven.MercurialEclipseMavenPlugin
+Bundle-Vendor: MercurialEclipse project
+Bundle-RequiredExecutionEnvironment: J2SE-1.5
+Bundle-ActivationPolicy: lazy
+Require-Bundle: org.eclipse.ui,
+ org.eclipse.core.runtime,
+ org.eclipse.team.core,
+ com.vectrace.MercurialEclipse,
+ org.eclipse.m2e.scm
+Eclipse-LazyStart: true
+Export-Package: com.nexj.oss.MercurialEclipseMaven

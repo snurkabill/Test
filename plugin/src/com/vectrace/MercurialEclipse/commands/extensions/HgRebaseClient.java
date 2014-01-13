@@ -8,6 +8,7 @@
  * Contributors:
  *     Bastian Doetsch           - implementation
  *     Andrei Loskutov           - bug fixes
+ *     Josh Tam                  - bug fixes for largefiles support
  *******************************************************************************/
 package com.vectrace.MercurialEclipse.commands.extensions;
 
@@ -18,9 +19,11 @@ import com.aragost.javahg.ext.rebase.flags.RebaseCommandFlags;
 import com.aragost.javahg.ext.rebase.merge.RebaseConflictResolvingContext;
 import com.vectrace.MercurialEclipse.commands.AbstractClient;
 import com.vectrace.MercurialEclipse.commands.HgClients;
+import com.vectrace.MercurialEclipse.commands.HgStatusClient;
 import com.vectrace.MercurialEclipse.commands.JavaHgCommandJob;
 import com.vectrace.MercurialEclipse.exception.HgException;
 import com.vectrace.MercurialEclipse.extensionpoint.definition.handlers.ActionListenerContributionDispatcher;
+import com.vectrace.MercurialEclipse.menu.UpdateJob;
 import com.vectrace.MercurialEclipse.model.HgRoot;
 import com.vectrace.MercurialEclipse.preferences.MercurialPreferenceConstants;
 import com.vectrace.MercurialEclipse.team.MercurialUtilities;
@@ -112,8 +115,10 @@ public class HgRebaseClient extends AbstractClient {
 		}
 
 		MercurialUtilities.setOfferAutoCommitMerge(true);
+		addAuthToHgCommand(hgRoot, c);
 
-		return new JavaHgCommandJob<RebaseConflictResolvingContext>(c, "Rebasing") {
+		final boolean[] hasNoConflicts = new boolean[1];
+		RebaseConflictResolvingContext ctx = new JavaHgCommandJob<RebaseConflictResolvingContext>(c, "Rebasing") {
 			@Override
 			protected RebaseConflictResolvingContext run() throws Exception {
 				RebaseConflictResolvingContext result;
@@ -123,15 +128,25 @@ public class HgRebaseClient extends AbstractClient {
 					result = c.execute();
 				}
 
-				if (result.getFlagConflicts().size() == 0
-						&& result.getKeepDeleteConflicts().size() == 0
-						&& result.getMergeConflicts().size() == 0) {
+				hasNoConflicts[0] = result.getFlagConflicts().size() == 0 &&
+						result.getKeepDeleteConflicts().size() == 0 && result.getMergeConflicts().size() == 0;
+
+				if (hasNoConflicts[0]) {
 					ActionListenerContributionDispatcher.onRebase(result.getLocal().getNode());
 				}
 
 				return result;
 			}
 		}.execute(HgClients.getTimeOut(MercurialPreferenceConstants.PULL_TIMEOUT)).getValue();
+
+		// Workaround for rebase + largefiles bug (see http://bz.selenic.com/show_bug.cgi?id=3861)
+		if (hgRoot.hasLargeFiles() && hasNoConflicts[0] && !HgStatusClient.getDeleted(hgRoot, ".").isEmpty()) {
+			UpdateJob job = new UpdateJob(".", true, hgRoot, false);
+			job.setDataLossConfirmed(true);
+			job.schedule();
+		}
+
+		return ctx;
 	}
 
 	/**
