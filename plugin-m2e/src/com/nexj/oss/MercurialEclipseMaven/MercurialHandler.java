@@ -30,6 +30,10 @@ import com.vectrace.MercurialEclipse.storage.HgRepositoryLocationManager;
 public class MercurialHandler extends ScmHandler{
 
 	public static final String SCM_HG_PREFIX = "scm:hg:";
+	
+	public static final String ARTIFACT_ID="${project.artifactId}"; 
+	
+	public static final String HEAD="HEAD";
 
 	/**
 	 * @see org.eclipse.m2e.scm.spi.ScmHandler#checkoutProject(org.eclipse.m2e.scm.MavenProjectScmInfo, java.io.File, org.eclipse.core.runtime.IProgressMonitor)
@@ -41,11 +45,26 @@ public class MercurialHandler extends ScmHandler{
 
 		String repositoryUrl = info.getRepositoryUrl();
 		String hgURL = repositoryUrl.substring(SCM_HG_PREFIX.length());
-
-		IHgRepositoryLocation location = repoManager.getRepoLocation(hgURL);
-
+		String resolvedHgURL;
+		
+		if (hgURL.contains(ARTIFACT_ID)){
+			String artifactId= info.getModel().getArtifactId();
+		    resolvedHgURL = hgURL.replace(ARTIFACT_ID,artifactId);
+		} else {
+			resolvedHgURL=hgURL;
+		}
+		
+		
+		IHgRepositoryLocation location = repoManager.getRepoLocation(resolvedHgURL);
+		
+		String revision = info.getRevision();
+		
+		if (revision.equals(HEAD)){
+			revision=null;
+		}
+		
 		HgCloneClient.clone(dest.getParentFile(), location, false, false, false,
-				false, null, dest.getName());
+				false, revision, dest.getName());
 	}
 
 }
