@@ -1798,7 +1798,7 @@
         </description>
       </fontDefinition>
       <colorDefinition
-        id="com.vectrace.mercurialeclipse.ui.colorsandfonts.IgnoredForegroundColor"
+        id="com.vectrace.mercurialeclipse.ui.colorsandfonts.ignoredForegroundColor"
         categoryId="com.vectrace.mercurialeclipse.ui.colorsandfonts"
         label="%colorDefinition.label.ignoredFg"
         value="COLOR_LIST_FOREGROUND">
@@ -1807,7 +1807,7 @@
         </description>
       </colorDefinition>
       <colorDefinition
-        id="com.vectrace.mercurialeclipse.ui.colorsandfonts.IgnoredBackgroundColor"
+        id="com.vectrace.mercurialeclipse.ui.colorsandfonts.ignoredBackgroundColor"
         categoryId="com.vectrace.mercurialeclipse.ui.colorsandfonts"
         label="%colorDefinition.label.ignoredBg"
         value="COLOR_LIST_BACKGROUND">
@@ -1816,7 +1816,7 @@
         </description>
       </colorDefinition>
       <fontDefinition
-        id="com.vectrace.mercurialeclipse.ui.colorsandfonts.IgnoredFont"
+        id="com.vectrace.mercurialeclipse.ui.colorsandfonts.ignoredFont"
         categoryId="com.vectrace.mercurialeclipse.ui.colorsandfonts"
         label="%fontDefinition.label.ignored">
         <description>

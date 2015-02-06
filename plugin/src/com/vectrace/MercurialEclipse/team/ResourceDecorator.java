@@ -219,6 +219,9 @@ public class ResourceDecorator extends LabelProvider implements ILightweightLabe
 			if (output != null) {
 				overlay = decorate(output.intValue(), prefix, d, colorise);
 			} else {
+				if (resource.getType() == IResource.FILE) {
+					overlay = decorate(MercurialStatusCache.BIT_IGNORE, prefix, d, colorise);
+				}
 				// empty folder, do nothing
 			}
 			if (overlay != null) {
