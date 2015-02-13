@@ -44,23 +44,6 @@ They are:
 * https://bitbucket.org/aragost/javahg-ext-rebase
 * https://bitbucket.org/nexj/javahg-ext-largefiles
 
-NOTE: in the specific case of javahg-ext-largefiles, I've had to add some Jackson dependencies to the POM:
-		<dependency>
-			<groupId>com.fasterxml.jackson.core</groupId>
-			<artifactId>jackson-core</artifactId>
-			<version>2.4.0</version>
-		</dependency>
-		<dependency>
-			<groupId>com.fasterxml.jackson.core</groupId>
-			<artifactId>jackson-annotations</artifactId>
-			<version>2.4.0</version>
-		</dependency>
-		<dependency>
-			<groupId>com.fasterxml.jackson.core</groupId>
-			<artifactId>jackson-databind</artifactId>
-			<version>2.4.0</version>
-		</dependency>
-
 For each of the JavaHg projects, update to the appropriate Mercurial tag for the version that's needed (indicative values are given in the next paragraph)
 	   * See /plugin/pom.xml dependencies section for the appropriate version numbers
 
