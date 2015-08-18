@@ -24,6 +24,7 @@ import org.eclipse.core.resources.IResource;
 import org.eclipse.core.runtime.CoreException;
 import org.eclipse.core.runtime.Path;
 import org.eclipse.jface.dialogs.MessageDialog;
+import org.eclipse.jface.dialogs.MessageDialogWithToggle;
 import org.eclipse.ui.console.ConsolePlugin;
 import org.eclipse.ui.console.IConsole;
 import org.eclipse.ui.console.IConsoleManager;
@@ -202,43 +203,59 @@ public class HgResolveClient extends AbstractClient {
 			int result = actionForRemainingItems;
 
 			if ( actionForRemainingItems == -1 ) {
-				String[] dialogButtons = new String[] {"Delete", "Keep"};
+				String title = "File Conflict";
+				String remoteBranch = conflict.getMergeCtx().getRemote().getBranch();
+				String localBranch = conflict.getMergeCtx().getLocal().getBranch();
 
-				if ( remainingConflicts > 0 ) {
-					dialogButtons = new String[] {"Delete", "Keep", "Delete All (" + remainingConflicts + " more)", "Keep All (" + remainingConflicts + " more)"};
+				String msg = conflict.getFilename();
+
+				String[] buttons;
+
+				String keepBranch = conflict.getKeepParent().getBranch();
+				if ( localBranch.equals(keepBranch) ) {
+					msg += " was deleted on " + remoteBranch + " and modified on " + localBranch + ". What would you like todo?";
+					buttons = new String[] {"Delete Local", "Keep Local", "Rename Local"};
+				}
+				else {
+					msg += " was deleted on " + localBranch + " and modified on " + remoteBranch + ". What would you like todo?";
+					buttons = new String[] {"Leave Deleted", "Keep Remote", "Rename Remote"};
 				}
 
-				String title = "File Conflict";
-				StringBuilder msg = new StringBuilder(conflict.getFilename()).append(" was deleted in the incoming branch and modified in the current branch. What would you like to do?" );
 
-				MessageDialog dialog = new MessageDialog(
-					null, title, null, msg.toString(),
+				MessageDialogWithToggle dialog = new MessageDialogWithToggle(
+					null, title, null, msg,
 					MessageDialog.QUESTION,
-					dialogButtons, 0
+					buttons, 0,
+					"Apply to all (" + remainingConflicts + " remaining - will print list to console)",
+					false
 				);
 
 				result = dialog.open();
-			}
 
-			// if the user choose to delete all or keep all remaining
-			if ( result == 2 ) {
-			   // delete all
-			   actionForRemainingItems = 0;
-			   result = 0;
-			}
-			else if ( result == 3 ) {
-			   // keep all
-			   actionForRemainingItems = 1;
-			   result = 1;
+				// not sure why the result comes back like this....
+				if ( result == 256 ) 		{ result = 0; }
+				else if ( result == 257 ) 	{ result = 1; }
+				else if ( result == 258 ) 	{ result = 2; }
+
+				// apply for all?
+				if ( dialog.getToggleState() ) {
+					actionForRemainingItems = result;
+				}
 			}
 
 			if ( result == 0 ) {
-			   conflict.delete();
-			   writeToConsole("Merge Results", "DELETED " + conflict.getFilename());
+				conflict.delete();
+				writeToConsole("Merge Results", "DELETED " + conflict.getFilename());
 			}
 			else if ( result == 1 ) {
 			   conflict.keep();
 			   writeToConsole("Merge Results", "KEPT " + conflict.getFilename());
+			}
+			else if ( result == 2 ) {
+			   conflict.keep();
+			   File newFile = hgRoot.getRepository().file( conflict.getFilename() + ".deleted" );
+			   hgRoot.getRepository().file( conflict.getFilename() ).renameTo( newFile );
+			   writeToConsole("Merge Results", "RENAMED " + conflict.getFilename());
 			}
 		}
 
