@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<site>
+   <feature url="features/com.nexj.oss.MercurialEclipseMaven.feature_1.0.0.qualifier.jar" id="com.nexj.oss.MercurialEclipseMaven.feature" version="1.0.0.qualifier">
+      <category name="MercurialEclipseMaven"/>
+   </feature>
+   <category-def name="MercurialEclipseMaven" label="MercurialEclipse Maven"/>
+</site>
