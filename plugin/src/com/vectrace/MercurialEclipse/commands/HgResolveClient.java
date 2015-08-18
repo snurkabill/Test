@@ -196,6 +196,8 @@ public class HgResolveClient extends AbstractClient {
 	public static boolean autoResolve(HgRoot hgRoot, ConflictResolvingContext ctx) {
 		int actionForRemainingItems = -1;
 
+		getConsoleWriter("Merge Results").getConsole().clearConsole();
+
 		for ( int i=0; i<ctx.getKeepDeleteConflicts().size(); i++ ) {
 			KeepDeleteConflict conflict = ctx.getKeepDeleteConflicts().get(i);
 			int remainingConflicts = ctx.getKeepDeleteConflicts().size()-(i+1);
@@ -246,7 +248,10 @@ public class HgResolveClient extends AbstractClient {
 			}
 
 			if ( result == 0 ) {
-				conflict.delete();
+				File existingFile = hgRoot.getRepository().file( conflict.getFilename() );
+				if ( existingFile.exists()  ) {
+					conflict.delete();
+				}
 				writeToConsole("Merge Results", "DELETED [Deleted On: " + deletedOnBranch + "] " + conflict.getFilename());
 			}
 			else if ( result == 1 ) {
