@@ -250,9 +250,21 @@ public class HgResolveClient extends AbstractClient {
 			if ( result == 0 ) {
 				File existingFile = hgRoot.getRepository().file( conflict.getFilename() );
 				if ( existingFile.exists()  ) {
-					conflict.delete();
+					try {
+						conflict.delete();
+						writeToConsole("Merge Results", "DELETED [Deleted On: " + deletedOnBranch + "] " + conflict.getFilename());
+					}
+					catch ( Exception ex ) {
+						writeToConsole("Merge Results", "ERROR DELETING [Deleted On: " + deletedOnBranch + "] " + conflict.getFilename() + " (" + ex.getMessage() + " ... See log for details)");
+						ex.printStackTrace(System.out);
+						MessageDialog dialog = new MessageDialog(
+							null, "Error Deleting File", null, ex.getMessage(),
+							MessageDialog.ERROR,
+							new String[] {"Ok"}, 0
+						);
+						dialog.open();
+					}
 				}
-				writeToConsole("Merge Results", "DELETED [Deleted On: " + deletedOnBranch + "] " + conflict.getFilename());
 			}
 			else if ( result == 1 ) {
 			   conflict.keep();
