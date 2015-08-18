@@ -201,6 +201,8 @@ public class HgResolveClient extends AbstractClient {
 			int remainingConflicts = ctx.getKeepDeleteConflicts().size()-(i+1);
 
 			int result = actionForRemainingItems;
+			String keepBranch = conflict.getKeepParent().getBranch();
+			String deletedOnBranch = null;
 
 			if ( actionForRemainingItems == -1 ) {
 				String title = "File Conflict";
@@ -211,16 +213,16 @@ public class HgResolveClient extends AbstractClient {
 
 				String[] buttons;
 
-				String keepBranch = conflict.getKeepParent().getBranch();
 				if ( localBranch.equals(keepBranch) ) {
+					deletedOnBranch = remoteBranch;
 					msg += " was deleted on " + remoteBranch + " and modified on " + localBranch + ". What would you like todo?";
 					buttons = new String[] {"Delete Local", "Keep Local", "Rename Local"};
 				}
 				else {
+					deletedOnBranch = localBranch;
 					msg += " was deleted on " + localBranch + " and modified on " + remoteBranch + ". What would you like todo?";
 					buttons = new String[] {"Leave Deleted", "Keep Remote", "Rename Remote"};
 				}
-
 
 				MessageDialogWithToggle dialog = new MessageDialogWithToggle(
 					null, title, null, msg,
@@ -245,17 +247,17 @@ public class HgResolveClient extends AbstractClient {
 
 			if ( result == 0 ) {
 				conflict.delete();
-				writeToConsole("Merge Results", "DELETED " + conflict.getFilename());
+				writeToConsole("Merge Results", "DELETED [Deleted On: " + deletedOnBranch + "] " + conflict.getFilename());
 			}
 			else if ( result == 1 ) {
 			   conflict.keep();
-			   writeToConsole("Merge Results", "KEPT " + conflict.getFilename());
+			   writeToConsole("Merge Results", "KEPT [Deleted On: " + deletedOnBranch + "] " + conflict.getFilename());
 			}
 			else if ( result == 2 ) {
 			   conflict.keep();
 			   File newFile = hgRoot.getRepository().file( conflict.getFilename() + ".deleted" );
 			   hgRoot.getRepository().file( conflict.getFilename() ).renameTo( newFile );
-			   writeToConsole("Merge Results", "RENAMED " + conflict.getFilename());
+			   writeToConsole("Merge Results", "RENAMED  [Deleted On: " + deletedOnBranch + "] " + conflict.getFilename());
 			}
 		}
 
