@@ -129,5 +129,8 @@ public final class MercurialPreferenceConstants {
 	// security
 	public static final String PREF_VERIFY_SERVER_CERTIFICATE = "hg.verifyServerCertificate"; //$NON-NLS-1$
 
+	// commit
+	public static final String PREF_REFRESH_BEFORE_COMMIT = "hg.commit.refreshBeforeCommit";
+
 
 }

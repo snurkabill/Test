@@ -25,6 +25,7 @@ import org.eclipse.core.runtime.Assert;
 import org.eclipse.core.runtime.CoreException;
 import org.eclipse.core.runtime.IProgressMonitor;
 import org.eclipse.core.runtime.IStatus;
+import org.eclipse.core.runtime.NullProgressMonitor;
 import org.eclipse.core.runtime.Status;
 import org.eclipse.core.runtime.jobs.Job;
 import org.eclipse.jface.dialogs.IDialogConstants;
@@ -32,6 +33,7 @@ import org.eclipse.jface.dialogs.IDialogSettings;
 import org.eclipse.jface.dialogs.IMessageProvider;
 import org.eclipse.jface.dialogs.MessageDialog;
 import org.eclipse.jface.dialogs.TitleAreaDialog;
+import org.eclipse.jface.preference.IPreferenceStore;
 import org.eclipse.jface.text.Document;
 import org.eclipse.jface.text.IDocument;
 import org.eclipse.jface.text.ITextListener;
@@ -92,6 +94,7 @@ import com.vectrace.MercurialEclipse.model.ChangeSet;
 import com.vectrace.MercurialEclipse.model.HgRoot;
 import com.vectrace.MercurialEclipse.model.JHgChangeSet;
 import com.vectrace.MercurialEclipse.mylyn.MylynFacadeFactory;
+import com.vectrace.MercurialEclipse.preferences.MercurialPreferenceConstants;
 import com.vectrace.MercurialEclipse.storage.HgCommitMessageManager;
 import com.vectrace.MercurialEclipse.team.ActionRevert;
 import com.vectrace.MercurialEclipse.team.MercurialTeamProvider;
@@ -164,6 +167,18 @@ public class CommitDialog extends TitleAreaDialog {
 		super(shell);
 
 		Assert.isNotNull(hgRoot);
+
+		// refresh the project first?
+		IPreferenceStore store = MercurialEclipsePlugin.getDefault().getPreferenceStore();
+		boolean refreshFirst = store.getBoolean(MercurialPreferenceConstants.PREF_REFRESH_BEFORE_COMMIT);
+		if ( refreshFirst ) {
+			try {
+				hgRoot.getResource().refreshLocal(IResource.DEPTH_INFINITE, new NullProgressMonitor());
+			}
+			catch ( Exception ex ) {
+				ex.printStackTrace(System.err);
+			}
+		}
 
 		this.root = hgRoot;
 		setShellStyle(getShellStyle() | SWT.RESIZE | SWT.TITLE);

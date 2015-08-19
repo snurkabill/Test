@@ -210,6 +210,12 @@ IWorkbenchPreferencePage {
 				getFieldEditorParent());
 		addField(cert_editor);
 
+		BooleanFieldEditor refresh_editor = new BooleanFieldEditor(
+				PREF_REFRESH_BEFORE_COMMIT,
+				"Refresh repository before commit.", //$NON-NLS-1$
+				getFieldEditorParent());
+		addField(refresh_editor);
+
 		IntegerFieldEditor commitSizeEditor = new IntegerFieldEditor(
 				COMMIT_MESSAGE_BATCH_SIZE,
 				Messages.getString("GeneralPreferencePage.field.commitMessageBatchSize"), //$NON-NLS-1$
