@@ -80,6 +80,7 @@ public class RebaseOperation extends HgOperation {
 			InterruptedException {
 		monitor.beginTask(getActionDescription(), 2);
 		boolean rebaseConflict = false;
+		RebaseConflictResolvingContext ctx = null;
 		try {
 			monitor.worked(1);
 			monitor.subTask(Messages.getString("RebaseOperation.calling")); //$NON-NLS-1$
@@ -87,7 +88,7 @@ public class RebaseOperation extends HgOperation {
 			if (abort) {
 				HgRebaseClient.abortRebase(hgRoot);
 			} else {
-				RebaseConflictResolvingContext ctx = HgRebaseClient.rebase(hgRoot, sourceRev, baseRev, destRev, collapse, cont,
+				ctx = HgRebaseClient.rebase(hgRoot, sourceRev, baseRev, destRev, collapse, cont,
 						keepBranches, keep, user);
 				if (HgRebaseClient.isRebasing(hgRoot)) {
 					HgResolveClient.autoResolve(hgRoot, ctx);
@@ -106,8 +107,8 @@ public class RebaseOperation extends HgOperation {
 			RefreshWorkspaceStatusJob job = new RefreshWorkspaceStatusJob(hgRoot,
 					RefreshRootJob.ALL);
 
-			if(rebaseConflict) {
-				job.addJobChangeListener(MergeView.makeConflictJobChangeListener(hgRoot, getShell(), false));
+			if(rebaseConflict && ctx != null) {
+				job.addJobChangeListener(MergeView.makeConflictJobChangeListener(hgRoot, ctx, getShell(), false));
 			}
 
 			job.schedule();

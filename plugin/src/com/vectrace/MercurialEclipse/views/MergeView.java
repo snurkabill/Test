@@ -12,6 +12,7 @@
 package com.vectrace.MercurialEclipse.views;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Observable;
 import java.util.Observer;
@@ -22,6 +23,7 @@ import org.eclipse.core.resources.IProject;
 import org.eclipse.core.resources.IResource;
 import org.eclipse.core.runtime.CoreException;
 import org.eclipse.core.runtime.NullProgressMonitor;
+import org.eclipse.core.runtime.Path;
 import org.eclipse.core.runtime.jobs.IJobChangeEvent;
 import org.eclipse.core.runtime.jobs.IJobChangeListener;
 import org.eclipse.core.runtime.jobs.JobChangeAdapter;
@@ -54,6 +56,8 @@ import org.eclipse.ui.IWorkbenchPart;
 import org.eclipse.ui.PartInitException;
 import org.eclipse.ui.PlatformUI;
 
+import com.aragost.javahg.merge.ConflictResolvingContext;
+import com.aragost.javahg.merge.KeepDeleteConflict;
 import com.vectrace.MercurialEclipse.MercurialEclipsePlugin;
 import com.vectrace.MercurialEclipse.commands.HgResolveClient;
 import com.vectrace.MercurialEclipse.commands.extensions.HgRebaseClient;
@@ -92,7 +96,11 @@ public class MergeView extends AbstractRootView implements Observer {
 
 	private Action markUnresolvedAction;
 
+	private Action deleteFileAction;
+
 	protected boolean merging = true;
+
+	protected HashMap<IResource, KeepDeleteConflict> keepDeleteConflicts = new HashMap<IResource, KeepDeleteConflict>();
 
 	@Override
 	public void createPartControl(final Composite parent) {
@@ -124,7 +132,7 @@ public class MergeView extends AbstractRootView implements Observer {
 			public void run() {
 				if (areAllResolved()) {
 					attemptToCommit();
-					refresh(hgRoot);
+					refresh(hgRoot, conflictResolvingContext);
 				}
 			}
 		};
@@ -147,7 +155,7 @@ public class MergeView extends AbstractRootView implements Observer {
 
 					runnable.setShell(table.getShell());
 					runnable.run(hgRoot);
-					refresh(hgRoot);
+					refresh(hgRoot, conflictResolvingContext);
 				} catch (CoreException e) {
 					handleError(e);
 				}
@@ -165,7 +173,14 @@ public class MergeView extends AbstractRootView implements Observer {
 					List<IFile> files = getSelections();
 					if (files != null) {
 						for (IFile file : files) {
-							HgResolveClient.markResolved(hgRoot, file);
+							KeepDeleteConflict c = keepDeleteConflicts.get(file);
+							if ( c != null ) {
+								// just remove it from the list..
+								conflictResolvingContext.getKeepDeleteConflicts().remove(c);
+							}
+							else {
+								HgResolveClient.markResolved(hgRoot, file);
+							}
 						}
 						populateView(true);
 					}
@@ -182,7 +197,12 @@ public class MergeView extends AbstractRootView implements Observer {
 					List<IFile> files = getSelections();
 					if (files != null) {
 						for (IFile file : files) {
-							HgResolveClient.markUnresolved(hgRoot, file);
+							KeepDeleteConflict c = keepDeleteConflicts.get(file);
+							// do nothing for keep-delete conflicts
+							if ( c == null ) {
+								HgResolveClient.markUnresolved(hgRoot, file);
+							}
+
 						}
 						populateView(true);
 					}
@@ -192,6 +212,56 @@ public class MergeView extends AbstractRootView implements Observer {
 			}
 		};
 		markUnresolvedAction.setEnabled(false);
+
+		deleteFileAction = new Action(Messages.getString("MergeView.deleteFile")) {
+			@Override
+			public void run() {
+				super.run();
+				try {
+					List<IFile> files = getSelections();
+					if (files != null) {
+						for (IFile file : files) {
+							KeepDeleteConflict c = keepDeleteConflicts.get(file);
+							if ( c != null ) {
+								try {
+									HgResolveClient.deleteKeepDeleteConflict(hgRoot, conflictResolvingContext, c, file);
+								}
+								catch ( Exception ex ) {
+									// just in case, I've seen some random failures when the workspace isn't in sync with the file system
+									MessageDialog dialog = new MessageDialog(
+										null, "Error Deleting File", null, ex.getMessage(),
+										MessageDialog.ERROR,
+										new String[] {"Ok"}, 0
+									);
+								}
+							}
+							else {
+								// even if it's not a keep-delete conflict, we are providing a delete file option,
+								// so delete the file either way.
+								try {
+									file.delete(true, null);
+								}
+								catch ( Exception ex ) {
+									MessageDialog dialog = new MessageDialog(
+										null, "Error Deleting File", null, ex.getMessage(),
+										MessageDialog.ERROR,
+										new String[] {"Ok"}, 0
+									);
+								}
+							}
+
+							// refresh status
+							MercurialStatusCache.getInstance().refreshStatus(file, null);
+							ResourceUtils.touch(file);
+						}
+						populateView(true);
+					}
+				} catch (HgException e) {
+					handleError(e);
+				}
+			}
+		};
+		deleteFileAction.setEnabled( false );
 	}
 
 	/**
@@ -254,6 +324,8 @@ public class MergeView extends AbstractRootView implements Observer {
 				menuMgr1.add(markResolvedAction);
 				menuMgr1.add(markUnresolvedAction);
 				menuMgr1.add(new Separator());
+				menuMgr1.add(deleteFileAction);
+				menuMgr1.add(new Separator());
 				menuMgr1.add(completeAction);
 				menuMgr1.add(abortAction);
 			}
@@ -265,14 +337,26 @@ public class MergeView extends AbstractRootView implements Observer {
 
 	private void populateView(boolean attemptToCommit) throws HgException {
 		boolean bAllResolved = true;
-		List<ResolveStatus> status = null;
-		status = HgResolveClient.list(hgRoot);
+
+		List<ResolveStatus> status = HgResolveClient.list(hgRoot);
+
+		keepDeleteConflicts.clear();
+
+		// add keep-delete conflicts
+		for ( KeepDeleteConflict c : conflictResolvingContext.getKeepDeleteConflicts() ) {
+			IResource iFile = ResourceUtils.getFileHandle(hgRoot.toAbsolute(new Path(c.getFilename())));
+			keepDeleteConflicts.put(iFile, c);
+			status.add(new ResolveStatus(iFile, c));
+		}
+
 		table.setItems(status);
+
 		for (ResolveStatus flagged : status) {
 			if (flagged.isUnresolved()) {
 				bAllResolved = false;
 			}
 		}
+
 		completeAction.setEnabled(bAllResolved);
 
 		/* TODO: remove this block? Commit button enablement provides sufficient feedback
@@ -312,6 +396,7 @@ public class MergeView extends AbstractRootView implements Observer {
 			completeAction.setEnabled(false);
 			markResolvedAction.setEnabled(false);
 			markUnresolvedAction.setEnabled(false);
+			deleteFileAction.setEnabled(false);
 			table.setEnabled(false);
 
 			return;
@@ -321,6 +406,7 @@ public class MergeView extends AbstractRootView implements Observer {
 		completeAction.setEnabled(true);
 		markResolvedAction.setEnabled(true);
 		markUnresolvedAction.setEnabled(true);
+		deleteFileAction.setEnabled(true);
 		table.setEnabled(true);
 
 		try {
@@ -458,7 +544,7 @@ public class MergeView extends AbstractRootView implements Observer {
 		if(!projects.isEmpty()) {
 			Display.getDefault().asyncExec(new Runnable() {
 				public void run() {
-					refresh(hgRoot);
+					refresh(hgRoot, conflictResolvingContext);
 				}
 			});
 		}
@@ -474,9 +560,9 @@ public class MergeView extends AbstractRootView implements Observer {
 	/**
 	 * Must be called from the UI thread
 	 */
-	public static void showMergeConflict(HgRoot hgRoot, Shell shell) throws PartInitException {
+	public static void showMergeConflict(HgRoot hgRoot, final ConflictResolvingContext ctx, Shell shell) throws PartInitException {
 		MergeView view = (MergeView) MercurialEclipsePlugin.getActivePage().showView(MergeView.ID);
-		view.refresh(hgRoot);
+		view.refresh(hgRoot, ctx);
 		MercurialEclipsePlugin.showDontShowAgainConfirmDialog("A merge conflict occurred",
 				"A merge conflict occurred. Use the merge view to resolve and commit the merge",
 				MessageDialog.INFORMATION,
@@ -487,9 +573,9 @@ public class MergeView extends AbstractRootView implements Observer {
 	/**
 	 * Must be called from the UI thread
 	 */
-	public static void showRebaseConflict(HgRoot hgRoot, Shell shell) throws PartInitException {
+	public static void showRebaseConflict(HgRoot hgRoot, final ConflictResolvingContext ctx, Shell shell) throws PartInitException {
 		MergeView view = (MergeView) MercurialEclipsePlugin.getActivePage().showView(MergeView.ID);
-		view.refresh(hgRoot);
+		view.refresh(hgRoot, ctx);
 		MercurialEclipsePlugin
 				.showDontShowAgainConfirmDialog(
 						"A rebase conflict occurred",
@@ -508,7 +594,7 @@ public class MergeView extends AbstractRootView implements Observer {
 	 * @param merge True if this is a merge, false if it's a rebase.
 	 * @return A new job change listener
 	 */
-	public static IJobChangeListener makeConflictJobChangeListener(final HgRoot hgRoot,
+	public static IJobChangeListener makeConflictJobChangeListener(final HgRoot hgRoot, final ConflictResolvingContext ctx,
 			final Shell shell, final boolean merge) {
 		return makeUIJobChangeAdapter(new Runnable() {
 			public void run() {
@@ -516,9 +602,9 @@ public class MergeView extends AbstractRootView implements Observer {
 					Shell sh = (shell == null) ? MercurialEclipsePlugin.getActiveShell() : shell;
 
 					if (merge) {
-						showMergeConflict(hgRoot, sh);
+						showMergeConflict(hgRoot, ctx, sh);
 					} else {
-						showRebaseConflict(hgRoot, sh);
+						showRebaseConflict(hgRoot, ctx, sh);
 					}
 				} catch (PartInitException e1) {
 					MercurialEclipsePlugin.logError(e1);

@@ -122,25 +122,28 @@ public class MergeHandler extends RootHandler {
 		MercurialUtilities.setOfferAutoCommitMerge(true);
 
 		try {
-			if (mergeAndAutoResolve(hgRoot, cs.getNode(), forced)) {
+			MergeContext ctx = createMergeContext(hgRoot, cs.getNode(), forced);
+
+			if (mergeAndAutoResolve(hgRoot, ctx, cs.getNode())) {
 				if (showCommitDialog) {
 					MercurialStatusCache.getInstance().refreshStatus(hgRoot, monitor);
 				}
 				commitMerge(monitor, hgRoot, cs.getNode(), shell, showCommitDialog);
 			} else {
-				MergeView.showMergeConflict(hgRoot, shell);
+				MergeView.showMergeConflict(hgRoot, ctx, shell);
 			}
 		} finally {
 			new RefreshWorkspaceStatusJob(hgRoot).schedule();
 		}
 	}
 
+	public static MergeContext createMergeContext(HgRoot hgRoot, String mergeNode, boolean forced) throws HgException {
+		return HgMergeClient.merge(hgRoot, mergeNode, forced);
+	}
 	/**
 	 * @return True if the merge can be immediately committed, false if the merge view should be shown
 	 */
-	public static boolean mergeAndAutoResolve(HgRoot hgRoot, String mergeNode, boolean forced) throws HgException {
-		MergeContext ctx = HgMergeClient.merge(hgRoot, mergeNode, forced);
-
+	public static boolean mergeAndAutoResolve(HgRoot hgRoot, MergeContext ctx, String mergeNode) throws HgException {
 		// Is this necessary? Refresh should be done anyway later
 		MercurialStatusCache.getInstance().setMergeStatus(hgRoot, mergeNode);
 

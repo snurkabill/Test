@@ -22,6 +22,7 @@ import org.eclipse.swt.widgets.Composite;
 import org.eclipse.ui.ISelectionListener;
 import org.eclipse.ui.part.ViewPart;
 
+import com.aragost.javahg.merge.ConflictResolvingContext;
 import com.vectrace.MercurialEclipse.MercurialEclipsePlugin;
 import com.vectrace.MercurialEclipse.exception.HgException;
 import com.vectrace.MercurialEclipse.model.HgRoot;
@@ -32,6 +33,7 @@ import com.vectrace.MercurialEclipse.model.HgRoot;
 public abstract class AbstractRootView extends ViewPart implements ISelectionListener {
 
 	protected HgRoot hgRoot;
+	protected ConflictResolvingContext conflictResolvingContext;
 
 	@Override
 	public void createPartControl(Composite parent) {
@@ -96,12 +98,14 @@ public abstract class AbstractRootView extends ViewPart implements ISelectionLis
 		super.dispose();
 	}
 
-	public final void refresh(HgRoot newRoot) {
+	public final void refresh(HgRoot newRoot, ConflictResolvingContext ctx) {
 		hgRoot = null;
 
 		if (newRoot != null && canChangeRoot(newRoot, false)) {
 			hgRoot = newRoot;
 		}
+
+		conflictResolvingContext = ctx;
 
 		handleRootChanged();
 	}

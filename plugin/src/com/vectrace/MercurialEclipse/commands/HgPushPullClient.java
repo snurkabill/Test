@@ -29,6 +29,7 @@ import com.aragost.javahg.commands.flags.PushCommandFlags;
 import com.aragost.javahg.ext.largefiles.LfpullCommand;
 import com.aragost.javahg.ext.largefiles.flags.LfpullCommandFlags;
 import com.aragost.javahg.ext.rebase.merge.RebaseConflictResolvingContext;
+import com.aragost.javahg.merge.MergeContext;
 import com.vectrace.MercurialEclipse.MercurialEclipsePlugin;
 import com.vectrace.MercurialEclipse.commands.extensions.HgRebaseClient;
 import com.vectrace.MercurialEclipse.exception.HgException;
@@ -171,16 +172,17 @@ public class HgPushPullClient extends AbstractClient {
 
 			if (HgRebaseClient.isRebasing(hgRoot)) {
 				HgResolveClient.autoResolve(hgRoot, ctx);
-				refreshJob.addJobChangeListener(MergeView.makeConflictJobChangeListener(hgRoot,
+				refreshJob.addJobChangeListener(MergeView.makeConflictJobChangeListener(hgRoot, ctx,
 						null, false));
 			}
 		} else if (merge) {
-			if (MergeHandler.mergeAndAutoResolve(hgRoot, "tip", false)) {
+			MergeContext ctx = MergeHandler.createMergeContext(hgRoot, "tip", false);
+			if (MergeHandler.mergeAndAutoResolve(hgRoot, ctx, "tip")) {
 				// Unlike rebase it's not committed immediately if there are no conflicts
 				refreshJob.addJobChangeListener(MergeView.makeCommitMergeJobChangeListener(hgRoot,
 						null, "tip"));
 			} else {
-				refreshJob.addJobChangeListener(MergeView.makeConflictJobChangeListener(hgRoot,
+				refreshJob.addJobChangeListener(MergeView.makeConflictJobChangeListener(hgRoot, ctx,
 						null, true));
 			}
 		}

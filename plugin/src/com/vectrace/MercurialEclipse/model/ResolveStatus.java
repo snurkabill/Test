@@ -14,15 +14,41 @@ import org.eclipse.core.resources.IResource;
 import org.eclipse.core.runtime.IAdaptable;
 
 import com.aragost.javahg.commands.ResolveStatusLine;
+import com.aragost.javahg.merge.KeepDeleteConflict;
 
 public class ResolveStatus implements IAdaptable {
 
+	public static enum Type {
+		RESOLVED( 'R' ), UNRESOLVED( 'U' ), REMOTE_DELETED('X'), LOCAL_DELETED('Y');
+
+		private char ch;
+
+		private Type( char ch ) {
+			this.ch = ch;
+		}
+	}
+
 	private final IResource adaptable;
-	private final ResolveStatusLine.Type flag;
+	private final Type flag;
+
+	protected Type typeForChar( char ch ) {
+		for ( Type t : Type.values() ) {
+			if ( t.ch == ch ) {
+				return t;
+			}
+		}
+		throw new IllegalArgumentException( "No match for " + ch );
+	}
+
+	public ResolveStatus(IResource adaptable, KeepDeleteConflict c) {
+		this.adaptable = adaptable;
+		boolean remoteDeleted = c.getMergeCtx().getLocal().getBranch().equals( c.getKeepParent().getBranch() );
+		this.flag = remoteDeleted ? Type.REMOTE_DELETED : Type.LOCAL_DELETED;
+	}
 
 	public ResolveStatus(IResource adaptable, ResolveStatusLine.Type flag) {
 		this.adaptable = adaptable;
-		this.flag = flag;
+		this.flag = flag == ResolveStatusLine.Type.RESOLVED ? Type.RESOLVED : Type.UNRESOLVED;
 	}
 
 	public IResource getResource() {
@@ -36,21 +62,28 @@ public class ResolveStatus implements IAdaptable {
 		return adaptable.getAdapter(adapter);
 	}
 
-	public ResolveStatusLine.Type getFlag() {
+	public Type getFlag() {
 		return this.flag;
 	}
 
 	public String getStatus() {
-		return flag == ResolveStatusLine.Type.UNRESOLVED ? Messages
-				.getString("FlaggedAdaptable.unresolvedStatus") : Messages
-				.getString("FlaggedAdaptable.resolvedStatus");
+		if ( flag == Type.REMOTE_DELETED ) {
+			return Messages.getString("FlaggedAdaptable.remoteDeleted");
+		}
+		else if ( flag == Type.LOCAL_DELETED ) {
+			return Messages.getString("FlaggedAdaptable.localDeleted");
+		}
+		else if ( flag == Type.UNRESOLVED ) {
+			return Messages.getString("FlaggedAdaptable.unresolvedStatus");
+		}
+		return Messages.getString("FlaggedAdaptable.resolvedStatus");
 	}
 
 	public boolean isUnresolved() {
-		return flag == ResolveStatusLine.Type.UNRESOLVED;
+		return flag != Type.RESOLVED;
 	}
 
 	public boolean isResolved() {
-		return flag == ResolveStatusLine.Type.RESOLVED;
+		return flag == Type.RESOLVED;
 	}
 }

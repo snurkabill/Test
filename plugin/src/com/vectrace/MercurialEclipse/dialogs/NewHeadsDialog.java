@@ -138,10 +138,11 @@ public class NewHeadsDialog extends IconAndMessageDialog  {
 				public void run(IProgressMonitor monitor) throws InvocationTargetException, InterruptedException {
 
 					boolean rebaseConflict = false;
+					RebaseConflictResolvingContext ctx = null;
 					try {
-						monitor.beginTask("Rebasing on tip", 2);
+						ctx = HgRebaseClient.rebaseCurrentOnTip(hgRoot);
 
-						RebaseConflictResolvingContext ctx = HgRebaseClient.rebaseCurrentOnTip(hgRoot);
+						monitor.beginTask("Rebasing on tip", 2);
 
 						if (HgRebaseClient.isRebasing(hgRoot)) {
 							monitor.worked(1);
@@ -161,7 +162,9 @@ public class NewHeadsDialog extends IconAndMessageDialog  {
 						RefreshWorkspaceStatusJob job = new RefreshWorkspaceStatusJob(hgRoot, RefreshRootJob.ALL);
 						if (rebaseConflict) {
 							// do not join to avoid any potential deadlocks. listener is enough
-							job.addJobChangeListener(MergeView.makeConflictJobChangeListener(hgRoot, getShell(), false));
+							if ( ctx != null ) {
+								job.addJobChangeListener(MergeView.makeConflictJobChangeListener(hgRoot, ctx, getShell(), false));
+							}
 						}
 						job.schedule();
 					}

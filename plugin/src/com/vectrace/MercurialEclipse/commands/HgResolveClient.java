@@ -23,8 +23,6 @@ import org.eclipse.core.resources.IProject;
 import org.eclipse.core.resources.IResource;
 import org.eclipse.core.runtime.CoreException;
 import org.eclipse.core.runtime.Path;
-import org.eclipse.jface.dialogs.MessageDialog;
-import org.eclipse.jface.dialogs.MessageDialogWithToggle;
 import org.eclipse.ui.console.ConsolePlugin;
 import org.eclipse.ui.console.IConsole;
 import org.eclipse.ui.console.IConsoleManager;
@@ -133,6 +131,16 @@ public class HgResolveClient extends AbstractClient {
 		}
 	}
 
+	public static void deleteKeepDeleteConflict(HgRoot hgRoot, ConflictResolvingContext ctx, KeepDeleteConflict c, IFile iFile) throws HgException {
+		try {
+			c.delete();
+			ctx.getKeepDeleteConflicts().remove(c);
+			refreshStatus(iFile);
+		} catch (Exception e) {
+			throw new HgException(e.getLocalizedMessage(), e);
+		}
+	}
+
 	private static void refreshStatus(IResource res) throws HgException {
 		MercurialStatusCache.getInstance().refreshStatus(res, null);
 		ResourceUtils.touch(res);
@@ -194,96 +202,21 @@ public class HgResolveClient extends AbstractClient {
 	 * @return True if all conflicts are resolved
 	 */
 	public static boolean autoResolve(HgRoot hgRoot, ConflictResolvingContext ctx) {
-		int actionForRemainingItems = -1;
-
-		getConsoleWriter("Merge Results").getConsole().clearConsole();
-
-		for ( int i=0; i<ctx.getKeepDeleteConflicts().size(); i++ ) {
-			KeepDeleteConflict conflict = ctx.getKeepDeleteConflicts().get(i);
-			int remainingConflicts = ctx.getKeepDeleteConflicts().size()-(i+1);
-
-			int result = actionForRemainingItems;
-			String keepBranch = conflict.getKeepParent().getBranch();
-			String deletedOnBranch = null;
-
-			if ( actionForRemainingItems == -1 ) {
-				String title = "File Conflict";
-				String remoteBranch = conflict.getMergeCtx().getRemote().getBranch();
-				String localBranch = conflict.getMergeCtx().getLocal().getBranch();
-
-				String msg = conflict.getFilename();
-
-				String[] buttons;
-
-				if ( localBranch.equals(keepBranch) ) {
-					deletedOnBranch = remoteBranch;
-					msg += " was deleted on " + remoteBranch + " and modified on " + localBranch + ". What would you like todo?";
-					buttons = new String[] {"Delete Local", "Keep Local", "Rename Local"};
-				}
-				else {
-					deletedOnBranch = localBranch;
-					msg += " was deleted on " + localBranch + " and modified on " + remoteBranch + ". What would you like todo?";
-					buttons = new String[] {"Leave Deleted", "Keep Remote", "Rename Remote"};
-				}
-
-				MessageDialogWithToggle dialog = new MessageDialogWithToggle(
-					null, title, null, msg,
-					MessageDialog.QUESTION,
-					buttons, 0,
-					"Apply to all (" + remainingConflicts + " remaining - will print list to console)",
-					false
-				);
-
-				result = dialog.open();
-
-				// not sure why the result comes back like this....
-				if ( result == 256 ) 		{ result = 0; }
-				else if ( result == 257 ) 	{ result = 1; }
-				else if ( result == 258 ) 	{ result = 2; }
-
-				// apply for all?
-				if ( dialog.getToggleState() ) {
-					actionForRemainingItems = result;
-				}
-			}
-
-			if ( result == 0 ) {
-				File existingFile = hgRoot.getRepository().file( conflict.getFilename() );
-				if ( existingFile.exists()  ) {
-					try {
-						conflict.delete();
-						writeToConsole("Merge Results", "DELETED [Deleted On: " + deletedOnBranch + "] " + conflict.getFilename());
-					}
-					catch ( Exception ex ) {
-						writeToConsole("Merge Results", "ERROR DELETING [Deleted On: " + deletedOnBranch + "] " + conflict.getFilename() + " (" + ex.getMessage() + " ... See log for details)");
-						ex.printStackTrace(System.out);
-						MessageDialog dialog = new MessageDialog(
-							null, "Error Deleting File", null, ex.getMessage(),
-							MessageDialog.ERROR,
-							new String[] {"Ok"}, 0
-						);
-						dialog.open();
-					}
-				}
-			}
-			else if ( result == 1 ) {
-			   conflict.keep();
-			   writeToConsole("Merge Results", "KEPT [Deleted On: " + deletedOnBranch + "] " + conflict.getFilename());
-			}
-			else if ( result == 2 ) {
-			   conflict.keep();
-			   File newFile = hgRoot.getRepository().file( conflict.getFilename() + ".deleted" );
-			   hgRoot.getRepository().file( conflict.getFilename() ).renameTo( newFile );
-			   writeToConsole("Merge Results", "RENAMED  [Deleted On: " + deletedOnBranch + "] " + conflict.getFilename());
-			}
-		}
+		// Never auto-resolve keep-delete conflicts
 
 		// TODO: should this instead be done in the merge view asyncronously?
 		for (FlagConflict conflict : ctx.getFlagConflicts()) {
 
 		}
 
-		return autoResolve(hgRoot);
+		boolean r = autoResolve(hgRoot);
+
+		// keep-delete conflicts should not be auto-resolved
+		if ( r && ! ctx.getKeepDeleteConflicts().isEmpty() ) {
+			return false;
+		}
+
+		return r;
 	}
 
 	/**

@@ -192,7 +192,7 @@ public class BackoutWizardPage extends HgWizardPage {
 			} else {
 				if (merge) {
 					try {
-						MergeView.showMergeConflict(hgRoot, getShell());
+						MergeView.showMergeConflict(hgRoot, ctx, getShell());
 					} catch (PartInitException e1) {
 						MercurialEclipsePlugin.logError(e1);
 					}
