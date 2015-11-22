@@ -95,6 +95,7 @@ public class ResourceDecorator extends LabelProvider implements ILightweightLabe
 		INTERESTING_PREFS.add(LABELDECORATOR_LOGIC_2MM);
 		INTERESTING_PREFS.add(LABELDECORATOR_LOGIC);
 		INTERESTING_PREFS.add(PREF_DECORATE_WITH_COLORS);
+		INTERESTING_PREFS.add(RESOURCE_DECORATOR_SHOW_CHANGESET_IN_PROJECT_LABEL);
 		INTERESTING_PREFS.add(RESOURCE_DECORATOR_SHOW_CHANGESET);
 		INTERESTING_PREFS.add(RESOURCE_DECORATOR_SHOW_INCOMING_CHANGESET);
 		INTERESTING_PREFS.add(RESOURCE_DECORATOR_SHOW_SUMMARY);
@@ -105,6 +106,7 @@ public class ResourceDecorator extends LabelProvider implements ILightweightLabe
 	private boolean folderLogic2MM;
 	private ITheme theme;
 	private boolean colorise;
+	private boolean showChangesetInProjectLabel;
 	private boolean showChangeset;
 	private boolean showIncomingChangeset;
 	private boolean enableSubrepos;
@@ -186,6 +188,7 @@ public class ResourceDecorator extends LabelProvider implements ILightweightLabe
 		IPreferenceStore store = MercurialEclipsePlugin.getDefault().getPreferenceStore();
 		folderLogic2MM = LABELDECORATOR_LOGIC_2MM.equals(store.getString(LABELDECORATOR_LOGIC));
 		colorise = store.getBoolean(PREF_DECORATE_WITH_COLORS);
+		showChangesetInProjectLabel = store.getBoolean(RESOURCE_DECORATOR_SHOW_CHANGESET_IN_PROJECT_LABEL);
 		showChangeset = store.getBoolean(RESOURCE_DECORATOR_SHOW_CHANGESET);
 		showIncomingChangeset = store.getBoolean(RESOURCE_DECORATOR_SHOW_INCOMING_CHANGESET);
 		showSummary = store.getBoolean(RESOURCE_DECORATOR_SHOW_SUMMARY);
@@ -491,7 +494,7 @@ public class ResourceDecorator extends LabelProvider implements ILightweightLabe
 			}
 
 			// rev info
-			if (showChangeset) {
+			if (showChangesetInProjectLabel) {
 				suffix.append(' ').append(changeSet.getIndex()).append(':').append(hex);
 			}
 

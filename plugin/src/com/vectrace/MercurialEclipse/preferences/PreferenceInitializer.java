@@ -73,6 +73,7 @@ public class PreferenceInitializer extends AbstractPreferenceInitializer {
 		// when having 2 different statuses in a folder it should have the more important one
 		store.setDefault(LABELDECORATOR_LOGIC, LABELDECORATOR_LOGIC_HB);
 
+		store.setDefault(RESOURCE_DECORATOR_SHOW_CHANGESET_IN_PROJECT_LABEL, false);
 		store.setDefault(RESOURCE_DECORATOR_SHOW_CHANGESET, false);
 		store.setDefault(RESOURCE_DECORATOR_SHOW_INCOMING_CHANGESET, false);
 		store.setDefault(RESOURCE_DECORATOR_SHOW_SUMMARY, true);

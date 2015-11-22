@@ -73,6 +73,11 @@ implements IWorkbenchPreferencePage {
 				Messages.getString("PerformancePreferencePage.field.computeFullStatus"), //$NON-NLS-1$
 				getFieldEditorParent()));
 
+		addField(new BooleanFieldEditor(
+				RESOURCE_DECORATOR_SHOW_CHANGESET_IN_PROJECT_LABEL,
+				Messages.getString("PerformancePreferencePage.field.showChangesetOnContainer"), //$NON-NLS-1$
+				getFieldEditorParent()));
+
 		final BooleanFieldEditor showChangesetsInfo = new BooleanFieldEditor(
 				RESOURCE_DECORATOR_SHOW_CHANGESET,
 				Messages.getString("PerformancePreferencePage.field.showChangesetOnFiles"), //$NON-NLS-1$
