@@ -1207,8 +1207,8 @@ public class MercurialHistoryPage extends HistoryPage {
 	}
 
 	private IWorkbenchSiteProgressService getProgressService() {
-		IWorkbenchSiteProgressService progressService = (IWorkbenchSiteProgressService) getHistoryPageSite()
-				.getWorkbenchPageSite().getService(IWorkbenchSiteProgressService.class);
+		IWorkbenchSiteProgressService progressService = getHistoryPageSite().getWorkbenchPageSite()
+				.getService(IWorkbenchSiteProgressService.class);
 		return progressService;
 	}
 

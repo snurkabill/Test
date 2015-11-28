@@ -45,7 +45,7 @@ public class BundleRepoWizard extends HgWizard implements IExportWizard {
 			return;
 		}
 		PlatformObject po = (PlatformObject) selection.getFirstElement();
-		IResource res = (IResource) po.getAdapter(IResource.class);
+		IResource res = po.getAdapter(IResource.class);
 		try {
 			root = MercurialTeamProvider.getHgRoot(res);
 			if (root != null) {

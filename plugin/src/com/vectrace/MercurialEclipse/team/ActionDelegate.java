@@ -116,7 +116,7 @@ public abstract class ActionDelegate implements IWorkbenchWindowActionDelegate {
 			} catch (Exception e) {
 			}
 		} else if (o instanceof IAdaptable) {
-			IWorkbenchAdapter resource = ((IWorkbenchAdapter)((IAdaptable) o).getAdapter(IWorkbenchAdapter.class));
+			IWorkbenchAdapter resource = ((IAdaptable) o).getAdapter(IWorkbenchAdapter.class);
 
 			if (resource != null) {
 				hgRoot = getHgRoot(resource.getParent(o));

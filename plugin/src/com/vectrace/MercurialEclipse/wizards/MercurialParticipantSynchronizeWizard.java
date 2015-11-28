@@ -316,7 +316,7 @@ public class MercurialParticipantSynchronizeWizard extends ParticipantSynchroniz
 		IProject[] selectedProjects = scope.getProjects();
 		ResourceMapping[] selectedMappings = new ResourceMapping[selectedProjects.length];
 		for (int i = 0; i < selectedProjects.length; i++) {
-			selectedMappings[i] = (ResourceMapping) selectedProjects[i].getAdapter(ResourceMapping.class);
+			selectedMappings[i] = selectedProjects[i].getAdapter(ResourceMapping.class);
 		}
 		HgSubscriberScopeManager manager = new HgSubscriberScopeManager(selectedMappings, subscriber);
 		HgSubscriberMergeContext ctx = new HgSubscriberMergeContext(subscriber, manager);
