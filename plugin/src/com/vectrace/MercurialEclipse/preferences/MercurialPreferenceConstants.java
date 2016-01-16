@@ -132,6 +132,7 @@ public final class MercurialPreferenceConstants {
 
 	// commit
 	public static final String PREF_REFRESH_BEFORE_COMMIT = "hg.commit.refreshBeforeCommit";
+	public static final String PREF_COMMIT_UPDATE_QUICKDIFF = "hg.commit.updateQuickDiff";
 
 
 }

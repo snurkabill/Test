@@ -12,16 +12,21 @@
  *     Zsolt Koppany (Intland)
  *     Adam Berkes (Intland)
  *     Andrei Loskutov           - bug fixes
+ *     Amenel Voglozin           - added listeners and notification (bug #337-Quick Diff refresh)
  *******************************************************************************/
 package com.vectrace.MercurialEclipse.commands;
 
 import java.io.File;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
 import org.eclipse.core.resources.IResource;
 import org.eclipse.core.runtime.IProgressMonitor;
+import org.eclipse.core.runtime.IStatus;
+import org.eclipse.core.runtime.Status;
+import org.eclipse.core.runtime.jobs.Job;
 
 import com.aragost.javahg.Changeset;
 import com.aragost.javahg.commands.CommitCommand;
@@ -39,6 +44,9 @@ import com.vectrace.MercurialEclipse.utils.ResourceUtils;
  *
  */
 public class HgCommitClient extends AbstractClient {
+
+	private static List<IPostCommitListener> postCommitListeners = null;
+	private static Job prevNotification = null;
 
 	/**
 	 * Commit given resources and refresh the caches for the associated projects
@@ -84,7 +92,7 @@ public class HgCommitClient extends AbstractClient {
 	}
 
 	/**
-	 * Performs commit. No refresh of any cashes is done afterwards.
+	 * Performs commit. No refresh of any caches is done afterwards.
 	 *
 	 * <b>Note</b> clients should not use this method directly, it is NOT private for tests only
 	 */
@@ -118,6 +126,7 @@ public class HgCommitClient extends AbstractClient {
 		}
 
 		HgCommitMessageManager.updateDefaultCommitName(hgRoot, user);
+		firePostCommitEvent();
 	}
 
 	/**
@@ -137,6 +146,58 @@ public class HgCommitClient extends AbstractClient {
 			HgCommitMessageManager.updateDefaultCommitName(hgRoot, user);
 		} finally {
 			new RefreshRootJob(hgRoot, RefreshRootJob.LOCAL_AND_OUTGOING).schedule();
+			firePostCommitEvent();
 		}
+	}
+
+	// borrowed and adapted from Subclipse's SVNRemoteStorage.fireResourceStatesChangedEvent()
+	protected static void firePostCommitEvent() {
+		final Job prevNotify = HgCommitClient.prevNotification;
+		Job job = new Job("HgCommitClient notification of listeners that a commit has completed.") { //$NON-NLS-1$
+			@Override
+			protected IStatus run(IProgressMonitor monitor) {
+				if (prevNotify != null) {
+					try {
+						prevNotify.join();
+					} catch (InterruptedException e) {
+						return Status.CANCEL_STATUS;
+					}
+				}
+
+				if (postCommitListeners != null) {
+					for (IPostCommitListener listener : postCommitListeners) {
+						if (!monitor.isCanceled()) {
+							listener.resourceCommitted();
+						}
+					}
+				}
+				return monitor.isCanceled() ? Status.CANCEL_STATUS : Status.OK_STATUS;
+			}
+		};
+		job.setSystem(true);
+		job.schedule();
+		HgCommitClient.prevNotification = job;
+	}
+
+	/**
+	 * Adds a listener to be notified after the commit operation has completed. Since the
+	 * registration for notification does not specify any resource, all listeners will be notified
+	 * for each commit, including that of resources that they don't care about.
+	 *
+	 */
+	public static void addPostCommitListener(IPostCommitListener listener) {
+		if (postCommitListeners == null) {
+			postCommitListeners = new ArrayList<IPostCommitListener>();
+		}
+		if (!postCommitListeners.contains(listener)) {
+			postCommitListeners.add(listener);
+		}
+	}
+
+	public static void removePostCommitListener(IPostCommitListener listener) {
+		if (postCommitListeners == null) {
+			return;
+		}
+		postCommitListeners.remove(listener);
 	}
 }

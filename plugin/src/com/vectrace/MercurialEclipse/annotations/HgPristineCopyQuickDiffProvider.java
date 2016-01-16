@@ -10,6 +10,7 @@
  *     StefanC           - jobs framework code cleenup
  *     Bastian Doetsch   - refactoring
  *     Andrei Loskutov   - made it finally working
+ *     Amenel Voglozin   - added registering/unregistering for Commit notifications (bug #337)
  *******************************************************************************/
 package com.vectrace.MercurialEclipse.annotations;
 
@@ -38,8 +39,12 @@ import org.eclipse.ui.texteditor.IElementStateListener;
 import org.eclipse.ui.texteditor.ITextEditor;
 import org.eclipse.ui.texteditor.quickdiff.IQuickDiffReferenceProvider;
 
+import com.vectrace.MercurialEclipse.MercurialEclipsePlugin;
+import com.vectrace.MercurialEclipse.commands.HgCommitClient;
+import com.vectrace.MercurialEclipse.commands.IPostCommitListener;
 import com.vectrace.MercurialEclipse.exception.HgException;
 import com.vectrace.MercurialEclipse.model.HgFile;
+import com.vectrace.MercurialEclipse.preferences.MercurialPreferenceConstants;
 import com.vectrace.MercurialEclipse.team.MercurialTeamProvider;
 import com.vectrace.MercurialEclipse.team.cache.MercurialStatusCache;
 import com.vectrace.MercurialEclipse.utils.CompareUtils;
@@ -65,11 +70,11 @@ import com.vectrace.MercurialEclipse.utils.ResourceUtils;
  * [Note: Currently an empty document must be returned for an unmanaged file. This results in the
  * entire document appearing as outgoing changes in the quickdiff bar. This is required because the
  * quickdiff support relies on IDocument change events to update the quickdiff, and returning null
- * for the reference document doesn't allow the transition to later return a IDocument.]
+ * for the reference document doesn't allow the transition to later return an IDocument.]
  *
  * @since 3.0
  */
-public class HgPristineCopyQuickDiffProvider implements	IQuickDiffReferenceProvider {
+public class HgPristineCopyQuickDiffProvider implements IQuickDiffReferenceProvider, IPostCommitListener {
 
 	public static final String HG_REFERENCE_PROVIDER = "com.vectrace.MercurialEclipse.annotatations.HgReferenceProvider"; //$NON-NLS-1$
 
@@ -93,6 +98,14 @@ public class HgPristineCopyQuickDiffProvider implements	IQuickDiffReferenceProvi
 
 	// Job that re-creates the reference document.
 	private Job fUpdateJob;
+
+	// Flag for knowing whether this instance had registered for notification. We get
+	// the preference setting at registration time. This means that if the preference is
+	// changed while the editor is already open with quick diff already enabled, this
+	// value won't change. Therefore, it is not semantically equivalent to the preference 
+	// setting that deals with updating quick diff annotations. Put differently, we can't
+	// just read the preference again as it's a "volatile" value to us. 
+	private boolean registeredForPostCommitNotification = false;
 
 	/**
 	 * Updates the document if the document is changed (e.g. replace with)
@@ -140,6 +153,11 @@ public class HgPristineCopyQuickDiffProvider implements	IQuickDiffReferenceProvi
 			documentProvider.addElementStateListener(documentListener);
 		}
 		isReferenceInitialized = true;
+
+		if (MercurialEclipsePlugin.getDefault().getPreferenceStore().getBoolean(MercurialPreferenceConstants.PREF_COMMIT_UPDATE_QUICKDIFF)) {
+			registeredForPostCommitNotification = true;
+			HgCommitClient.addPostCommitListener(this);
+		}
 	}
 
 	public boolean isEnabled() {
@@ -160,6 +178,9 @@ public class HgPristineCopyQuickDiffProvider implements	IQuickDiffReferenceProvi
 		if (documentProvider != null) {
 			documentProvider.removeElementStateListener(documentListener);
 		}
+		if (registeredForPostCommitNotification) {
+			HgCommitClient.removePostCommitListener(this);
+		}
 	}
 
 	public void setId(String id) {
@@ -172,7 +193,7 @@ public class HgPristineCopyQuickDiffProvider implements	IQuickDiffReferenceProvi
 
 	/**
 	 * Determine if the file represented by this quickdiff provider has changed
-	 * with respect to it's remote state. Return true if the remote contents
+	 * with respect to its remote state. Return true if the remote contents
 	 * should be refreshed, and false if not.
 	 */
 	private boolean computeChange(IProgressMonitor monitor) {
@@ -329,5 +350,14 @@ public class HgPristineCopyQuickDiffProvider implements	IQuickDiffReferenceProvi
 			}
 		};
 		fUpdateJob.schedule();
+	}
+
+	/**
+	 * @see com.vectrace.MercurialEclipse.commands.IPostCommitListener#resourceCommitted()
+	 */
+	public void resourceCommitted() {
+		if (editor != null && isEnabled()) {
+			fetchContentsInJob();
+		}
 	}
 }

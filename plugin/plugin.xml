@@ -1357,27 +1357,31 @@
       <page class="com.vectrace.MercurialEclipse.preferences.GeneralPreferencePage"
             id="com.vectrace.MercurialEclipse.prefspage"
             category="org.eclipse.team.ui.TeamPreferences"
-            name="%mercurial"/>
+            name="%prefPage.mercurial"/>
       <page class="com.vectrace.MercurialEclipse.preferences.SynchronizePreferencePage"
             id="com.vectrace.MercurialEclipse.prefspage.Synchronize"
             category="com.vectrace.MercurialEclipse.prefspage"
-            name="%synchronize"/>
+            name="%prefPage.synchronize"/>
       <page class="com.vectrace.MercurialEclipse.preferences.TimeoutPreferencePage"
             id="com.vectrace.MercurialEclipse.prefspage.Timeouts"
             category="com.vectrace.MercurialEclipse.prefspage"
-            name="%timeouts"/>
+            name="%prefPage.timeouts"/>
       <page class="com.vectrace.MercurialEclipse.preferences.HistoryPreferencePage"
             id="com.vectrace.MercurialEclipse.prefspage.History"
             category="com.vectrace.MercurialEclipse.prefspage"
-            name="%history"/>
+            name="%prefPage.history"/>
       <page class="com.vectrace.MercurialEclipse.preferences.PerformancePreferencePage"
             id="com.vectrace.MercurialEclipse.prefspage.Performance"
             category="com.vectrace.MercurialEclipse.prefspage"
-            name="%performance"/>
+            name="%prefPage.performance"/>
       <page class="com.vectrace.MercurialEclipse.preferences.ConsolePreferencesPage"
             id="com.vectrace.MercurialEclipse.prefspage.Console"
             category="com.vectrace.MercurialEclipse.prefspage"
-            name="%console"/>
+            name="%prefPage.console"/>
+      <page class="com.vectrace.MercurialEclipse.preferences.CommitPreferencePage"
+            id="com.vectrace.MercurialEclipse.prefspage.Commit"
+            category="com.vectrace.MercurialEclipse.prefspage"
+            name="%prefPage.commit"/>
 
    </extension>
 

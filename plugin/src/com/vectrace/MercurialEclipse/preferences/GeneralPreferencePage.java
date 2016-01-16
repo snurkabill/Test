@@ -23,7 +23,6 @@ import java.io.File;
 import org.eclipse.jface.preference.BooleanFieldEditor;
 import org.eclipse.jface.preference.FieldEditorPreferencePage;
 import org.eclipse.jface.preference.FileFieldEditor;
-import org.eclipse.jface.preference.IntegerFieldEditor;
 import org.eclipse.jface.preference.RadioGroupFieldEditor;
 import org.eclipse.jface.preference.StringFieldEditor;
 import org.eclipse.swt.widgets.Composite;
@@ -199,29 +198,12 @@ IWorkbenchPreferencePage {
 				Messages.getString("GeneralPreferencePage.autoshare"), //$NON-NLS-1$
 				getFieldEditorParent()));
 
-		addField(new BooleanFieldEditor(
-				PREF_PRESELECT_UNTRACKED_IN_COMMIT_DIALOG,
-				Messages.getString("GeneralPreferencePage.preselectUntrackedInCommitDialog"), //$NON-NLS-1$
-				getFieldEditorParent()));
-
 		BooleanFieldEditor cert_editor = new BooleanFieldEditor(
 				PREF_VERIFY_SERVER_CERTIFICATE,
 				Messages.getString("GeneralPreferencePage.verifyServerCertificate"), //$NON-NLS-1$
 				getFieldEditorParent());
 		addField(cert_editor);
 
-		BooleanFieldEditor refresh_editor = new BooleanFieldEditor(
-				PREF_REFRESH_BEFORE_COMMIT,
-				"Refresh repository before commit.", //$NON-NLS-1$
-				getFieldEditorParent());
-		addField(refresh_editor);
-
-		IntegerFieldEditor commitSizeEditor = new IntegerFieldEditor(
-				COMMIT_MESSAGE_BATCH_SIZE,
-				Messages.getString("GeneralPreferencePage.field.commitMessageBatchSize"), //$NON-NLS-1$
-				getFieldEditorParent());
-		commitSizeEditor.setValidRange(1, Integer.MAX_VALUE);
-		addField(commitSizeEditor);
 	}
 
 	protected void enablePathEditor(boolean on) {

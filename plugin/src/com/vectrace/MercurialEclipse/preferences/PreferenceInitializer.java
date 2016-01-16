@@ -48,6 +48,8 @@ public class PreferenceInitializer extends AbstractPreferenceInitializer {
 	public void initializeDefaultPreferences() {
 		final IPreferenceStore store = MercurialEclipsePlugin.getDefault().getPreferenceStore();
 
+		store.setDefault(PREF_COMMIT_UPDATE_QUICKDIFF, true);
+
 		// per default, we use exact the executable we have (if any) on board
 		store.setDefault(USE_BUILT_IN_HG_EXECUTABLE, true);
 
