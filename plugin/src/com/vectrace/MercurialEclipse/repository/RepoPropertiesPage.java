@@ -54,7 +54,7 @@ public class RepoPropertiesPage extends FieldEditorPreferencePage implements IWo
 		if (adaptable == null) {
 			return;
 		}
-		IHgRepositoryLocation adapter = adaptable.getAdapter(IHgRepositoryLocation.class);
+		IHgRepositoryLocation adapter = (IHgRepositoryLocation) adaptable.getAdapter(IHgRepositoryLocation.class);
 		if (!(adapter instanceof HgRepositoryLocation)) {
 			return;
 		}
@@ -115,7 +115,7 @@ public class RepoPropertiesPage extends FieldEditorPreferencePage implements IWo
 		if (adaptable == null) {
 			return null;
 		}
-		return adaptable.getAdapter(IHgRepositoryLocation.class);
+		return (IHgRepositoryLocation) adaptable.getAdapter(IHgRepositoryLocation.class);
 	}
 
 	public void setElement(IAdaptable element) {

@@ -134,7 +134,7 @@ public class RepositoriesView extends ViewPart implements ISelectionListener {
 					});
 				}
 			});
-			IWorkbenchSiteProgressService service = getSite()
+			IWorkbenchSiteProgressService service = (IWorkbenchSiteProgressService) getSite()
 					.getService(IWorkbenchSiteProgressService.class);
 			service.schedule(job);
 		}

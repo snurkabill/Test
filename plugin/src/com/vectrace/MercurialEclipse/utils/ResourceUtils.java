@@ -665,16 +665,16 @@ public final class ResourceUtils {
 		}
 		if (o instanceof IAdaptable) {
 			IAdaptable adaptable = (IAdaptable) o;
-			IResource adapter = adaptable.getAdapter(IResource.class);
+			IResource adapter = (IResource) adaptable.getAdapter(IResource.class);
 			if (adapter != null) {
 				return adapter;
 			}
-			adapter = adaptable.getAdapter(IFile.class);
+			adapter = (IResource) adaptable.getAdapter(IFile.class);
 			if (adapter != null) {
 				return adapter;
 			}
 		}
-		return Platform.getAdapterManager().getAdapter(o, IResource.class);
+		return (IResource) Platform.getAdapterManager().getAdapter(o, IResource.class);
 	}
 
 	public static void touch(final IResource res) {

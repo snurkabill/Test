@@ -430,7 +430,7 @@ public class PatchQueueView extends AbstractRootView {
 		if (selection instanceof IStructuredSelection) {
 			IStructuredSelection structured = (IStructuredSelection) selection;
 			if (structured.getFirstElement() instanceof IAdaptable) {
-				IResource newResource = ((IAdaptable) structured.getFirstElement())
+				IResource newResource = (IResource) ((IAdaptable) structured.getFirstElement())
 						.getAdapter(IResource.class);
 
 				if (newResource != null && newResource.isAccessible()
@@ -443,7 +443,7 @@ public class PatchQueueView extends AbstractRootView {
 		// TODO: why?
 		if (part instanceof IEditorPart) {
 			IEditorInput input = ((IEditorPart) part).getEditorInput();
-			IFile file = input.getAdapter(IFile.class);
+			IFile file = (IFile) input.getAdapter(IFile.class);
 			if (file != null && file.isAccessible()
 					&& MercurialTeamProvider.isHgTeamProviderFor(file)) {
 				rootSelected(MercurialTeamProvider.getHgRoot(file));

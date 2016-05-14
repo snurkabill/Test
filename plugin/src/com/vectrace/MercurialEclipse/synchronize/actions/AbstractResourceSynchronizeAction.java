@@ -60,7 +60,7 @@ public abstract class AbstractResourceSynchronizeAction extends PathAwareAction 
 				selectedResources.add((IResource) object);
 			} else if (object instanceof IAdaptable){
 				IAdaptable adaptable = (IAdaptable) object;
-				IResource resource = adaptable.getAdapter(IResource.class);
+				IResource resource = (IResource) adaptable.getAdapter(IResource.class);
 				if(resource != null){
 					selectedResources.add(resource);
 				}

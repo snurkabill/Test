@@ -277,7 +277,7 @@ public class OpenMercurialRevisionAction extends BaseSelectionListenerAction {
 			IEditorPart part = editorRef.getEditor(false);
 			if (part != null
 					&& part.getEditorInput() instanceof MercurialRevisionEditorInput) {
-				IFileRevision editorRevision = part.getEditorInput().getAdapter(IFileRevision.class);
+				IFileRevision editorRevision = (IFileRevision) part.getEditorInput().getAdapter(IFileRevision.class);
 
 				if (inputRevision.equals(editorRevision)) {
 					// make the editor that already contains the revision
