@@ -49,7 +49,7 @@ import com.vectrace.MercurialEclipse.MercurialEclipsePlugin;
 import com.vectrace.MercurialEclipse.commands.HgRemoveClient;
 import com.vectrace.MercurialEclipse.commands.HgRenameClient;
 import com.vectrace.MercurialEclipse.commands.HgRevertClient;
-import com.vectrace.MercurialEclipse.dialogs.CommitDialog.Options;
+import com.vectrace.MercurialEclipse.dialogs.BaseCommitDialog.Options;
 import com.vectrace.MercurialEclipse.exception.HgException;
 import com.vectrace.MercurialEclipse.menu.CommitHandler;
 import com.vectrace.MercurialEclipse.model.HgRoot;

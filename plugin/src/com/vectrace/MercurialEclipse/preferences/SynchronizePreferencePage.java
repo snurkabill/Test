@@ -8,6 +8,7 @@
  * Contributors:
  *     Andrei Loskutov		 - implementation
  *     Soren Mathiasen		 - synchronize view options
+ *     Amenel VOGLOZIN		 - Changeset context menu option
  *******************************************************************************/
 
 package com.vectrace.MercurialEclipse.preferences;
@@ -21,8 +22,10 @@ import org.eclipse.ui.IWorkbenchPreferencePage;
 
 import com.vectrace.MercurialEclipse.MercurialEclipsePlugin;
 
-public class SynchronizePreferencePage extends FieldEditorPreferencePage implements
-		IWorkbenchPreferencePage {
+public class SynchronizePreferencePage extends FieldEditorPreferencePage
+		implements IWorkbenchPreferencePage {
+
+	private BooleanFieldEditor enableChangesetsContextMenu;
 
 	public SynchronizePreferencePage() {
 		super(GRID);
@@ -36,24 +39,39 @@ public class SynchronizePreferencePage extends FieldEditorPreferencePage impleme
 
 	@Override
 	public void createFieldEditors() {
-		addField(new BooleanFieldEditor(
-				PREF_SYNC_ONLY_CURRENT_BRANCH,
+		addField(new BooleanFieldEditor(PREF_SYNC_ONLY_CURRENT_BRANCH,
 				Messages.getString("SynchronizePreferencePage.syncOnlyCurrentBranch"), //$NON-NLS-1$
 				getFieldEditorParent()));
 
-		addField(new BooleanFieldEditor(
+		// This field, upon being unchecked, will disable the context menu field.
+		final BooleanFieldEditor enableLocalChangesets = new BooleanFieldEditor(
 				PREF_SYNC_ENABLE_LOCAL_CHANGESETS,
 				Messages.getString("SynchronizePreferencePage.syncEnableLocalChangeSets"), //$NON-NLS-1$
-				getFieldEditorParent()));
+				getFieldEditorParent()) {
+			@Override
+			protected void fireStateChanged(String property, boolean oldValue, boolean newValue) {
+				super.fireStateChanged(property, oldValue, newValue);
+				if (oldValue != newValue) {
+					enableChangesetsContextMenu.setEnabled(getBooleanValue(),
+							getFieldEditorParent());
+				}
+			}
+		};
+		addField(enableLocalChangesets);
 
-		addField(new BooleanFieldEditor(
-				PREF_SYNC_ALL_PROJECTS_IN_REPO,
+		enableChangesetsContextMenu = new BooleanFieldEditor(
+				PREF_SYNC_ENABLE_LOCAL_CHANGESETS_CONTEXT_MENU,
+				Messages.getString(
+						"SynchronizePreferencePage.syncEnableLocalChangeSetsContextMenu"), //$NON-NLS-1$
+				getFieldEditorParent());
+		addField(enableChangesetsContextMenu);
+
+		addField(new BooleanFieldEditor(PREF_SYNC_ALL_PROJECTS_IN_REPO,
 				Messages.getString("SynchronizePreferencePage.syncAllProjectsInRepo"), //$NON-NLS-1$
 				getFieldEditorParent()));
-		addField(new BooleanFieldEditor(
-				PREF_SYNC_SHOW_EMPTY_GROUPS,
+		addField(new BooleanFieldEditor(PREF_SYNC_SHOW_EMPTY_GROUPS,
 				Messages.getString("SynchronizePreferencePage.showEmptyGroups"), //$NON-NLS-1$
-			getFieldEditorParent()));
+				getFieldEditorParent()));
 	}
 
 }

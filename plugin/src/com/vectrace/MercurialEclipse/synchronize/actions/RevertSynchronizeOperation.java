@@ -25,7 +25,7 @@ import org.eclipse.team.ui.synchronize.ISynchronizePageConfiguration;
 import org.eclipse.team.ui.synchronize.SynchronizeModelOperation;
 
 import com.vectrace.MercurialEclipse.SafeUiJob;
-import com.vectrace.MercurialEclipse.dialogs.CommitDialog.Options;
+import com.vectrace.MercurialEclipse.dialogs.BaseCommitDialog.Options;
 import com.vectrace.MercurialEclipse.menu.CommitHandler;
 import com.vectrace.MercurialEclipse.model.WorkingChangeSet;
 import com.vectrace.MercurialEclipse.team.ActionRevert;

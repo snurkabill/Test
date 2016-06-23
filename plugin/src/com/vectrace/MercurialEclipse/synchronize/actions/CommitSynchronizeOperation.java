@@ -27,7 +27,7 @@ import org.eclipse.team.ui.synchronize.SynchronizeModelOperation;
 
 import com.vectrace.MercurialEclipse.MercurialEclipsePlugin;
 import com.vectrace.MercurialEclipse.SafeUiJob;
-import com.vectrace.MercurialEclipse.dialogs.CommitDialog.Options;
+import com.vectrace.MercurialEclipse.dialogs.BaseCommitDialog.Options;
 import com.vectrace.MercurialEclipse.exception.HgException;
 import com.vectrace.MercurialEclipse.menu.CommitHandler;
 import com.vectrace.MercurialEclipse.model.GroupedUncommittedChangeSet;

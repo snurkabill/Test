@@ -17,8 +17,8 @@ import java.util.Set;
 
 import org.eclipse.core.resources.IResource;
 
+import com.vectrace.MercurialEclipse.dialogs.BaseCommitDialog.Options;
 import com.vectrace.MercurialEclipse.dialogs.CommitDialog;
-import com.vectrace.MercurialEclipse.dialogs.CommitDialog.Options;
 import com.vectrace.MercurialEclipse.exception.HgException;
 import com.vectrace.MercurialEclipse.model.HgRoot;
 import com.vectrace.MercurialEclipse.team.cache.MercurialStatusCache;

@@ -16,7 +16,6 @@ import java.util.Iterator;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Observable;
-import java.util.Observer;
 import java.util.Set;
 import java.util.concurrent.CopyOnWriteArrayList;
 
@@ -35,9 +34,9 @@ import org.eclipse.jface.util.IPropertyChangeListener;
 import org.eclipse.jface.util.PropertyChangeEvent;
 
 import com.vectrace.MercurialEclipse.model.ChangeSet;
+import com.vectrace.MercurialEclipse.model.ChangeSet.Direction;
 import com.vectrace.MercurialEclipse.model.GroupedUncommittedChangeSet;
 import com.vectrace.MercurialEclipse.model.WorkingChangeSet;
-import com.vectrace.MercurialEclipse.model.ChangeSet.Direction;
 import com.vectrace.MercurialEclipse.synchronize.HgSubscriberMergeContext;
 import com.vectrace.MercurialEclipse.synchronize.cs.HgChangeSetContentProvider.IUncommitted;
 import com.vectrace.MercurialEclipse.team.cache.MercurialStatusCache;
@@ -51,7 +50,7 @@ import com.vectrace.MercurialEclipse.team.cache.MercurialStatusCache;
  *
  * @author Andrei
  */
-public class UncommittedChangesetGroup extends ChangesetGroup implements Observer, IUncommitted {
+public class UncommittedChangesetGroup extends ChangesetGroup implements IUncommitted {
 
 
 	private final List<IPropertyChangeListener> listeners;

@@ -7,6 +7,7 @@
  *
  * Contributors:
  *     Andrei Loskutov - implementation
+ *     Amenel VOGLOZIN - String externalization + custom ready message
  *******************************************************************************/
 package com.vectrace.MercurialEclipse.dialogs;
 
@@ -51,6 +52,7 @@ public class EditChangesetDialog extends CommitDialog {
 		options.showDiff = true;
 		options.filesSelectable = !isDefault;
 		options.allowEmptyCommit = true;
+		options.readyMessageSelector = "EditChangesetDialog.readyMessage"; //$NON-NLS-1$
 	}
 
 	@Override
@@ -81,7 +83,7 @@ public class EditChangesetDialog extends CommitDialog {
 		Composite comp = SWTWidgetHelper.createComposite(container, 2);
 		comp.moveAbove(container.getChildren()[0]);
 
-		SWTWidgetHelper.createLabel(comp, "Changeset name:");
+		SWTWidgetHelper.createLabel(comp, Messages.getString("EditChangesetDialog.changeset.name"));
 		changesetNameText = SWTWidgetHelper.createTextField(comp);
 		changesetNameText.setText(changeset.getName());
 		changesetNameText.addFocusListener(new FocusListener() {

@@ -38,6 +38,7 @@ import org.eclipse.ui.texteditor.SourceViewerDecorationSupport;
 import org.eclipse.ui.texteditor.spelling.SpellingAnnotation;
 
 import com.vectrace.MercurialEclipse.commands.HgPatchClient;
+import com.vectrace.MercurialEclipse.dialogs.BaseCommitDialog;
 import com.vectrace.MercurialEclipse.dialogs.CommitDialog;
 import com.vectrace.MercurialEclipse.model.HgRoot;
 import com.vectrace.MercurialEclipse.storage.HgCommitMessageManager;
@@ -124,9 +125,9 @@ public class QNewWizardPage extends HgWizardPage {
 			}
 		});
 
-		CommitDialog.createOldCommitCombo(composite, commitTextDocument, commitTextBox);
+		BaseCommitDialog.createOldCommitCombo(composite, commitTextDocument, commitTextBox);
 
-		Group g = SWTWidgetHelper.createGroup(composite, "Add changes to patch:", 1, GridData.FILL_BOTH); //$NON-NLS-1$
+		Group g = SWTWidgetHelper.createGroup(composite, "Add changes to patch:", 1, GridData.FILL_BOTH);
 		// TODO: Resource calculation wrong for repos below root
 		fileChooser = new CommitFilesChooser(g, true, new ArrayList<IResource>(ResourceUtils
 				.getProjects(root)), true, true, false);

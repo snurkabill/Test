@@ -10,6 +10,7 @@
  *     Jérôme Nègre   - constants are now, well, constant
  *     Bastian Doetsch
  *     Andrei Loskutov - bug fixes
+ *     Amenel VOGLOZIN - Update Quick Diff, Changeset context menu options
  *******************************************************************************/
 
 package com.vectrace.MercurialEclipse.preferences;
@@ -48,6 +49,7 @@ public final class MercurialPreferenceConstants {
 	public static final String PREF_SYNC_ONLY_CURRENT_BRANCH = "hg.syncOnlyCurrentBranch"; //$NON-NLS-1$
 	public static final String PREF_SYNC_PRESENTATION_MODE = "hg.syncPresentationMode";  //$NON-NLS-1$
 	public static final String PREF_SYNC_ENABLE_LOCAL_CHANGESETS = "hg.syncEnableLocalChangesets";  //$NON-NLS-1$
+	public static final String PREF_SYNC_ENABLE_LOCAL_CHANGESETS_CONTEXT_MENU = "hg.syncEnableLocalChangesetsContextMenu";  //$NON-NLS-1$
 
 	public static final String HISTORY_LOG_USE_REMOVED = "historyLogUseRemoved"; //$NON-NLS-1$
 	public static final String PREF_ENABLE_SUBREPO_SUPPORT = "enableSubrepoSupport"; //$NON-NLS-1$

@@ -13,6 +13,7 @@
  *     Zingo Andersen - some updates
  *     Andrei Loskutov - bug fixes
  *     Adam Berkes (Intland) - bug fixes
+ *     Amenel VOGLOZIN - Added showUser and readyMessageSelector options, fixed wrong label when files are not selectable
  *******************************************************************************/
 package com.vectrace.MercurialEclipse.dialogs;
 
@@ -32,29 +33,18 @@ import org.eclipse.jface.dialogs.IDialogConstants;
 import org.eclipse.jface.dialogs.IDialogSettings;
 import org.eclipse.jface.dialogs.IMessageProvider;
 import org.eclipse.jface.dialogs.MessageDialog;
-import org.eclipse.jface.dialogs.TitleAreaDialog;
 import org.eclipse.jface.preference.IPreferenceStore;
-import org.eclipse.jface.text.Document;
 import org.eclipse.jface.text.IDocument;
-import org.eclipse.jface.text.ITextListener;
-import org.eclipse.jface.text.TextEvent;
-import org.eclipse.jface.text.source.AnnotationModel;
-import org.eclipse.jface.text.source.ISourceViewer;
-import org.eclipse.jface.text.source.SourceViewer;
 import org.eclipse.jface.window.Window;
 import org.eclipse.jface.wizard.ProgressMonitorPart;
 import org.eclipse.swt.SWT;
-import org.eclipse.swt.events.DisposeEvent;
-import org.eclipse.swt.events.DisposeListener;
 import org.eclipse.swt.events.KeyEvent;
 import org.eclipse.swt.events.KeyListener;
-import org.eclipse.swt.events.SelectionAdapter;
 import org.eclipse.swt.events.SelectionEvent;
 import org.eclipse.swt.events.SelectionListener;
 import org.eclipse.swt.graphics.Rectangle;
 import org.eclipse.swt.layout.GridData;
 import org.eclipse.swt.widgets.Button;
-import org.eclipse.swt.widgets.Combo;
 import org.eclipse.swt.widgets.Composite;
 import org.eclipse.swt.widgets.Control;
 import org.eclipse.swt.widgets.Event;
@@ -63,12 +53,6 @@ import org.eclipse.swt.widgets.Listener;
 import org.eclipse.swt.widgets.Sash;
 import org.eclipse.swt.widgets.Shell;
 import org.eclipse.swt.widgets.Text;
-import org.eclipse.ui.editors.text.EditorsUI;
-import org.eclipse.ui.editors.text.TextSourceViewerConfiguration;
-import org.eclipse.ui.texteditor.AnnotationPreference;
-import org.eclipse.ui.texteditor.DefaultMarkerAnnotationAccess;
-import org.eclipse.ui.texteditor.SourceViewerDecorationSupport;
-import org.eclipse.ui.texteditor.spelling.SpellingAnnotation;
 
 import com.aragost.javahg.Phase;
 import com.vectrace.MercurialEclipse.HgFeatures;
@@ -111,23 +95,21 @@ import com.vectrace.MercurialEclipse.utils.StringUtils;
  * A commit dialog box allowing choosing of what files to commit and a commit message for those
  * files. Untracked files may also be chosen.
  */
-public class CommitDialog extends TitleAreaDialog {
+public class CommitDialog extends BaseCommitDialog {
 	public static final String FILE_MODIFIED = Messages.getString("CommitDialog.modified"); //$NON-NLS-1$
 	public static final String FILE_ADDED = Messages.getString("CommitDialog.added"); //$NON-NLS-1$
 	public static final String FILE_REMOVED = Messages.getString("CommitDialog.removed"); //$NON-NLS-1$
 	public static final String FILE_UNTRACKED = Messages.getString("CommitDialog.untracked"); //$NON-NLS-1$
 	public static final String FILE_DELETED = Messages.getString("CommitDialog.deletedInWorkspace"); //$NON-NLS-1$
 	public static final String FILE_CLEAN = Messages.getString("CommitDialog.clean"); //$NON-NLS-1$
-	private static final String DEFAULT_COMMIT_MESSAGE = Messages
-			.getString("CommitDialog.defaultCommitMessage"); //$NON-NLS-1$
 
-	private ISourceViewer commitTextBox;
+//	private ISourceViewer commitTextBox;
+//	private final IDocument commitTextDocument;
+//	private SourceViewerDecorationSupport decorationSupport;
 	protected CommitFilesChooser commitFilesList;
 	private List<IResource> resourcesToAdd;
 	private List<IResource> resourcesToCommit;
 	private List<IResource> resourcesToRemove;
-	private final IDocument commitTextDocument;
-	private SourceViewerDecorationSupport decorationSupport;
 	private final List<IResource> inResources;
 	private Text userTextField;
 	private String user;
@@ -142,20 +124,6 @@ public class CommitDialog extends TitleAreaDialog {
 	private Label leftSeparator;
 	private Label rightSeparator;
 	private Control trayControl;
-	protected Options options;
-
-	public static class Options {
-		public boolean showDiff = true;
-		public boolean showAmend = true;
-		public boolean showCloseBranch = true;
-		public boolean showRevert = true;
-		public boolean filesSelectable = true;
-		public String defaultCommitMessage = DEFAULT_COMMIT_MESSAGE;
-		public boolean showCommitMessage = true;
-		public boolean allowEmptyCommit = false;
-		/** optional to use if no files are specified and allowEmptyCommit is true */
-		public HgRoot hgRoot = null;
-	}
 
 	/**
 	 * @param hgRoot
@@ -182,14 +150,9 @@ public class CommitDialog extends TitleAreaDialog {
 
 		this.root = hgRoot;
 		setShellStyle(getShellStyle() | SWT.RESIZE | SWT.TITLE);
-		options = new Options();
 		setBlockOnOpen(false);
 		inResources = resources;
-		commitTextDocument = new Document();
-	}
-
-	public String getCommitMessage() {
-		return commitTextDocument.get();
+		//commitTextDocument = new Document();
 	}
 
 	public List<IResource> getResourcesToCommit() {
@@ -287,6 +250,7 @@ public class CommitDialog extends TitleAreaDialog {
 		return StringUtils.isEmpty(message) || DEFAULT_COMMIT_MESSAGE.equals(message);
 	}
 
+	@Override
 	protected void validateControls() {
 		if (isDefaultCommitMessage()) {
 			setErrorMessage(Messages.getString("CommitDialog.commitMessageRequired")); // ";
@@ -306,7 +270,8 @@ public class CommitDialog extends TitleAreaDialog {
 				setMessage(Messages.getString("CommitDialog.amendPublicWarning"),
 						IMessageProvider.WARNING);
 			} else {
-				setMessage(Messages.getString("CommitDialog.readyToCommit"));
+				setMessage(Messages.getString(options.readyMessageSelector == null
+						? "CommitDialog.readyToCommit" : options.readyMessageSelector));
 			}
 		}
 	}
@@ -374,7 +339,8 @@ public class CommitDialog extends TitleAreaDialog {
 	}
 
 	protected CommitFilesChooser createFilesList(Composite container) {
-		SWTWidgetHelper.createLabel(container, Messages.getString("CommitDialog.selectFiles"));
+		SWTWidgetHelper.createLabel(container, Messages.getString(options.filesSelectable
+				? "CommitDialog.selectFiles.selectable" : "CommitDialog.selectFiles.unselectable"));
 		CommitFilesChooser chooser = new CommitFilesChooser(container, areFilesSelectable(), inResources,
 				true, true, false);
 
@@ -397,6 +363,9 @@ public class CommitDialog extends TitleAreaDialog {
 	}
 
 	private void createUserCommitCombo(Composite container) {
+		if (!options.showUser) {
+			return;
+		}
 		Composite comp = SWTWidgetHelper.createComposite(container, 2);
 		SWTWidgetHelper.createLabel(comp, Messages.getString("CommitDialog.userLabel.text"));
 		userTextField = SWTWidgetHelper.createTextField(comp);
@@ -408,85 +377,44 @@ public class CommitDialog extends TitleAreaDialog {
 		return HgCommitMessageManager.getDefaultCommitName(root);
 	}
 
-	private void createCommitTextBox(Composite container) {
-		if(!options.showCommitMessage){
-			return;
-		}
-
-		setMessage(Messages.getString("CommitDialog.commitTextLabel.text"));
-
-		commitTextBox = new SourceViewer(container, null, SWT.V_SCROLL | SWT.MULTI | SWT.BORDER
-				| SWT.WRAP);
-		commitTextBox.setEditable(true);
-		commitTextBox.getTextWidget().setLayoutData(SWTWidgetHelper.getFillGD(100));
-
-		// set up spell-check annotations
-		decorationSupport = new SourceViewerDecorationSupport(commitTextBox, null,
-				new DefaultMarkerAnnotationAccess(), EditorsUI.getSharedTextColors());
-
-		AnnotationPreference pref = EditorsUI.getAnnotationPreferenceLookup()
-				.getAnnotationPreference(SpellingAnnotation.TYPE);
-
-		decorationSupport.setAnnotationPreference(pref);
-		decorationSupport.install(EditorsUI.getPreferenceStore());
-
-		commitTextBox.configure(new TextSourceViewerConfiguration(EditorsUI.getPreferenceStore()));
-		AnnotationModel annotationModel = new AnnotationModel();
-		commitTextBox.setDocument(commitTextDocument, annotationModel);
-		commitTextBox.getTextWidget().addDisposeListener(new DisposeListener() {
-			public void widgetDisposed(DisposeEvent e) {
-				decorationSupport.uninstall();
-			}
-		});
-
-		commitTextBox.addTextListener(new ITextListener() {
-			public void textChanged(TextEvent event) {
-				validateControls();
-			}
-		});
-	}
-
-	private void createOldCommitCombo(Composite container) {
-		if(!options.showCommitMessage){
-			return;
-		}
-		createOldCommitCombo(container, commitTextDocument, commitTextBox);
-	}
-
-	public static void createOldCommitCombo(Composite container, final IDocument commitTextDocument,
-			final ISourceViewer commitTextBox) {
-		final String[] oldCommits = MercurialEclipsePlugin.getCommitMessageManager()
-				.getCommitMessages();
-		if (oldCommits.length > 0) {
-			final Combo oldCommitComboBox = SWTWidgetHelper.createCombo(container);
-			String[] oddCommitsDisplay = new String[oldCommits.length+1];
-			oddCommitsDisplay[0] = Messages.getString("CommitDialog.oldCommitMessages");
-			for (int i = 0; i < oldCommits.length; i++) {
-				 // Add text to the combo but replace \n with <br> to get a one-liner
-				String commitText = oldCommits[i].replaceAll("\\n", "<br>");
-				//XXX This is a workaround of Bug 209157 of SWT Combo
-				if (oddCommitsDisplay.length > 3 || commitText.length() <= 100) {
-					oddCommitsDisplay[i+1] = commitText;
-				} else {
-					oddCommitsDisplay[i+1] = commitText.substring(0, 100) + " ...";
-				}
-			}
-			oldCommitComboBox.setItems(oddCommitsDisplay);
-			oldCommitComboBox.setText(Messages.getString("CommitDialog.oldCommitMessages"));
-			oldCommitComboBox.addSelectionListener(new SelectionAdapter() {
-				@Override
-				public void widgetSelected(SelectionEvent e) {
-					if (oldCommitComboBox.getSelectionIndex() != 0) {
-						commitTextDocument
-						.set(oldCommits[oldCommitComboBox.getSelectionIndex() - 1]);
-						commitTextBox.setSelectedRange(0, oldCommits[oldCommitComboBox
-																	.getSelectionIndex() - 1].length());
-					}
-
-				}
-			});
-		}
-	}
+//	@Override
+//	private void createCommitTextBox(Composite container) {
+//		if(!options.showCommitMessage){
+//			return;
+//		}
+//
+//		setMessage(Messages.getString("CommitDialog.commitTextLabel.text"));
+//
+//		commitTextBox = new SourceViewer(container, null, SWT.V_SCROLL | SWT.MULTI | SWT.BORDER
+//				| SWT.WRAP);
+//		commitTextBox.setEditable(true);
+//		commitTextBox.getTextWidget().setLayoutData(SWTWidgetHelper.getFillGD(100));
+//
+//		// set up spell-check annotations
+//		decorationSupport = new SourceViewerDecorationSupport(commitTextBox, null,
+//				new DefaultMarkerAnnotationAccess(), EditorsUI.getSharedTextColors());
+//
+//		AnnotationPreference pref = EditorsUI.getAnnotationPreferenceLookup()
+//				.getAnnotationPreference(SpellingAnnotation.TYPE);
+//
+//		decorationSupport.setAnnotationPreference(pref);
+//		decorationSupport.install(EditorsUI.getPreferenceStore());
+//
+//		commitTextBox.configure(new TextSourceViewerConfiguration(EditorsUI.getPreferenceStore()));
+//		AnnotationModel annotationModel = new AnnotationModel();
+//		commitTextBox.setDocument(commitTextDocument, annotationModel);
+//		commitTextBox.getTextWidget().addDisposeListener(new DisposeListener() {
+//			public void widgetDisposed(DisposeEvent e) {
+//				decorationSupport.uninstall();
+//			}
+//		});
+//
+//		commitTextBox.addTextListener(new ITextListener() {
+//			public void textChanged(TextEvent event) {
+//				validateControls();
+//			}
+//		});
+//	}
 
 	/**
 	 * Override the OK button pressed to capture the info we want first and then call super.

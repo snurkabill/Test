@@ -45,7 +45,7 @@ public class GroupedUncommittedChangeSet extends WorkingChangeSet {
 	}
 
 	/**
-	 * @return true if all changes should go to this changeset first (if there are more then one
+	 * @return true if all changes should go to this changeset first (if there are more than one
 	 *         uncommitted changeset available)
 	 */
 	public boolean isDefault() {

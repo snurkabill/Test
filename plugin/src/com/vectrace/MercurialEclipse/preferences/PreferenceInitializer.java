@@ -12,6 +12,7 @@
  *     Andrei Loskutov           - bug fixes
  *     Zsolt Koppany (intland)   - bug fixes
  *     Philip Graf               - use default timeout from preferences
+ *     Amenel VOGLOZIN           - Update Quick Diff, Changeset context menu options
  *******************************************************************************/
 
 package com.vectrace.MercurialEclipse.preferences;
@@ -65,6 +66,7 @@ public class PreferenceInitializer extends AbstractPreferenceInitializer {
 		store.setDefault(PREF_SYNC_SHOW_EMPTY_GROUPS, true);
 		store.setDefault(PREF_SYNC_PRESENTATION_MODE, PresentationMode.COMPRESSED_TREE.name());
 		store.setDefault(PREF_SYNC_ENABLE_LOCAL_CHANGESETS, false);
+		store.setDefault(PREF_SYNC_ENABLE_LOCAL_CHANGESETS_CONTEXT_MENU, true);
 
 		// currently this reduces performance 2x => so disable per default
 		store.setDefault(PREF_ENABLE_SUBREPO_SUPPORT, false);

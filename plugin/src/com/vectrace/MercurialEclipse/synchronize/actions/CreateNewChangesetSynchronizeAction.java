@@ -40,7 +40,7 @@ import com.vectrace.MercurialEclipse.synchronize.cs.UncommittedChangesetGroup;
  */
 public class CreateNewChangesetSynchronizeAction extends SynchronizeModelAction {
 
-	public static final String ID = "hg.createNewChangeset";
+	private static final String ID = "hg.createNewChangeset"; //$NON-NLS-1$
 
 	public CreateNewChangesetSynchronizeAction(String text,
 			ISynchronizePageConfiguration configuration,
@@ -112,7 +112,7 @@ public class CreateNewChangesetSynchronizeAction extends SynchronizeModelAction 
 	 * @return <code>true</code> if all objects have the uncommitted changeset group as their
 	 *         parent.
 	 */
-	private static boolean isSupported(Object[] selectedObjects) {
+	protected static boolean isSupported(Object[] selectedObjects) {
 		if (selectedObjects.length == 0) {
 			return false;
 		}
