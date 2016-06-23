@@ -8,7 +8,6 @@
  * Contributors:
  *     Andrei Loskutov		 - implementation
  *     Soren Mathiasen		 - synchronize view options
- *     Amenel VOGLOZIN		 - Changeset context menu option
  *******************************************************************************/
 
 package com.vectrace.MercurialEclipse.preferences;
@@ -24,8 +23,6 @@ import com.vectrace.MercurialEclipse.MercurialEclipsePlugin;
 
 public class SynchronizePreferencePage extends FieldEditorPreferencePage
 		implements IWorkbenchPreferencePage {
-
-	private BooleanFieldEditor enableChangesetsContextMenu;
 
 	public SynchronizePreferencePage() {
 		super(GRID);
@@ -43,28 +40,10 @@ public class SynchronizePreferencePage extends FieldEditorPreferencePage
 				Messages.getString("SynchronizePreferencePage.syncOnlyCurrentBranch"), //$NON-NLS-1$
 				getFieldEditorParent()));
 
-		// This field, upon being unchecked, will disable the context menu field.
-		final BooleanFieldEditor enableLocalChangesets = new BooleanFieldEditor(
+		addField(new BooleanFieldEditor(
 				PREF_SYNC_ENABLE_LOCAL_CHANGESETS,
 				Messages.getString("SynchronizePreferencePage.syncEnableLocalChangeSets"), //$NON-NLS-1$
-				getFieldEditorParent()) {
-			@Override
-			protected void fireStateChanged(String property, boolean oldValue, boolean newValue) {
-				super.fireStateChanged(property, oldValue, newValue);
-				if (oldValue != newValue) {
-					enableChangesetsContextMenu.setEnabled(getBooleanValue(),
-							getFieldEditorParent());
-				}
-			}
-		};
-		addField(enableLocalChangesets);
-
-		enableChangesetsContextMenu = new BooleanFieldEditor(
-				PREF_SYNC_ENABLE_LOCAL_CHANGESETS_CONTEXT_MENU,
-				Messages.getString(
-						"SynchronizePreferencePage.syncEnableLocalChangeSetsContextMenu"), //$NON-NLS-1$
-				getFieldEditorParent());
-		addField(enableChangesetsContextMenu);
+				getFieldEditorParent()));
 
 		addField(new BooleanFieldEditor(PREF_SYNC_ALL_PROJECTS_IN_REPO,
 				Messages.getString("SynchronizePreferencePage.syncAllProjectsInRepo"), //$NON-NLS-1$

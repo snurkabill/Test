@@ -103,9 +103,6 @@ public class CommitDialog extends BaseCommitDialog {
 	public static final String FILE_DELETED = Messages.getString("CommitDialog.deletedInWorkspace"); //$NON-NLS-1$
 	public static final String FILE_CLEAN = Messages.getString("CommitDialog.clean"); //$NON-NLS-1$
 
-//	private ISourceViewer commitTextBox;
-//	private final IDocument commitTextDocument;
-//	private SourceViewerDecorationSupport decorationSupport;
 	protected CommitFilesChooser commitFilesList;
 	private List<IResource> resourcesToAdd;
 	private List<IResource> resourcesToCommit;
@@ -152,7 +149,6 @@ public class CommitDialog extends BaseCommitDialog {
 		setShellStyle(getShellStyle() | SWT.RESIZE | SWT.TITLE);
 		setBlockOnOpen(false);
 		inResources = resources;
-		//commitTextDocument = new Document();
 	}
 
 	public List<IResource> getResourcesToCommit() {
@@ -376,45 +372,6 @@ public class CommitDialog extends BaseCommitDialog {
 	protected String getInitialCommitUserName() {
 		return HgCommitMessageManager.getDefaultCommitName(root);
 	}
-
-//	@Override
-//	private void createCommitTextBox(Composite container) {
-//		if(!options.showCommitMessage){
-//			return;
-//		}
-//
-//		setMessage(Messages.getString("CommitDialog.commitTextLabel.text"));
-//
-//		commitTextBox = new SourceViewer(container, null, SWT.V_SCROLL | SWT.MULTI | SWT.BORDER
-//				| SWT.WRAP);
-//		commitTextBox.setEditable(true);
-//		commitTextBox.getTextWidget().setLayoutData(SWTWidgetHelper.getFillGD(100));
-//
-//		// set up spell-check annotations
-//		decorationSupport = new SourceViewerDecorationSupport(commitTextBox, null,
-//				new DefaultMarkerAnnotationAccess(), EditorsUI.getSharedTextColors());
-//
-//		AnnotationPreference pref = EditorsUI.getAnnotationPreferenceLookup()
-//				.getAnnotationPreference(SpellingAnnotation.TYPE);
-//
-//		decorationSupport.setAnnotationPreference(pref);
-//		decorationSupport.install(EditorsUI.getPreferenceStore());
-//
-//		commitTextBox.configure(new TextSourceViewerConfiguration(EditorsUI.getPreferenceStore()));
-//		AnnotationModel annotationModel = new AnnotationModel();
-//		commitTextBox.setDocument(commitTextDocument, annotationModel);
-//		commitTextBox.getTextWidget().addDisposeListener(new DisposeListener() {
-//			public void widgetDisposed(DisposeEvent e) {
-//				decorationSupport.uninstall();
-//			}
-//		});
-//
-//		commitTextBox.addTextListener(new ITextListener() {
-//			public void textChanged(TextEvent event) {
-//				validateControls();
-//			}
-//		});
-//	}
 
 	/**
 	 * Override the OK button pressed to capture the info we want first and then call super.

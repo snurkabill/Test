@@ -392,7 +392,7 @@ public class HgRepositoryLocationManager {
 			internalAddRepoLocation(hgRoot, loc);
 		}
 		//
-		// Add the default repository to the .hg/hgrc file
+		// Add the default path to the .hg/hgrc file
 		//
 		hgRoot.setAndStoreDefaultPath(loc.getLocation());
 	}
