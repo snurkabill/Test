@@ -13,6 +13,7 @@
  *     Adam Berkes (Intland)     - bug fixes
  *     Ilya Ivanov  (Intland)    - bug fixes
  *     Andrei Loskutov           - bug fixes
+ *     Amenel VOGLOZIN           - Storing of the default path to .hg/hgrc
  *******************************************************************************/
 package com.vectrace.MercurialEclipse.storage;
 
@@ -390,6 +391,10 @@ public class HgRepositoryLocationManager {
 		} else {
 			internalAddRepoLocation(hgRoot, loc);
 		}
+		//
+		// Add the default repository to the .hg/hgrc file
+		//
+		hgRoot.setAndStoreDefaultPath(loc.getLocation());
 	}
 
 	/**

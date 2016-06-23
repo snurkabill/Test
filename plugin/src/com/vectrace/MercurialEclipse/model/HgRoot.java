@@ -8,7 +8,8 @@
  * Contributors:
  *     bastian					- implementation
  *     Andrei Loskutov			- bug fixes
- *     Martin Olsen (Schantz)  -  Synchronization of Multiple repositories
+ *     Martin Olsen (Schantz)	- Synchronization of Multiple repositories
+ *     Amenel VOGLOZIN			- Storing of the default path to .hg/hgrc
  *******************************************************************************/
 package com.vectrace.MercurialEclipse.model;
 
@@ -46,6 +47,7 @@ import com.vectrace.MercurialEclipse.utils.StringUtils;
 public class HgRoot extends HgPath implements IHgRepositoryLocation {
 
 	private static final String PATHS_SECTION = "paths";
+	private static final String PATH_DEFAULT = "default";
 
 	private static final String HG_HGRC = ".hg/hgrc";
 
@@ -358,4 +360,61 @@ public class HgRoot extends HgPath implements IHgRepositoryLocation {
 				StringUtils.equalIgnoreNull(defaultCreds.getUser(), repo.getUser()) &&
 				StringUtils.equalIgnoreNull(defaultCreds.getPassword(), repo.getPassword());
 	}
+
+	/**
+	 * Sets the default path. In case a default path already exists, it will be overwritten.
+	 *
+	 * @param path
+	 *            the path to set as default path
+	 */
+	public void setAndStoreDefaultPath(String path) {
+		File hgrc = getConfig();
+
+		// The hgrc file may well not exist
+		if (hgrc == null) {
+			hgrc = createConfig();
+			if (hgrc == null) {
+				return;
+			}
+		}
+		IniFile ini;
+		try {
+			ini = new IniFile(hgrc.getAbsolutePath());
+			Map<String, String> section = ini.getSection(PATHS_SECTION);
+			if (section == null) {
+				ini.addSection(PATHS_SECTION);
+				section = ini.getSection(PATHS_SECTION);
+			}
+			section.put(PATH_DEFAULT, path);
+			ini.save(hgrc.getAbsolutePath());
+		} catch (FileNotFoundException e) {
+			MercurialEclipsePlugin.logError(e);
+		} catch (IOException e) {
+			MercurialEclipsePlugin.logError(e);
+		}
+	}
+
+	/**
+	 * Creates an empty config file.
+	 *
+	 * @return the hgrc file, or <code>null</code> if could not be created.
+	 */
+	private File createConfig() {
+		if (config == null) {
+			File hgrc = new File(this, HG_HGRC);
+			if (!hgrc.exists()) {
+				try {
+					hgrc.getParentFile().mkdirs();
+					hgrc.createNewFile();
+				} catch (IOException e) {
+					MercurialEclipsePlugin.logError(e);
+					return null;
+				}
+			}
+			config = hgrc;
+			return hgrc;
+		}
+		return config;
+	}
+
 }
