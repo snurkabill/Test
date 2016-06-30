@@ -16,6 +16,7 @@ package com.vectrace.MercurialEclipse.annotations;
 import java.util.Collections;
 import java.util.Map;
 
+import org.eclipse.core.runtime.IAdaptable;
 import org.eclipse.jface.preference.IPreferenceStore;
 import org.eclipse.jface.resource.JFaceResources;
 import org.eclipse.jface.text.Document;
@@ -63,7 +64,7 @@ class SourceViewerInformationControl implements IInformationControl, IInformatio
 
 
 			@Override
-			protected Map<String, ? extends Object> getHyperlinkDetectorTargets(ISourceViewer sourceViewer) {
+			protected Map<String, IAdaptable> getHyperlinkDetectorTargets(ISourceViewer sourceViewer) {
 				return Collections.singletonMap("org.eclipse.ui.DefaultTextEditor",  //$NON-NLS-1$
 					null);
 		//            new IAdaptable() {
