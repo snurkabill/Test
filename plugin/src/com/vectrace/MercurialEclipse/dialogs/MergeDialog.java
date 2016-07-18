@@ -47,7 +47,7 @@ public class MergeDialog extends CommitDialog {
 
 	@Override
 	protected CommitFilesChooser createFilesList(Composite container) {
-		SWTWidgetHelper.createLabel(container, Messages.getString("CommitDialog.selectFiles")); //$NON-NLS-1$
+		SWTWidgetHelper.createLabel(container, Messages.getString("CommitDialog.selectFiles.selectable")); //$NON-NLS-1$
 		return new CommitFilesChooser(root, container, false, true, true, false);
 	}
 

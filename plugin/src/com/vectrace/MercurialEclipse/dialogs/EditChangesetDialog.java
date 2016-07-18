@@ -111,8 +111,6 @@ public class EditChangesetDialog extends CommitDialog {
 	@Override
 	protected CommitFilesChooser createFilesList(Composite container) {
 		return super.createFilesList(container);
-//		SWTWidgetHelper.createLabel(container, Messages.getString("CommitDialog.selectFiles")); //$NON-NLS-1$
-//		return new CommitFilesChooser(root, container, options.filesSelectable, true, true, false);
 	}
 
 	@Override
