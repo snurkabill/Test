@@ -18,6 +18,7 @@
  *     Sebastian                 - Better naming
  *     Bastian Doetsch           - RepositoryProviderType for ProjectSets
  *     John Peberdy              - Add more handlers
+ *     Amenel Voglozin           - Add Synchronize Perspective handlers
  *******************************************************************************/
 -->
 
@@ -233,18 +234,17 @@
 
     <!-- commands -->
     <extension point="org.eclipse.ui.commands">
-        <command
-                categoryId="com.vectrace.MercurialEclipse.commandCategory"
-                id="com.vectrace.MercurialEclipse.menu.CommitMergeHandler"
-                name="%commitMerge"/>
+        <command id="com.vectrace.MercurialEclipse.menu.CommitMergeHandler"
+                 categoryId="com.vectrace.MercurialEclipse.commandCategory"
+                 name="%commitMerge"/>
         <command id="com.vectrace.MercurialEclipse.menu.CommitHandler"
                  categoryId="com.vectrace.MercurialEclipse.commandCategory"
                  name="%commit"/>
         <command id="com.vectrace.MercurialEclipse.menu.UpdateHandler"
-                categoryId="com.vectrace.MercurialEclipse.commandCategory"
+                 categoryId="com.vectrace.MercurialEclipse.commandCategory"
                  name="%update"/>
         <command id="com.vectrace.MercurialEclipse.menu.RootHistoryHandler"
-                categoryId="com.vectrace.MercurialEclipse.commandCategory"
+                 categoryId="com.vectrace.MercurialEclipse.commandCategory"
                  name="%rootHistory"/>
         <command id="com.vectrace.MercurialEclipse.menu.TagHandler"
                  categoryId="com.vectrace.MercurialEclipse.commandCategory"
@@ -359,6 +359,10 @@
                  categoryId="com.vectrace.MercurialEclipse.commandCategory"
                  description="%actionLabel.revert"
                  name="%revertName"/>
+        <command id="com.vectrace.MercurialEclipse.menu.EditChangeset"
+                 categoryId="com.vectrace.MercurialEclipse.commandCategory"
+                 description="%actionLabel.synchronize.editChangeset"
+                 name="%editChangesetName"/>
         <category
               description="Mercurial (Hg) related commands"
               id="com.vectrace.MercurialEclipse.commandCategory"
@@ -686,6 +690,8 @@
                  class="com.vectrace.MercurialEclipse.menu.CompareWithRevisionHandler" />
         <handler commandId="com.vectrace.MercurialEclipse.menu.Revert"
                  class="com.vectrace.MercurialEclipse.menu.RevertHandler" />
+        <handler commandId="com.vectrace.MercurialEclipse.menu.EditChangeset"
+                 class="com.vectrace.MercurialEclipse.menu.EditChangesetHandler" />
         <handler
                 commandId="com.vectrace.MercurialEclipse.menu.SearchHandler"
                 class="com.vectrace.MercurialEclipse.menu.SearchHandler">
@@ -2021,7 +2027,7 @@
             class="com.vectrace.MercurialEclipse.team.ActionShowHistory"
             toolbarPath="Normal/additions"
             icon="icons/history.gif"
-            label="%history">
+            label="%showHistoryName">
          </action>
          <action
             id="com.vectrace.MercurialEclipse.team.ActionSynchronize"
