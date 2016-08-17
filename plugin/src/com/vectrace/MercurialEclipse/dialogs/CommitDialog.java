@@ -13,7 +13,7 @@
  *     Zingo Andersen - some updates
  *     Andrei Loskutov - bug fixes
  *     Adam Berkes (Intland) - bug fixes
- *     Amenel VOGLOZIN - Added showUser and readyMessageSelector options, fixed wrong label when files are not selectable
+ *     Amenel VOGLOZIN - bug fixes
  *******************************************************************************/
 package com.vectrace.MercurialEclipse.dialogs;
 
@@ -80,6 +80,7 @@ import com.vectrace.MercurialEclipse.model.JHgChangeSet;
 import com.vectrace.MercurialEclipse.mylyn.MylynFacadeFactory;
 import com.vectrace.MercurialEclipse.preferences.MercurialPreferenceConstants;
 import com.vectrace.MercurialEclipse.storage.HgCommitMessageManager;
+import com.vectrace.MercurialEclipse.synchronize.cs.UncommittedChangesetGroup;
 import com.vectrace.MercurialEclipse.team.ActionRevert;
 import com.vectrace.MercurialEclipse.team.MercurialTeamProvider;
 import com.vectrace.MercurialEclipse.team.cache.LocalChangesetCache;
@@ -241,6 +242,9 @@ public class CommitDialog extends BaseCommitDialog {
 						inResources == null ? null : inResources.toArray(new IResource[0]));
 	}
 
+	/**
+	 * Tells whether the text in the Commit textbox is a default commit message.
+	 */
 	private boolean isDefaultCommitMessage() {
 		String message = commitTextBox.getDocument().get();
 		return StringUtils.isEmpty(message) || DEFAULT_COMMIT_MESSAGE.equals(message);
@@ -459,8 +463,11 @@ public class CommitDialog extends BaseCommitDialog {
 			}
 			pm.worked(1);
 
-			/* Store commit message in the database if not the default message */
-			if (!commitMessage.equals(options.defaultCommitMessage)) {
+			/* Store commit message in the database if not a default message */
+			if (!commitMessage.equals(options.defaultCommitMessage) ||
+					(// Covers the case of changesets of which the msg has not been edited between
+						// the dialog opening and the user clicking the OK button.
+					options.committingChangeset && !commitMessage.startsWith(UncommittedChangesetGroup.DEFAULT_NAME))) {
 				pm.subTask("Storing the commit message for later use.");
 				MercurialEclipsePlugin.getCommitMessageManager().saveCommitMessage(commitMessage);
 			}

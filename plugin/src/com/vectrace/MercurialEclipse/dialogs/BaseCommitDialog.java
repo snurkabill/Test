@@ -39,7 +39,7 @@ import com.vectrace.MercurialEclipse.ui.SWTWidgetHelper;
 
 /**
  * This class implements basic functionality from bits and pieces copied from the now-child class
- * CommitDialog. This is essentially a product of refactoring so as to avoid code duplication.
+ * CommitDialog. This was essentially a product of refactoring so as to avoid code duplication.
  *
  * @author Amenel VOGLOZIN
  *
@@ -65,6 +65,12 @@ public abstract class BaseCommitDialog extends TitleAreaDialog {
 		public String readyMessageSelector = null;
 		public boolean showCommitMessage = true;
 		public boolean allowEmptyCommit = false;
+		/**
+		 * Tells whether the commit dialog was opened to commit a changeset. <code>false</code> by
+		 * default. Must be set to <code>true</code> when it is ascertained that the commit deals
+		 * with change sets.
+		 */
+		public boolean committingChangeset = false;
 		/** optional to use if no files are specified and allowEmptyCommit is true */
 		public HgRoot hgRoot = null;
 	}

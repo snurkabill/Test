@@ -63,7 +63,7 @@ public class UncommittedChangesetGroup extends ChangesetGroup implements IUncomm
 	private final MercurialStatusCache cache;
 	private final Set<IFile> files;
 	private final UncommittedChangesetManager ucsManager;
-	private static final String DEFAULT_NAME = "New changeset";
+	public static final String DEFAULT_NAME = "New changeset";
 
 	public UncommittedChangesetGroup() {
 		super("Uncommitted", Direction.LOCAL);

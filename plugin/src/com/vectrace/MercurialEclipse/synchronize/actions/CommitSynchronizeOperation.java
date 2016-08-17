@@ -7,7 +7,8 @@
  *
  * Contributors:
  *     Bastian Doetsch				- implementation
- *     Andrei Loskutov - bug fixes
+ *     Andrei Loskutov 				- bug fixes
+ *     Amenel Voglozin				- bug fix - storing of local change set messages into the message history
  ******************************************************************************/
 package com.vectrace.MercurialEclipse.synchronize.actions;
 
@@ -66,6 +67,7 @@ public class CommitSynchronizeOperation extends SynchronizeModelOperation {
 						CommitHandler commithandler = new CommitHandler();
 						if (cs instanceof GroupedUncommittedChangeSet) {
 							Options options = new Options();
+							options.committingChangeset = true;
 							if (!StringUtils.isEmpty(cs.getComment())) {
 								options.defaultCommitMessage = cs.getComment();
 							} else {
