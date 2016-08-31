@@ -136,7 +136,6 @@ public class HgLogClient extends AbstractClient {
 				if (canFollow(root, relPath)) {
 					command.follow();
 					set.addAll(command.execute(sPath));
-					//command = addRange(LogCommandFlags.on(root.getRepository()), startRev, limitNumber, isFile);
 				}
 
 				command.removed();
