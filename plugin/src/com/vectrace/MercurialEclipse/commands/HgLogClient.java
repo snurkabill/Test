@@ -9,6 +9,7 @@
  * Zsolt Koppany (Intland)
  * Ilya Ivanov (Intland)
  * Josh Tam - bugfixes
+ * Amenel Voglozin               - bug #485 (Show history across renames)
  ******************************************************************************/
 
 package com.vectrace.MercurialEclipse.commands;
@@ -123,7 +124,7 @@ public class HgLogClient extends AbstractClient {
 		IPath path = ResourceUtils.getPath(res);
 		String sPath = path.toOSString();
 		IPath relPath = root.getRelativePath(res);
-		LogCommand command = addRange(LogCommandFlags.on(root.getRepository()), startRev, limitNumber, isFile);
+		LogCommand command = LogCommandFlags.on(root.getRepository()).limit(limitNumber);
 		List<Changeset> c;
 
 		if (isFile) {
@@ -135,7 +136,7 @@ public class HgLogClient extends AbstractClient {
 				if (canFollow(root, relPath)) {
 					command.follow();
 					set.addAll(command.execute(sPath));
-					command = addRange(LogCommandFlags.on(root.getRepository()), startRev, limitNumber, isFile);
+					//command = addRange(LogCommandFlags.on(root.getRepository()), startRev, limitNumber, isFile);
 				}
 
 				command.removed();

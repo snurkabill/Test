@@ -12,7 +12,7 @@
  *     Zsolt Koppany (Intland)
  *     Adam Berkes (Intland)
  *     Andrei Loskutov           - bug fixes
- *     Amenel Voglozin           - added listeners and notification (bug #337-Quick Diff refresh)
+ *     Amenel Voglozin           - #337-Quick Diff refresh, #485-Show history across renames
  *******************************************************************************/
 package com.vectrace.MercurialEclipse.commands;
 
@@ -113,6 +113,9 @@ public class HgCommitClient extends AbstractClient {
 
 		command.message(message);
 
+		// make sure that file renames are taken into account
+		command.addremove();
+
 		try {
 			Changeset tipChangeSet = amend ? command.getRepository().tip() : null;
 			Changeset changeSet = command.execute(files.toArray(new File[files.size()]));
@@ -140,6 +143,9 @@ public class HgCommitClient extends AbstractClient {
 		user = MercurialUtilities.getDefaultUserName(user);
 		command.user(user);
 		command.message(message);
+
+		// make sure that file renames are taken into account
+		command.addremove();
 
 		try {
 			command.execute();

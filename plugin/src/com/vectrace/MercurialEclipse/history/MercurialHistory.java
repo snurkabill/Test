@@ -10,6 +10,7 @@
  *     Stefan Groschupf          - logError
  *     Stefan C                  - Code cleanup
  *     Andrei Loskutov           - bugfixes
+ *     Amenel Voglozin           - bug #485 (Show history across renames)
  *******************************************************************************/
 package com.vectrace.MercurialEclipse.history;
 
@@ -253,13 +254,17 @@ public class MercurialHistory extends FileHistory {
 		int i = revisions.size();
 
 		for (MercurialRevision rev : batch) {
+			// When we follow renames, we are bound to have duplicate revisions (from both the new
+			// and old names/paths). We make sure not to show the same revision several times.
+			if (!revisions.contains(rev)) {
 
-			if (layout != null) {
-				rev.setGraphRow(layout.getRow(i));
+				if (layout != null) {
+					rev.setGraphRow(layout.getRow(i));
+				}
+
+				revisions.add(rev);
+				i += 1;
 			}
-
-			revisions.add(rev);
-			i += 1;
 		}
 
 		lastReqRevision = from;
