@@ -60,6 +60,7 @@ import com.vectrace.MercurialEclipse.synchronize.PresentationMode;
 import com.vectrace.MercurialEclipse.synchronize.cs.ChangesetGroup;
 import com.vectrace.MercurialEclipse.synchronize.cs.HgChangeSetActionProvider;
 import com.vectrace.MercurialEclipse.synchronize.cs.HgChangeSetContentProvider;
+import com.vectrace.MercurialEclipse.synchronize.cs.HgChangeSetContentProvider.IUncommitted;
 import com.vectrace.MercurialEclipse.synchronize.cs.UncommittedChangesetGroup;
 import com.vectrace.MercurialEclipse.utils.ResourceUtils;
 
@@ -379,8 +380,13 @@ public class MercurialSynchronizePageActionGroup extends ModelSynchronizePartici
 		CommonViewer commonViewer = (CommonViewer) viewer;
 		final HgChangeSetContentProvider csProvider = OpenAction
 				.getProvider(commonViewer.getNavigatorContentService());
-		UncommittedChangesetGroup ucg = (UncommittedChangesetGroup) csProvider
-				.getUncommittedEntry();
+		IUncommitted uncommittedEntry = csProvider.getUncommittedEntry();
+		if (!(uncommittedEntry instanceof UncommittedChangesetGroup)) {
+			// The user is not using local changesets. Showing changeset actions
+			// does not make sense.
+			return;
+		}
+		UncommittedChangesetGroup ucg = (UncommittedChangesetGroup) uncommittedEntry;
 
 		//
 		// We build the context menu structure.
