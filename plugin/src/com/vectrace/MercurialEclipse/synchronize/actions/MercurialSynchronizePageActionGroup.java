@@ -442,8 +442,11 @@ public class MercurialSynchronizePageActionGroup extends ModelSynchronizePartici
 	 */
 	private static String buildWorkingSetMenuLabel(GroupedUncommittedChangeSet gucs) {
 		String res = gucs.getName() + " : " + gucs.getComment();//$NON-NLS-1$
+		if (gucs.isDefault()) {
+			res = "> " + res; //$NON-NLS-1$
+		}
 		if (res.length() > 100) { // Trim to an arbitrary value
-			res = res.substring(0, 95) + "[...]";
+			res = res.substring(0, 95) + "[...]"; //$NON-NLS-1$
 		}
 		return res;
 	}
