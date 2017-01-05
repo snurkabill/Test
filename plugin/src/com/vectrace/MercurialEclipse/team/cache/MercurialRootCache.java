@@ -347,7 +347,12 @@ public class MercurialRootCache extends AbstractCache {
 				return false;
 			}
 			Object provider = project.getSessionProperty(TeamPlugin.PROVIDER_PROP_KEY);
-			return provider instanceof MercurialTeamProvider;
+			if (provider != null) {
+				return provider instanceof MercurialTeamProvider;
+			}
+			// No provider... Let's try the persistent property.
+			String providerId = project.getPersistentProperty(TeamPlugin.PROVIDER_PROP_KEY);
+			return MercurialTeamProvider.ID.equals(providerId);
 		} catch (CoreException e) {
 			MercurialEclipsePlugin.logError(e);
 			return false;
