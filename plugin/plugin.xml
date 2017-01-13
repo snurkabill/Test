@@ -970,8 +970,8 @@
                     </visibleWhen>
 
                     <menu
-                      id="team.main.com.vectrace.MercurialEclipse.menu.mqueue"
-                      label="%menuLabel.mqueue">
+                      id="team.main.com.vectrace.MercurialEclipse.menu.extensions.mqueue"
+                      label="%menuLabel.extensions.mqueue">
 
                         <command
                           commandId="com.vectrace.MercurialEclipse.menu.QImportHandler">
@@ -994,21 +994,28 @@
                         </command>
                     </menu>
 
-                    <command
-                      commandId="com.vectrace.MercurialEclipse.menu.ShelveHandler"
-                      icon="icons/export.gif">
-                        <visibleWhen>
-                            <reference definitionId="com.vectrace.MercurialEclipse.def.project" />
-                        </visibleWhen>
-                    </command>
+                    <menu
+                      id="team.main.com.vectrace.MercurialEclipse.menu.extensions.shelve"
+                      label="%menuLabel.extensions.shelve">
 
-                    <command
-                      commandId="com.vectrace.MercurialEclipse.menu.UnShelveHandler"
-                      icon="icons/import.gif">
-                        <visibleWhen>
-                            <reference definitionId="com.vectrace.MercurialEclipse.def.project" />
-                        </visibleWhen>
-                    </command>
+                        <command
+                          commandId="com.vectrace.MercurialEclipse.menu.ShelveHandler"
+                          icon="icons/export.gif"
+                          label="%shelveName">
+                            <visibleWhen>
+                                <reference definitionId="com.vectrace.MercurialEclipse.def.project" />
+                            </visibleWhen>
+                        </command>
+
+                        <command
+                          commandId="com.vectrace.MercurialEclipse.menu.UnShelveHandler"
+                          icon="icons/import.gif"
+                          label="%unshelveName">
+                            <visibleWhen>
+                                <reference definitionId="com.vectrace.MercurialEclipse.def.project" />
+                            </visibleWhen>
+                        </command>
+                    </menu>
 
                     <command
                       commandId="com.vectrace.MercurialEclipse.menu.SignHandler"

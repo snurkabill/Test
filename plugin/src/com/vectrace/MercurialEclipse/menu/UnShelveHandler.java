@@ -6,8 +6,9 @@
  * http://www.eclipse.org/legal/epl-v10.html
  *
  * Contributors:
- * bastian	implementation
+ *     bastian         - implementation
  *     Andrei Loskutov - bug fixes
+ *     Amenel Voglozin - update following the deprecation of HgAtticClient
  *******************************************************************************/
 package com.vectrace.MercurialEclipse.menu;
 
@@ -17,12 +18,14 @@ import org.eclipse.core.runtime.IProgressMonitor;
 import org.eclipse.core.runtime.IStatus;
 import org.eclipse.core.runtime.Status;
 import org.eclipse.jface.dialogs.MessageDialog;
+import org.eclipse.jface.window.Window;
 import org.eclipse.ui.IWorkbenchPart;
 
 import com.vectrace.MercurialEclipse.MercurialEclipsePlugin;
 import com.vectrace.MercurialEclipse.SafeWorkspaceJob;
 import com.vectrace.MercurialEclipse.commands.HgStatusClient;
 import com.vectrace.MercurialEclipse.dialogs.RejectsDialog;
+import com.vectrace.MercurialEclipse.dialogs.UnshelveDialog;
 import com.vectrace.MercurialEclipse.exception.HgException;
 import com.vectrace.MercurialEclipse.model.HgRoot;
 import com.vectrace.MercurialEclipse.operations.UnShelveOperation;
@@ -35,22 +38,12 @@ public class UnShelveHandler extends RootHandler {
 	@Override
 	protected void run(final HgRoot hgRoot) {
 
-		final UnshelveJob job = new UnshelveJob(Messages.getString("UnShelveHandler.Unshelving"),
-				hgRoot);
-
-		if (HgStatusClient.isDirty(hgRoot)) {
-			getShell().getDisplay().asyncExec(new Runnable() {
-				public void run() {
-					if (MessageDialog.openQuestion(getShell(),
-							"Outstanding uncommitted changes!",
-							"There are outstanding uncommitted changes. Force unshelve?")) {
-						job.setForce(true);
-						job.schedule();
-					}
-				}
-			});
+		final UnshelveDialog dlg = new UnshelveDialog(MercurialEclipsePlugin.getActiveShell(), HgStatusClient.isDirty(hgRoot));
+		if (dlg.open() != Window.OK) {
 			return;
 		}
+		final UnshelveJob job = new UnshelveJob(Messages.getString("UnShelveHandler.Unshelving"),
+				hgRoot, dlg.getAbort(), dlg.getContinue(), dlg.getKeep());
 
 		job.schedule();
 	}
@@ -58,22 +51,22 @@ public class UnShelveHandler extends RootHandler {
 	private final class UnshelveJob extends SafeWorkspaceJob {
 
 		private final HgRoot hgRoot;
+		private final boolean abort;
+		private final boolean cont;
+		private final boolean keep;
 
-		private boolean force;
-
-		private UnshelveJob(String name, HgRoot hgRoot) {
+		private UnshelveJob(String name, HgRoot hgRoot, boolean abort, boolean cont, boolean keep) {
 			super(name);
 			this.hgRoot = hgRoot;
-		}
-
-		public void setForce(boolean force) {
-			this.force = force;
+			this.abort = abort;
+			this.cont = cont;
+			this.keep = keep;
 		}
 
 		@Override
 		protected IStatus runSafe(IProgressMonitor monitor) {
 			try {
-				final UnShelveOperation op = new UnShelveOperation((IWorkbenchPart) null, hgRoot, force);
+				final UnShelveOperation op = new UnShelveOperation((IWorkbenchPart) null, hgRoot, abort, cont, keep);
 				op.run(monitor);
 
 				if (op.isConflict()) {

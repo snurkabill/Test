@@ -6,34 +6,30 @@
  * http://www.eclipse.org/legal/epl-v10.html
  *
  * Contributors:
- * bastian	implementation
+ *     bastian         - implementation
  *     Andrei Loskutov - bug fixes
  *     Josh Tam        - large files support
+ *     Amenel Voglozin - reimplementation after deprecating HgAtticClient
  *******************************************************************************/
 package com.vectrace.MercurialEclipse.operations;
 
 import java.io.File;
 import java.lang.reflect.InvocationTargetException;
-import java.util.Collections;
-import java.util.List;
 
-import org.eclipse.core.resources.IResource;
 import org.eclipse.core.runtime.CoreException;
 import org.eclipse.core.runtime.IProgressMonitor;
 import org.eclipse.ui.IWorkbenchPart;
 
+import com.vectrace.MercurialEclipse.MercurialEclipsePlugin;
 import com.vectrace.MercurialEclipse.actions.HgOperation;
 import com.vectrace.MercurialEclipse.commands.HgClients;
-import com.vectrace.MercurialEclipse.commands.HgPatchClient;
 import com.vectrace.MercurialEclipse.commands.HgStatusClient;
 import com.vectrace.MercurialEclipse.commands.HgUpdateClient;
-import com.vectrace.MercurialEclipse.commands.extensions.HgAtticClient;
+import com.vectrace.MercurialEclipse.commands.IConsole;
+import com.vectrace.MercurialEclipse.commands.extensions.HgShelveClient;
 import com.vectrace.MercurialEclipse.exception.HgCoreException;
 import com.vectrace.MercurialEclipse.model.HgRoot;
-import com.vectrace.MercurialEclipse.storage.HgCommitMessageManager;
-import com.vectrace.MercurialEclipse.team.MercurialUtilities;
-import com.vectrace.MercurialEclipse.team.ResourceProperties;
-import com.vectrace.MercurialEclipse.team.cache.RefreshWorkspaceStatusJob;
+import com.vectrace.MercurialEclipse.preferences.MercurialPreferenceConstants;
 import com.vectrace.MercurialEclipse.utils.ResourceUtils;
 
 /**
@@ -43,9 +39,19 @@ public class ShelveOperation extends HgOperation {
 	private final HgRoot hgRoot;
 	private File shelveFileConflict;
 
-	public ShelveOperation(IWorkbenchPart part, HgRoot hgRoot) {
+	/**
+	 * Tells whether the menu entry selected by the user implicitly warrants prompting the user
+	 * for information, irrespective of the value of the relevant preference setting.
+	 * <p>
+	 * This is meant to allow two entries in the Shelve submenu: "Shelve" and "Shelve...", the
+	 * latter of which will force the display of a dialog box.
+	 */
+	private final boolean forceInteraction;
+
+	public ShelveOperation(IWorkbenchPart part, HgRoot hgRoot, boolean forceInteraction) {
 		super(part);
 		this.hgRoot = hgRoot;
+		this.forceInteraction = forceInteraction;
 	}
 
 	@Override
@@ -58,49 +64,51 @@ public class ShelveOperation extends HgOperation {
 	 */
 	public void run(IProgressMonitor monitor) throws InvocationTargetException,
 			InterruptedException {
-		File shelveDir = new File(hgRoot, ".hg" + File.separator //$NON-NLS-1$
-				+ "mercurialeclipse-shelve-backups"); //$NON-NLS-1$
+		//
+		// Directory where the Shelve extension stores its artifacts
+		File shelveDir = new File(hgRoot, HgShelveClient.DEFAULT_FOLDER);
 		try {
-			// get modified files
 			monitor.beginTask(Messages.getString("ShelveOperation.shelving"), 5); //$NON-NLS-1$
-			// check if hgattic is available
-			if (MercurialUtilities.isCommandAvailable("attic-shelve", // $NON-NLS-1$
-							ResourceProperties.EXT_HGATTIC_AVAILABLE, "")) { // $NON-NLS-1$
-				String output = HgAtticClient.shelve(hgRoot,
-						"MercurialEclipse shelve operation", // $NON-NLS-1$
-						true, HgCommitMessageManager.getDefaultCommitName(hgRoot),
-						hgRoot.getName());
-				monitor.worked(1);
-				new RefreshWorkspaceStatusJob(hgRoot).schedule();
-				monitor.worked(1);
-				HgClients.getConsole().printMessage(output, null);
-			} else {
-
-				monitor.subTask(Messages.getString("ShelveOperation.determiningChanges")); //$NON-NLS-1$
-				//
-				if (!HgStatusClient.isDirty(hgRoot)) {
-					throw new HgCoreException(Messages.getString("ShelveOperation.error.nothingToShelve")); //$NON-NLS-1$
-				}
-				monitor.worked(1);
-				monitor.subTask(Messages.getString("ShelveOperation.shelvingChanges")); //$NON-NLS-1$
-
-				boolean mkdir = shelveDir.mkdir();
-				if(!mkdir && !shelveDir.exists()){
-					throw new HgCoreException(Messages.getString("ShelveOperation.error.shelfDirCreateFailed")); //$NON-NLS-1$
-				}
-				File shelveFile = new File(shelveDir, hgRoot.getName() + "-patchfile.patch"); //$NON-NLS-1$
-				if (shelveFile.exists()) {
-					shelveFileConflict = shelveFile;
-					throw new HgCoreException(Messages.getString("ShelveOperation.error.shelfNotEmpty")); //$NON-NLS-1$
-				}
-				// use empty resources to be able to shelve ALL files, also deleted/added
-				List<IResource> resources = Collections.emptyList(); // getDirtyFiles(hgRoot);
-
-				HgPatchClient.exportPatch(hgRoot, resources, shelveFile, null);
-				monitor.worked(2);
-				monitor.subTask(Messages.getString("ShelveOperation.cleaningDirtyFiles")); //$NON-NLS-1$
-				HgUpdateClient.cleanUpdate(hgRoot, ".", null);
+			monitor.subTask(Messages.getString("ShelveOperation.determiningChanges")); //$NON-NLS-1$
+			//
+			IConsole console = HgClients.getConsole();
+			if (!HgStatusClient.isDirty(hgRoot)) {
+				String key = "ShelveOperation.error.nothingToShelve"; //$NON-NLS-1$
+				// Let the user know why nothing happens by printing to the console.
+				console.printMessage(Messages.getString(key), null);
+				throw new HgCoreException(Messages.getString(key));
 			}
+			monitor.worked(1);
+			monitor.subTask(Messages.getString("ShelveOperation.shelvingChanges")); //$NON-NLS-1$
+
+			//
+			// Configuration
+			String shelveName = hgRoot.getName();
+			String shelveCommitMessage = "MercurialEclipse shelve operation";
+			boolean useInteraction = MercurialEclipsePlugin.getDefault().getPreferenceStore()
+					.getBoolean(MercurialPreferenceConstants.PREF_SHELVE_USE_INTERACTION);
+			if (useInteraction || forceInteraction) {
+				// TODO get information from the user
+			}
+			File shelveFile = new File(shelveDir, shelveName + HgShelveClient.EXTENSION);
+			if (shelveFile.exists()) {
+				shelveFileConflict = shelveFile;
+				console.printMessage(Messages.getString("ShelveOperation.error.shelfNotEmpty"), //$NON-NLS-1$
+						null);
+				throw new HgCoreException(
+						Messages.getString("ShelveOperation.error.shelfNotEmpty")); //$NON-NLS-1$
+			}
+
+			//
+			// Execute the operation
+			String res = HgShelveClient.shelve(hgRoot, shelveCommitMessage, shelveName);
+			console.printMessage(res, null); // Output the result of the operation to the console.
+			monitor.worked(2);
+
+			//
+			// Update the project so as to reflect the changes from the shelving.
+			monitor.subTask(Messages.getString("ShelveOperation.cleaningDirtyFiles")); //$NON-NLS-1$
+			HgUpdateClient.cleanUpdate(hgRoot, ".", null);
 		} catch (HgCoreException e) {
 			throw new InvocationTargetException(e, e.getLocalizedMessage());
 		} catch (CoreException e) {

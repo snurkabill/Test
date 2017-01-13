@@ -6,7 +6,8 @@
  * http://www.eclipse.org/legal/epl-v10.html
  *
  * Contributors:
- * bastian	implementation
+ * bastian			implementation
+ * Amenel Voglozin	Deprecation
  *******************************************************************************/
 package com.vectrace.MercurialEclipse.commands.extensions;
 
@@ -18,8 +19,9 @@ import com.vectrace.MercurialEclipse.model.HgRoot;
 
 /**
  * @author bastian
- *
+ * @deprecated
  */
+@Deprecated
 public class HgAtticClient extends AbstractClient {
 
 	public static String shelve(HgRoot hgRoot, String commitMessage,

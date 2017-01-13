@@ -136,5 +136,10 @@ public final class MercurialPreferenceConstants {
 	public static final String PREF_REFRESH_BEFORE_COMMIT = "hg.commit.refreshBeforeCommit";
 	public static final String PREF_COMMIT_UPDATE_QUICKDIFF = "hg.commit.updateQuickDiff";
 
+	//
+	// Settings for the Shelve extension - all must be changed manually: no UI for changing them.
+	//
+	public static final String PREF_SHELVE_USE_INTERACTION = "hg.shelve.use.interaction";
+
 
 }

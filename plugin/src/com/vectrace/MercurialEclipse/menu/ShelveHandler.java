@@ -36,7 +36,7 @@ public class ShelveHandler extends RootHandler {
 
 			@Override
 			protected IStatus runSafe(IProgressMonitor monitor) {
-				final ShelveOperation op = new ShelveOperation((IWorkbenchPart) null, hgRoot);
+				final ShelveOperation op = new ShelveOperation((IWorkbenchPart) null, hgRoot, false);
 				try {
 					op.run(monitor);
 					return super.runSafe(monitor);
