@@ -12,7 +12,7 @@
  *     Andrei Loskutov           - bug fixes
  *     Zsolt Koppany (intland)   - bug fixes
  *     Philip Graf               - use default timeout from preferences
- *     Amenel VOGLOZIN           - Update Quick Diff, Changeset context menu options
+ *     Amenel VOGLOZIN           - Update Quick Diff, Changeset context menu options, and others
  *******************************************************************************/
 
 package com.vectrace.MercurialEclipse.preferences;
@@ -161,8 +161,14 @@ public class PreferenceInitializer extends AbstractPreferenceInitializer {
 		store.setDefault(PREF_SHOW_REBASE_CONFICT_NOTIFICATION_DIALOG, MessageDialogWithToggle.PROMPT);
 		store.setDefault(PREF_SHOW_QFINISH_WARNING_DIALOG, MessageDialogWithToggle.PROMPT);
 		store.setDefault(PREF_SHOW_PUSH_FORCE_GUIDANCE_DIALOG, MessageDialogWithToggle.PROMPT);
-		// shelve extension
+
+		// Shelve extension
 		store.setDefault(PREF_SHELVE_USE_INTERACTION, false);
+
+		// Persistence of the column layout in the History view - no UI associated with these
+		// settings.
+		store.setDefault(PREF_HISTORY_COLUMN_PERSISTENCE, true);
+		store.setDefault(PREF_HISTORY_COLUMN_WIDTHS, "");
 
 	}
 

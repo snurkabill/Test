@@ -50,6 +50,7 @@ import org.eclipse.jface.fieldassist.IContentProposalListener2;
 import org.eclipse.jface.fieldassist.TextContentAdapter;
 import org.eclipse.jface.preference.IPreferenceStore;
 import org.eclipse.jface.text.revisions.Revision;
+import org.eclipse.jface.viewers.ColumnPixelData;
 import org.eclipse.jface.viewers.ColumnWeightData;
 import org.eclipse.jface.viewers.DoubleClickEvent;
 import org.eclipse.jface.viewers.IDoubleClickListener;
@@ -71,6 +72,8 @@ import org.eclipse.swt.custom.BusyIndicator;
 import org.eclipse.swt.dnd.Clipboard;
 import org.eclipse.swt.dnd.TextTransfer;
 import org.eclipse.swt.dnd.Transfer;
+import org.eclipse.swt.events.ControlEvent;
+import org.eclipse.swt.events.ControlListener;
 import org.eclipse.swt.events.FocusAdapter;
 import org.eclipse.swt.events.FocusEvent;
 import org.eclipse.swt.events.KeyAdapter;
@@ -184,6 +187,12 @@ public class MercurialHistoryPage extends HistoryPage {
 	private Composite rootControl;
 	private Composite gotoPanel;
 
+
+	//
+	private TableLayout layout = null;
+
+	/** Number of columns in the History view.*/
+	private static final int NUMBER_OF_COLUMNS = 7;
 
 	/**
 	 * Action which is related to the selected file
@@ -659,31 +668,92 @@ public class MercurialHistoryPage extends HistoryPage {
 		GridData gridData = new GridData(GridData.FILL_BOTH);
 		changeLogTable.setLayoutData(gridData);
 
-		TableLayout layout = new TableLayout();
+		IPreferenceStore store = MercurialEclipsePlugin.getDefault().getPreferenceStore();
+		if (layout == null) {
+			layout = new TableLayout();
+			// Get the user-defined column widths from the preferences.
+			String values = store.getString(PREF_HISTORY_COLUMN_WIDTHS);
+
+			// We set default widths when there's no widths in the preferences or the user is not
+			// interested in having their custom widths saved.
+			if ((values == null || values.trim().length() == 0)
+					|| (store.getBoolean(PREF_HISTORY_COLUMN_PERSISTENCE) == false)) {
+				layout.addColumnData(new ColumnWeightData(7, true));
+				layout.addColumnData(new ColumnWeightData(15, true));
+				layout.addColumnData(new ColumnWeightData(10, true));
+				layout.addColumnData(new ColumnWeightData(10, true));
+				layout.addColumnData(new ColumnWeightData(12, true));
+				layout.addColumnData(new ColumnWeightData(12, true));
+				layout.addColumnData(new ColumnWeightData(25, true));
+			} else {
+				// We found column widths in the preference store. We use them.
+				String[] widths = values.split(",");
+				//
+				int colIdx = 0;
+				while (colIdx < Math.min(widths.length, NUMBER_OF_COLUMNS)) {
+					layout.addColumnData(new ColumnPixelData(Integer.valueOf(widths[colIdx]), true));
+					colIdx++;
+				}
+				// This accounts for possible changes in the number of columns.
+				if (colIdx < NUMBER_OF_COLUMNS) {
+					// The number of columns has been increased. We set default widths and let the
+					// user resize as they like.
+					for (;colIdx < NUMBER_OF_COLUMNS; colIdx++) {
+						layout.addColumnData(new ColumnPixelData(Integer.valueOf(50), true));
+					}
+				} else {
+					// Nothing to do: either the number is unchanged or it is lower. We're covered
+					// in both cases, meaning that the appropriate number of column data is created.
+				}
+			}
+		}
+
 		changeLogTable.setLayout(layout);
+		for (int i = 0; i < NUMBER_OF_COLUMNS; i++) {
+			TableColumn column = new TableColumn(changeLogTable, i == 0 ? SWT.CENTER : SWT.LEFT);
+			switch (i) {
+			case 0:
+				column.setText(Messages.getString("MercurialHistoryPage.columnHeader.graph")); //$NON-NLS-1$
+				break;
+			case 1:
+				column.setText(Messages.getString("MercurialHistoryPage.columnHeader.changeset")); //$NON-NLS-1$
+				break;
+			case 2:
+				column.setText(Messages.getString("MercurialHistoryPage.columnHeader.tag")); //$NON-NLS-1$
+				break;
+			case 3:
+				column.setText(Messages.getString("MercurialHistoryPage.columnHeader.branch")); //$NON-NLS-1$
+				break;
+			case 4:
+				column.setText(Messages.getString("MercurialHistoryPage.columnHeader.user")); //$NON-NLS-1$
+				break;
+			case 5:
+				column.setText(Messages.getString("MercurialHistoryPage.columnHeader.date")); //$NON-NLS-1$
+				break;
+			case 6:
+				column.setText(Messages.getString("MercurialHistoryPage.columnHeader.summary")); //$NON-NLS-1$
+				break;
+			default:
+				// If this shows up in the view, then there was a programming error: please update
+				// the number of columns constant.
+				column.setText("ERROR!!!"); //$NON-NLS-1$
+				break;
+			}
+			//
+			// Listener to be notified of changes in the column width.
+			if (store.getBoolean(PREF_HISTORY_COLUMN_PERSISTENCE)) {
+				column.addControlListener(new ControlListener() {
 
-		TableColumn column = new TableColumn(changeLogTable, SWT.CENTER);
-		column.setText(Messages.getString("MercurialHistoryPage.columnHeader.graph")); //$NON-NLS-1$
-		layout.addColumnData(new ColumnWeightData(7, true));
-		column = new TableColumn(changeLogTable, SWT.LEFT);
-		column.setText(Messages.getString("MercurialHistoryPage.columnHeader.changeset")); //$NON-NLS-1$
-		layout.addColumnData(new ColumnWeightData(15, true));
-		column = new TableColumn(changeLogTable, SWT.LEFT);
-		column.setText(Messages.getString("MercurialHistoryPage.columnHeader.tag")); //$NON-NLS-1$
-		layout.addColumnData(new ColumnWeightData(10, true));
-		column = new TableColumn(changeLogTable, SWT.LEFT);
-		column.setText(Messages.getString("MercurialHistoryPage.columnHeader.branch")); //$NON-NLS-1$
-		layout.addColumnData(new ColumnWeightData(10, true));
-		column = new TableColumn(changeLogTable, SWT.LEFT);
-		column.setText(Messages.getString("MercurialHistoryPage.columnHeader.user")); //$NON-NLS-1$
-		layout.addColumnData(new ColumnWeightData(12, true));
-		column = new TableColumn(changeLogTable, SWT.LEFT);
-		column.setText(Messages.getString("MercurialHistoryPage.columnHeader.date")); //$NON-NLS-1$
-		layout.addColumnData(new ColumnWeightData(12, true));
-		column = new TableColumn(changeLogTable, SWT.LEFT);
-		column.setText(Messages.getString("MercurialHistoryPage.columnHeader.summary")); //$NON-NLS-1$
-		layout.addColumnData(new ColumnWeightData(25, true));
+					public void controlResized(ControlEvent e) {
+						persistColumnWidths();
+					}
 
+					public void controlMoved(ControlEvent e) {
+						// We have no interest in this: the columns aren't defined as moveable.
+					}
+				});
+			}
+		}
 		viewer.setLabelProvider(new ChangeSetLabelProvider());
 		viewer.setContentProvider(new ChangeLogContentProvider());
 		viewer.addDoubleClickListener(new IDoubleClickListener() {
@@ -718,6 +788,34 @@ public class MercurialHistoryPage extends HistoryPage {
 			}
 		});
 		contributeActions();
+	}
+
+	/**
+	 * Reads the current width of all columns and saves the widths in the preference store.
+	 * <p>
+	 * <b>NOTE</b>: Unfortunately, the architecture of JFace causes this method to be called
+	 * numerous times, way too many times to my taste. I have not been able to determine when the
+	 * resizing is finished, so as to call this method only once.
+	 */
+	private void persistColumnWidths() {
+		//
+		// Get all widths into a string.
+		String values = ""; // comma-separated list of column widths
+		int size;
+		Table changeLogTable = viewer.getTable();
+		TableColumn[] columns = changeLogTable.getColumns();
+		assert columns.length == NUMBER_OF_COLUMNS;
+		for (int i = 0; i < columns.length; i++) {
+			size = columns[i].getWidth();
+			values += size;
+			if (i != (columns.length - 1)) {
+				values += ",";
+			}
+		}
+		//
+		// Save the string to the preference store.
+		IPreferenceStore store = MercurialEclipsePlugin.getDefault().getPreferenceStore();
+		store.putValue(PREF_HISTORY_COLUMN_WIDTHS, values);
 	}
 
 	/**

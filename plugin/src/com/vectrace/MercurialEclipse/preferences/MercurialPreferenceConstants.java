@@ -10,7 +10,7 @@
  *     Jérôme Nègre   - constants are now, well, constant
  *     Bastian Doetsch
  *     Andrei Loskutov - bug fixes
- *     Amenel VOGLOZIN - Update Quick Diff, Changeset context menu options
+ *     Amenel VOGLOZIN - Update Quick Diff, Changeset context menu options, and others
  *******************************************************************************/
 
 package com.vectrace.MercurialEclipse.preferences;
@@ -141,5 +141,25 @@ public final class MercurialPreferenceConstants {
 	//
 	public static final String PREF_SHELVE_USE_INTERACTION = "hg.shelve.use.interaction";
 
+	//
+	//Settings for the persistence of the column layout in the History view -
+	//
+
+	/**
+	 * This boolean setting tells whether user-modified columns widths should be saved.
+	 * <p>
+	 * Defaults to <code>true</code>.
+	 */
+	public static final String PREF_HISTORY_COLUMN_PERSISTENCE = "hg.history.column.persistence";
+
+	/**
+	 * This setting is not accessible to the user via the UI and should not be changed by the user.
+	 * Comma separated list of integer values where each value indicates the width in pixels of the
+	 * corresponding column.
+	 * <p>
+	 * Defaults to an empty string. Note however that from the first time the History view is shown
+	 * onwards, this setting will receive contents.
+	 */
+	public static final String PREF_HISTORY_COLUMN_WIDTHS = "hg.history.column.widths";
 
 }
