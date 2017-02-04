@@ -7,6 +7,7 @@
  *
  * Contributors:
  *     Andrei Loskutov         - implementation
+ *     Amenel Voglozin         - addition of the unique identifier
  *******************************************************************************/
 package com.vectrace.MercurialEclipse.model;
 
@@ -38,13 +39,52 @@ public abstract class WorkingChangeSet extends ChangeSet {
 	private String comment;
 	Set<IFile> files;
 
+	/**
+	 * Identifier that is supposed to never be shared by two objects which would otherwise be
+	 * strictly identical from the user's perspective because both have the same name. This field
+	 * was implemented because the change sets are persisted to the preference file and the name of
+	 * the change set is used as an identifier. BUT the name is possibly defined by the user. This
+	 * leads to the possibility of having "clone" change sets, i.e. change sets that have the same
+	 * name. A further consequence is that after restoring change sets of the Synchronize view from
+	 * the prefs file, one can have files assigned to the wrong change set, which defeats the actual
+	 * purpose of change sets which is to group files that are logically related.
+	 */
+	private String uniqueId;
+
 	public WorkingChangeSet(String name) {
 
-		this.name = name;
-
-		setComment("");
-		files = new LinkedHashSet<IFile>();
+		//
+		// Inherited fields
 		setName(name);
+
+		//
+		// Own fields
+		this.name = name;
+		files = new LinkedHashSet<IFile>();
+		setComment("");
+		setUniqueId("" + System.currentTimeMillis());
+		try {
+			// Given that the current timestamp is used as the unique ID, we must ensure as much as
+			// possible that no two objects will ²be created in the same millisecond.
+			Thread.sleep(1);
+		} catch (InterruptedException e) {
+			// Nothing to do; we proceed as usual.
+		}
+	}
+
+	/**
+	 * Care must be exercised when calling this method. This is strictly for internal use and should
+	 * only be called when loading change sets from the preferences file.
+	 *
+	 * @param value The value to set, obtained from the prefs file.
+	 */
+	public void setUniqueId(String value) {
+		uniqueId = value;
+	}
+
+	@DoNotDisplayMe
+	public String getUniqueId() {
+		return uniqueId;
 	}
 
 	@Override

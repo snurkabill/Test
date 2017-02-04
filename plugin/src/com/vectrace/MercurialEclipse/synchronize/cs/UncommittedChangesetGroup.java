@@ -180,6 +180,7 @@ public class UncommittedChangesetGroup extends ChangesetGroup implements IUncomm
 			return;
 		}
 		getChangesets().remove(cs);
+		UncommittedChangesetManager.removeSavedChangeset(cs);
 		move(cs.getFiles().toArray(new IFile[0]), ucsManager.getDefaultChangeset());
 	}
 
@@ -337,7 +338,7 @@ public class UncommittedChangesetGroup extends ChangesetGroup implements IUncomm
 	}
 
 	public void changesetChanged(WorkingChangeSet set) {
-		// TODO: add argument to avoid too much updates?
+		// TODO: add argument to avoid too many updates?
 		ucsManager.storeChangesets();
 //		ucsManager.assignRemainingFiles();
 		notifyListeners();
