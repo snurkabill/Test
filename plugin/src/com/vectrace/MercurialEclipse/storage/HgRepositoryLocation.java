@@ -11,7 +11,8 @@
  *     Bastian Doetsch           - additions for repository view
  *     Subclipse contributors    - fromProperties() initial source
  *     Adam Berkes (Intland)     - bug fixes
- *     Andrei Loskutov - bug fixes
+ *     Andrei Loskutov           - bug fixes
+ *     Amenel Voglozin           - Support for using the logical name as a prefix in the label
  *******************************************************************************/
 package com.vectrace.MercurialEclipse.storage;
 
@@ -23,10 +24,12 @@ import java.net.URISyntaxException;
 import org.eclipse.jface.resource.ImageDescriptor;
 import org.eclipse.ui.model.IWorkbenchAdapter;
 
+import com.google.common.base.Strings;
 import com.vectrace.MercurialEclipse.MercurialEclipsePlugin;
 import com.vectrace.MercurialEclipse.exception.HgException;
 import com.vectrace.MercurialEclipse.model.HgRoot;
 import com.vectrace.MercurialEclipse.model.IHgRepositoryLocation;
+import com.vectrace.MercurialEclipse.preferences.MercurialPreferenceConstants;
 
 /**
  * A class abstracting a Mercurial repository location which may be either local
@@ -263,6 +266,15 @@ public class HgRepositoryLocation implements  Comparable<IHgRepositoryLocation>,
 	}
 
 	public String getLabel(Object o) {
+		boolean prefValue = MercurialEclipsePlugin.getDefault().getPreferenceStore().getBoolean(
+				MercurialPreferenceConstants.PREF_SHOW_LOGICAL_NAME_OF_REPOSITORIES);
+		if (o instanceof IHgRepositoryLocation && prefValue) {
+			String res = "";
+			if (!Strings.isNullOrEmpty(getLogicalName())) {
+				res = "[" + getLogicalName() + "] ";
+			}
+			return res + o.toString();
+		}
 		return o.toString();
 	}
 

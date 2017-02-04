@@ -132,6 +132,9 @@ public final class MercurialPreferenceConstants {
 	// security
 	public static final String PREF_VERIFY_SERVER_CERTIFICATE = "hg.verifyServerCertificate"; //$NON-NLS-1$
 
+	// Whether the logical name should show up as a prefix of a repository location.
+	public static final String PREF_SHOW_LOGICAL_NAME_OF_REPOSITORIES = "hg.showLogicalNameOfRepositories";
+
 	// commit
 	public static final String PREF_REFRESH_BEFORE_COMMIT = "hg.commit.refreshBeforeCommit";
 	public static final String PREF_COMMIT_UPDATE_QUICKDIFF = "hg.commit.updateQuickDiff";

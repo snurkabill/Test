@@ -204,6 +204,11 @@ IWorkbenchPreferencePage {
 				getFieldEditorParent());
 		addField(cert_editor);
 
+		addField(new BooleanFieldEditor(
+				PREF_SHOW_LOGICAL_NAME_OF_REPOSITORIES,
+				Messages.getString("GeneralPreferencePage.showLogicalNameOfRepositories"), //$NON-NLS-1$
+				getFieldEditorParent()));
+
 	}
 
 	protected void enablePathEditor(boolean on) {
