@@ -295,7 +295,7 @@ class UncommittedChangesetManager {
 
 	private static GroupedUncommittedChangeSet getChangeset(String name, Set<GroupedUncommittedChangeSet> sets){
 		for (GroupedUncommittedChangeSet set : sets) {
-			if(name.equals(set.getName())){
+			if(name.equals(buildChangesetUniqueName(set))){
 				return set;
 			}
 		}
