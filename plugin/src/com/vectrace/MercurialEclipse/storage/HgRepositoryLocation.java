@@ -12,7 +12,7 @@
  *     Subclipse contributors    - fromProperties() initial source
  *     Adam Berkes (Intland)     - bug fixes
  *     Andrei Loskutov           - bug fixes
- *     Amenel Voglozin           - Support for using the logical name as a prefix in the label
+ *     Amenel Voglozin           - Support for using the logical name as a prefix in the label + bug fixes
  *******************************************************************************/
 package com.vectrace.MercurialEclipse.storage;
 
@@ -108,7 +108,7 @@ public class HgRepositoryLocation implements  Comparable<IHgRepositoryLocation>,
 		isLocal = uri.getScheme() == null || uri.getScheme().equalsIgnoreCase("file");
 		try {
 			this.location = new URI(uri.getScheme(),
-					null,
+					uri.getUserInfo(),
 					uri.getHost(),
 					uri.getPort(),
 					uri.getPath(),

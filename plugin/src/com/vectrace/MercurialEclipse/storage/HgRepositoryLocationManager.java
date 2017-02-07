@@ -13,7 +13,7 @@
  *     Adam Berkes (Intland)     - bug fixes
  *     Ilya Ivanov  (Intland)    - bug fixes
  *     Andrei Loskutov           - bug fixes
- *     Amenel VOGLOZIN           - Storing of the default path to .hg/hgrc
+ *     Amenel VOGLOZIN           - Storing of the default path to .hg/hgrc + bug fixes
  *******************************************************************************/
 package com.vectrace.MercurialEclipse.storage;
 
@@ -405,7 +405,12 @@ public class HgRepositoryLocationManager {
 		IPreferenceStore store = MercurialEclipsePlugin.getDefault().getPreferenceStore();
 		String defLoc = store.getString(KEY_DEF_REPO_PREFIX + getRootKey(hgRoot));
 		if(StringUtils.isEmpty(defLoc)){
-			return null;
+			// We have no preference set for this root. We'll try the hgrc file.
+			defLoc = hgRoot.getDefaultPath();
+
+			if (StringUtils.isEmpty(defLoc)) {
+				return null;
+			}
 		}
 		Set<IHgRepositoryLocation> locations = rootRepos.get(hgRoot);
 		if (locations != null && !locations.isEmpty()) {

@@ -6,13 +6,17 @@
  * http://www.eclipse.org/legal/epl-v10.html
  *
  * Contributors:
- * bastian	implementation
+ *     bastian          - implementation
  *     Andrei Loskutov  - bug fixes
+ *     Amenel Voglozin  - bug fixes
  *******************************************************************************/
 package com.vectrace.MercurialEclipse.ui;
 
 import static com.vectrace.MercurialEclipse.ui.SWTWidgetHelper.*;
 
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.List;
 import java.util.Set;
 
 import org.eclipse.core.resources.IProject;
@@ -36,6 +40,7 @@ import org.eclipse.ui.dialogs.PreferencesUtil;
 import org.eclipse.ui.dialogs.PropertyPage;
 
 import com.vectrace.MercurialEclipse.MercurialEclipsePlugin;
+import com.vectrace.MercurialEclipse.exception.HgException;
 import com.vectrace.MercurialEclipse.model.HgRoot;
 import com.vectrace.MercurialEclipse.model.IHgRepositoryLocation;
 import com.vectrace.MercurialEclipse.storage.HgCommitMessageManager;
@@ -82,7 +87,7 @@ public class HgProjectPropertyPage extends PropertyPage {
 
 		createCommitGroup(comp);
 
-		createRepoGroup(comp);
+		createRepoGroup(comp, defLoc);
 
 		createButtons(mgr);
 
@@ -99,12 +104,20 @@ public class HgProjectPropertyPage extends PropertyPage {
 		return comp;
 	}
 
-	private void createRepoGroup(Composite comp) {
+	private void createRepoGroup(Composite comp, IHgRepositoryLocation defLoc) {
 		reposGroup = SWTWidgetHelper.createGroup(comp, "Default repository", 1,
 				GridData.FILL_HORIZONTAL);
 
 		defTextField = createTextField(reposGroup);
 		defTextField.setEditable(false);
+		try {
+			if (defLoc != null && defLoc.getUri() != null) {
+				defTextField.setText(defLoc.getUri().toString());
+			}
+		} catch (HgException e) {
+			// This is an innocuous exception: the user will simply not see the text if one is thrown.
+			MercurialEclipsePlugin.logError(e);
+		}
 
 		createLabel(reposGroup, "Set as default:");
 		allReposCombo = createCombo(reposGroup);
@@ -187,7 +200,25 @@ public class HgProjectPropertyPage extends PropertyPage {
 
 		int idx = -1;
 		int defIndex = idx;
-		for (final IHgRepositoryLocation repo : allRepos) {
+		//
+		// We sort the URIs alphabetically, which will be easier on the user.
+		List<IHgRepositoryLocation> sortedRepos = new ArrayList<IHgRepositoryLocation>(allRepos.size());
+		for (IHgRepositoryLocation repo : allRepos) {
+			sortedRepos.add(repo);
+		}
+		sortedRepos.sort(new Comparator<IHgRepositoryLocation>() {
+			public int compare(IHgRepositoryLocation o1, IHgRepositoryLocation o2) {
+				try {
+					return o1.getUri().compareTo(o2.getUri());
+				} catch (HgException e) {
+					MercurialEclipsePlugin.logError(e);
+					return 0;
+				}
+			}
+		});
+		//
+		//
+		for (final IHgRepositoryLocation repo : sortedRepos) {
 			idx++;
 			allReposCombo.add(repo.getLocation());
 			if(defLoc != null && defLoc.equals(repo)){

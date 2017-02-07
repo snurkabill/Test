@@ -362,6 +362,15 @@ public class HgRoot extends HgPath implements IHgRepositoryLocation {
 	}
 
 	/**
+	 * Gets the default path (paths.default entry from the hgrc file).
+	 *
+	 * @return <code>null</code> if the hgrc file does not exist or no default is defined.
+	 */
+	public String getDefaultPath() {
+		return getConfigItem("paths", "default");
+	}
+
+	/**
 	 * Sets the default path. In case a default path already exists, it will be overwritten.
 	 *
 	 * @param path
