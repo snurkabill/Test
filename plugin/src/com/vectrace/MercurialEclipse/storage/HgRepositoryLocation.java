@@ -108,7 +108,7 @@ public class HgRepositoryLocation implements  Comparable<IHgRepositoryLocation>,
 		isLocal = uri.getScheme() == null || uri.getScheme().equalsIgnoreCase("file");
 		try {
 			this.location = new URI(uri.getScheme(),
-					uri.getUserInfo(),
+					HgRepositoryLocationParser.getUserNameFromURI(uri),
 					uri.getHost(),
 					uri.getPort(),
 					uri.getPath(),

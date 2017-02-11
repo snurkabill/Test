@@ -6,9 +6,10 @@
  * http://www.eclipse.org/legal/epl-v10.html
  *
  * Contributors:
- *     Bastian Doetsch				- implementation
- *     Andrei Loskutov              - bug fixes
- *     Martin Olsen (Schantz)  -  Synchronization of Multiple repositories
+ *     Bastian Doetsch         - implementation
+ *     Andrei Loskutov         - bug fixes
+ *     Martin Olsen (Schantz)  - Synchronization of Multiple repositories
+ *     Amenel Voglozin         - Support for showing logical names of repos in the view title
  ******************************************************************************/
 package com.vectrace.MercurialEclipse.synchronize;
 
@@ -20,6 +21,7 @@ import org.eclipse.core.resources.IResource;
 import org.eclipse.core.resources.mapping.ModelProvider;
 import org.eclipse.core.resources.mapping.ResourceMapping;
 import org.eclipse.core.runtime.CoreException;
+import org.eclipse.jface.preference.IPreferenceStore;
 import org.eclipse.team.core.mapping.ISynchronizationScope;
 import org.eclipse.team.core.mapping.ISynchronizationScopeManager;
 import org.eclipse.team.core.mapping.ISynchronizationScopeParticipant;
@@ -42,10 +44,12 @@ import com.vectrace.MercurialEclipse.exception.HgException;
 import com.vectrace.MercurialEclipse.model.FileFromChangeSet;
 import com.vectrace.MercurialEclipse.model.HgRoot;
 import com.vectrace.MercurialEclipse.model.IHgRepositoryLocation;
+import com.vectrace.MercurialEclipse.preferences.MercurialPreferenceConstants;
 import com.vectrace.MercurialEclipse.synchronize.RepositorySynchronizationScope.RepositoryLocationMap;
 import com.vectrace.MercurialEclipse.synchronize.actions.MercurialSynchronizePageActionGroup;
 import com.vectrace.MercurialEclipse.synchronize.cs.HgChangeSetCapability;
 import com.vectrace.MercurialEclipse.synchronize.cs.HgChangeSetModelProvider;
+import com.vectrace.MercurialEclipse.utils.StringUtils;
 
 /**
  * TODO why did we choose the {@link ModelSynchronizeParticipant} as a parent class?
@@ -57,6 +61,13 @@ public class MercurialSynchronizeParticipant extends ModelSynchronizeParticipant
 	implements IChangeSetProvider, ISynchronizationScopeParticipant {
 
 	private String secondaryId;
+	/**
+	 * This is the label that appears below the "Synchronize" text in the tab of the Synchronize
+	 * view. Typically, until #506 was implemented, this was the URI to the repository(ies) of the
+	 * project(s) being synchronized. Starting with #505, the URI(s) may be prefixed by the logical
+	 * name in case that name is not empty.
+	 */
+	private String syncViewTitle;
 	private RepositoryLocationMap repositoryLocations;
 	private HgChangeSetCapability changeSetCapability;
 
@@ -69,6 +80,7 @@ public class MercurialSynchronizeParticipant extends ModelSynchronizeParticipant
 		super(ctx);
 		this.repositoryLocations = repositoryLocation;
 		secondaryId = computeSecondaryId(scope, repositoryLocation);
+		syncViewTitle = computeSynchronizationViewTitle(scope, repositoryLocation);
 		try {
 			ISynchronizeParticipantDescriptor descriptor = TeamUI
 				.getSynchronizeManager().getParticipantDescriptor(getId());
@@ -76,6 +88,36 @@ public class MercurialSynchronizeParticipant extends ModelSynchronizeParticipant
 		} catch (CoreException e) {
 			MercurialEclipsePlugin.logError(e);
 		}
+	}
+
+	/**
+	 * Computes the label that is displayed as the title, below the "Synchronize" tab label. This
+	 * text is different from the secondary ID only in the fact that repo logical names are
+	 * included, provided that the user has enabled the appropriate preference setting.
+	 *
+	 * @return the URI to the repository against which the synchronization is done, possibly
+	 *         prefixed with the logical name.
+	 */
+	private static String computeSynchronizationViewTitle(RepositorySynchronizationScope scope, RepositoryLocationMap repos) {
+		IPreferenceStore store = MercurialEclipsePlugin.getDefault().getPreferenceStore();
+		boolean showRepoLogicalName = store.getBoolean(MercurialPreferenceConstants.PREF_SHOW_LOGICAL_NAME_OF_REPOSITORIES);
+
+		IProject[] projects = scope.getProjects();
+		StringBuilder sb = new StringBuilder();
+		if(projects.length > 0){
+			sb.append("[");
+			for (IHgRepositoryLocation repo : repos.getLocations()) {
+				if (showRepoLogicalName && !StringUtils.isEmpty(repo.getLogicalName())) {
+					sb.append('[');
+					sb.append(repo.getLogicalName());
+					sb.append("] ");
+				}
+				sb.append(repo.getLocation()).append(',');
+			}
+			sb.deleteCharAt(sb.length() - 1);
+			sb.append("] ");
+		}
+		return sb.toString();
 	}
 
 	private static String computeSecondaryId(RepositorySynchronizationScope scope, RepositoryLocationMap repos) {
@@ -100,7 +142,7 @@ public class MercurialSynchronizeParticipant extends ModelSynchronizeParticipant
 		secondaryId = secId;
 
 		IMemento myMemento = memento.getChild(MercurialSynchronizeParticipant.class.getName());
-
+		syncViewTitle = myMemento.getString("viewTitle");
 		try {
 			repositoryLocations = new RepositoryLocationMap(myMemento);
 		} catch (HgException e) {
@@ -121,6 +163,7 @@ public class MercurialSynchronizeParticipant extends ModelSynchronizeParticipant
 		IMemento myMemento = memento
 			.createChild(MercurialSynchronizeParticipant.class.getName());
 		repositoryLocations.serialize(myMemento);
+		myMemento.putString("viewTitle", syncViewTitle);
 		super.saveState(memento);
 	}
 
@@ -163,8 +206,25 @@ public class MercurialSynchronizeParticipant extends ModelSynchronizeParticipant
 		return secondaryId;
 	}
 
+	/**
+	 * We have to test whether the title is null for backward compatibility with versions of
+	 * MercurialEclipse prior to the introduction of sync title. At startup, before anything is
+	 * visible on the screen, Eclipse unmarshalls the participant from persistent storage (see
+	 * {@link #init(String, IMemento)}, which causes the new property (i.e. the sync view title) to
+	 * be null[1]. This in turn will cause a catastrophic failure that will prevent the part from
+	 * initializing properly and the Eclipse window from showing up on the screen. However, the next
+	 * time that the user starts a synchronization, say from the Java perspective, an object will be
+	 * constructed for this participant, which will allow for a normal flow.
+	 * <p>
+	 * [1]: This is true only on the first run after the new version has been installed. Subsequent
+	 * close/open cycles will persist the view title.<br>
+	 * [2]: I guess this is true only if Eclipse was closed while the Synchronize view was visible.
+	 */
 	@Override
 	public String getName() {
+		if (syncViewTitle != null) {
+			return syncViewTitle;
+		}
 		return secondaryId;
 	}
 
