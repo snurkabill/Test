@@ -443,6 +443,7 @@ public class RepositoriesView extends ViewPart implements ISelectionListener {
 				.addPostSelectionListener(this);
 		treeViewer.addSelectionChangedListener(removeRootAction);
 
+		// FIXME This will fail if the user has assigned a key other than F5
 		// when F5 is pressed, refresh this view
 		treeViewer.getControl().addKeyListener(new KeyAdapter() {
 			@Override

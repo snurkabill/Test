@@ -65,7 +65,7 @@ public abstract class WorkingChangeSet extends ChangeSet {
 		setUniqueId("" + System.currentTimeMillis());
 		try {
 			// Given that the current timestamp is used as the unique ID, we must ensure as much as
-			// possible that no two objects will ²be created in the same millisecond.
+			// possible that no two objects will be created in the same millisecond.
 			Thread.sleep(1);
 		} catch (InterruptedException e) {
 			// Nothing to do; we proceed as usual.

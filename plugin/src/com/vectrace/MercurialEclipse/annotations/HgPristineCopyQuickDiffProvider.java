@@ -99,12 +99,18 @@ public class HgPristineCopyQuickDiffProvider implements IQuickDiffReferenceProvi
 	// Job that re-creates the reference document.
 	private Job fUpdateJob;
 
-	// Flag for knowing whether this instance had registered for notification. We get
-	// the preference setting at registration time. This means that if the preference is
-	// changed while the editor is already open with quick diff already enabled, this
-	// value won't change. Therefore, it is not semantically equivalent to the preference 
-	// setting that deals with updating quick diff annotations. Put differently, we can't
-	// just read the preference again as it's a "volatile" value to us. 
+	/**
+	 * Flag for knowing whether this instance had registered for notification when the editor was
+	 * set: if <code>true</code>, a "deregistration" is warranted at disposal time.
+	 * <p>
+	 * We get the preference setting (which tells whether the user wants to update quick diff
+	 * annotations on commits) at registration time. If the preference is changed (to
+	 * <code>false</code>) while the editor is already opened and quick diff already enabled (the
+	 * preference was at <code>true</code>), this value of whether we had registered <u>must not</u>
+	 * change. Therefore, it is not strictly equivalent to the preference setting and it would be
+	 * just plain wrong to just read the preference again at disposal time because it's a "volatile"
+	 * value to us.
+	 */
 	private boolean registeredForPostCommitNotification = false;
 
 	/**
@@ -297,7 +303,7 @@ public class HgPristineCopyQuickDiffProvider implements IQuickDiffReferenceProvi
 	}
 
 	/**
-	 * Returns the HgFile associated with he active editor or <code>null</code>
+	 * Returns the HgFile associated with the active editor or <code>null</code>
 	 * if the provider doesn't not have access to a Hg managed file.
 	 *
 	 * @return the handle to a Hg file
