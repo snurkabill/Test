@@ -159,7 +159,7 @@ public class HgRebaseClient extends AbstractClient {
 	 */
 	public static void abortRebase(HgRoot hgRoot) throws HgException {
 		try {
-			RebaseCommandFlags.on(hgRoot.getRepository()).abort();
+			RebaseCommandFlags.on(hgRoot.getRepository()).executeAbort();
 		} finally {
 			new RefreshWorkspaceStatusJob(hgRoot, RefreshRootJob.ALL).schedule();
 		}
