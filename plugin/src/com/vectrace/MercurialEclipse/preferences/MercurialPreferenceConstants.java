@@ -139,6 +139,9 @@ public final class MercurialPreferenceConstants {
 	public static final String PREF_REFRESH_BEFORE_COMMIT = "hg.commit.refreshBeforeCommit";
 	public static final String PREF_COMMIT_UPDATE_QUICKDIFF = "hg.commit.updateQuickDiff";
 
+	// Resolve
+	public static final String PREF_RESOLVE_SHOW_RECAP_DIALOG = "hg.resolve.showRecapDialog";
+
 	//
 	// Settings for the Shelve extension - all must be changed manually: no UI for changing them.
 	//
@@ -147,7 +150,6 @@ public final class MercurialPreferenceConstants {
 	//
 	//Settings for the persistence of the column layout in the History view -
 	//
-
 	/**
 	 * This boolean setting tells whether user-modified columns widths should be saved.
 	 * <p>

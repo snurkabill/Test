@@ -155,6 +155,7 @@ public class PreferenceInitializer extends AbstractPreferenceInitializer {
 		store.setDefault(PREF_PRESELECT_UNTRACKED_IN_COMMIT_DIALOG, false);
 		store.setDefault(PREF_VERIFY_SERVER_CERTIFICATE, true);
 		store.setDefault(PREF_SHOW_LOGICAL_NAME_OF_REPOSITORIES, true);
+		store.setDefault(PREF_RESOLVE_SHOW_RECAP_DIALOG, true);
 
 		store.setDefault(PREF_SHOW_PULL_WARNING_DIALOG, MessageDialogWithToggle.PROMPT);
 		store.setDefault(PREF_SHOW_MULTIPLE_PROJECTS_DIALOG, MessageDialogWithToggle.PROMPT);

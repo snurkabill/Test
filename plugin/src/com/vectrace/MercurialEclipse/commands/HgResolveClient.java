@@ -9,11 +9,13 @@
  *     Bastian Doetsch           - implementation
  *     Andrei Loskutov           - bug fixes
  *     Adam Berkes (Intland)     - bug fixes
+ *     Amenel Voglozin           - Added Autoresolve recap dialog
  *******************************************************************************/
 package com.vectrace.MercurialEclipse.commands;
 
 import java.io.File;
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -23,6 +25,7 @@ import org.eclipse.core.resources.IProject;
 import org.eclipse.core.resources.IResource;
 import org.eclipse.core.runtime.CoreException;
 import org.eclipse.core.runtime.Path;
+import org.eclipse.ui.PlatformUI;
 import org.eclipse.ui.console.ConsolePlugin;
 import org.eclipse.ui.console.IConsole;
 import org.eclipse.ui.console.IConsoleManager;
@@ -37,13 +40,17 @@ import com.aragost.javahg.merge.FlagConflict;
 import com.aragost.javahg.merge.KeepDeleteConflict;
 import com.google.common.collect.Lists;
 import com.vectrace.MercurialEclipse.MercurialEclipsePlugin;
+import com.vectrace.MercurialEclipse.dialogs.AutoresolveRecapDialog;
 import com.vectrace.MercurialEclipse.exception.HgException;
 import com.vectrace.MercurialEclipse.model.HgRoot;
 import com.vectrace.MercurialEclipse.model.ResolveStatus;
+import com.vectrace.MercurialEclipse.preferences.MercurialPreferenceConstants;
 import com.vectrace.MercurialEclipse.team.cache.MercurialStatusCache;
 import com.vectrace.MercurialEclipse.utils.ResourceUtils;
 
 public class HgResolveClient extends AbstractClient {
+
+	private static final MercurialStatusCache STATUS_CACHE = MercurialStatusCache.getInstance();
 
 	/**
 	 * List merge state of files after merge
@@ -96,24 +103,41 @@ public class HgResolveClient extends AbstractClient {
 		try {
 			ResolveCommandFlags.on(hgRoot.getRepository()).mark(file.getCanonicalPath());
 			// cleanup .orig files left after merge
-			File origFile = new File(file.getAbsolutePath() + ".orig");
-			if (origFile.isFile()) {
-				IResource fileToDelete = ResourceUtils.convert(origFile);
-				boolean deleted = origFile.delete();
-				if (!deleted) {
-					MercurialEclipsePlugin.logInfo("Failed to cleanup " + origFile
-							+ " file after merge", null);
-				} else {
-					try {
-						fileToDelete.refreshLocal(IResource.DEPTH_ZERO, null);
-					} catch (CoreException e) {
-						MercurialEclipsePlugin.logError(e);
-					}
-				}
-			}
+			deleteOrigFile(file);
 			refreshStatus(ifile);
 		} catch (IOException e) {
 			throw new HgException(e.getLocalizedMessage(), e);
+		}
+	}
+
+	/**
+	 * Deletes the .orig file that is left after a merge, <b>provided that the file is not being
+	 * tracked by Mercurial</b>. This can safely be called even when not sure that the said file
+	 * exists; no errors will occur and no exceptions will be thrown.
+	 *
+	 * @param file
+	 * @throws HgException
+	 */
+	private static void deleteOrigFile(File file) throws HgException {
+		File origFile = new File(file.getAbsolutePath() + ".orig");
+		if (origFile.isFile()) {
+			IResource fileToDelete = ResourceUtils.convert(origFile);
+
+			if (STATUS_CACHE.isSupervised(fileToDelete)) {
+				return; // We won't delete tracked .orig files.
+			}
+
+			boolean deleted = origFile.delete();
+			if (!deleted) {
+				MercurialEclipsePlugin.logInfo("Failed to cleanup " + origFile
+						+ " file after merge", null);
+			} else {
+				try {
+					fileToDelete.refreshLocal(IResource.DEPTH_ZERO, null);
+				} catch (CoreException e) {
+					MercurialEclipsePlugin.logError(e);
+				}
+			}
 		}
 	}
 
@@ -220,15 +244,23 @@ public class HgResolveClient extends AbstractClient {
 	}
 
 	/**
-	 * Attempt to externally resolve all conflicts: If external merge tool preference is set invokes
-	 * simple resolve. Otherwise resolve is invoked with an invalid merge tool so Mercurial's
-	 * premerge algorithm is invoked and the file is left unresolved if pre-merge fails.
+	 * Attempt to externally resolve all conflicts: If external merge tool preference is set, simply
+	 * invokes the resolve operation. Otherwise, <code>resolve</code> is invoked with an invalid
+	 * merge tool so Mercurial's premerge algorithm is invoked and the file is left unresolved if
+	 * pre-merge fails.
+	 * <p>
+	 * NOTE</u>: the .orig files created by Mercurial when not using an external tool will be
+	 * deleted.
 	 *
-	 * @param hgRoot The root to resolve for
-	 * @return True if all conflicts are resolved
+	 * @param hgRoot
+	 *            The root to resolve for
+	 * @return <code>true</code> if all conflicts are resolved.
 	 */
 	public static boolean autoResolve(HgRoot hgRoot) {
 
+		//
+		// First, a tool is used to try to resolve any conflicts.
+		//
 		if (isUseExternalMergeTool()) {
 			ResolveCommand command = ResolveCommandFlags.on(hgRoot.getRepository()).all();
 
@@ -243,16 +275,61 @@ public class HgResolveClient extends AbstractClient {
 			}
 		}
 
-		for(ResolveStatusLine line : ResolveCommandFlags.on(hgRoot.getRepository()).list()) {
+		//
+		// Second, we check that **all** conflicts were indeed resolved; if so, we'll return true,
+		// otherwise we return false.
+		//
+		boolean allConflictsResolved = true; // This is the variable whose value we will return.
+
+		List<ResolveStatusLine> postAutoresolveList = ResolveCommandFlags.on(hgRoot.getRepository()).list();
+
+		// Files that undergo a merge: they were modified both locally and remotely.
+		List<IResource> resources = new ArrayList<IResource>();
+
+		for (ResolveStatusLine line : postAutoresolveList) {
+			IResource resource = ResourceUtils
+					.getFileHandle(hgRoot.toAbsolute(new Path(line.getFileName())));
+			resources.add(resource);
+
 			if (line.getType() == ResolveStatusLine.Type.UNRESOLVED) {
-				return false;
+				allConflictsResolved = false;
+			} else {
+				//
+				// The **untracked** .orig file is deleted when the pre-merge was successful (using
+				// an external tool is not covered; we leave the deletion to the user).
+				if (!isUseExternalMergeTool()) {
+					File file = ResourceUtils.getFileHandle(resource);
+					try {
+						deleteOrigFile(file);
+						refreshStatus(resource);
+					} catch (HgException e) {
+						MercurialEclipsePlugin.logError(e);
+					}
+				}
 			}
 		}
 
-		return true;
+		//
+		// Third, we show the dialog, only if the user wants to see it and there's sth to show (there'll be
+		// sth to show only if files were modified locally AND remotely).
+		//
+		boolean showRecapDialog = MercurialEclipsePlugin.getDefault().getPreferenceStore()
+				.getBoolean(MercurialPreferenceConstants.PREF_RESOLVE_SHOW_RECAP_DIALOG);
+		if (showRecapDialog && resources.size() > 0) {
+			final AutoresolveRecapDialog dialog = new AutoresolveRecapDialog(
+					MercurialEclipsePlugin.getActiveShell(), resources, allConflictsResolved);
+			PlatformUI.getWorkbench().getDisplay().asyncExec(new Runnable() {
+				public void run() {
+					dialog.open();
+				}
+			});
+		}
+
+		return allConflictsResolved;
 	}
 
 
+	@SuppressWarnings("unused")
 	private static void writeToConsole( String name, String line ) {
 		findConsole( name ).activate();
 		getConsoleWriter(name).println(line);
