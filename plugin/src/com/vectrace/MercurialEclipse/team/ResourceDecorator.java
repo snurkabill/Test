@@ -11,6 +11,7 @@
  *     Adam Berkes (Intland)     - bug fixes
  *     Zsolt Kopany (Intland)    - bug fixes
  *     Philip Graf               - bug fix
+ *     Amenel Voglozin           - Feature. Configurable project labels.
  *******************************************************************************/
 package com.vectrace.MercurialEclipse.team;
 
@@ -39,6 +40,7 @@ import org.eclipse.ui.PlatformUI;
 import org.eclipse.ui.themes.ITheme;
 import org.eclipse.ui.themes.IThemeManager;
 
+import com.google.common.base.Strings;
 import com.vectrace.MercurialEclipse.HgFeatures;
 import com.vectrace.MercurialEclipse.MercurialEclipsePlugin;
 import com.vectrace.MercurialEclipse.commands.AbstractClient;
@@ -48,7 +50,8 @@ import com.vectrace.MercurialEclipse.commands.extensions.HgRebaseClient;
 import com.vectrace.MercurialEclipse.exception.HgException;
 import com.vectrace.MercurialEclipse.model.ChangeSet;
 import com.vectrace.MercurialEclipse.model.HgRoot;
-import com.vectrace.MercurialEclipse.preferences.MercurialPreferenceConstants;
+import com.vectrace.MercurialEclipse.model.IHgRepositoryLocation;
+import com.vectrace.MercurialEclipse.preferences.HgDecoratorConstants;
 import com.vectrace.MercurialEclipse.team.cache.IncomingChangesetCache;
 import com.vectrace.MercurialEclipse.team.cache.LocalChangesetCache;
 import com.vectrace.MercurialEclipse.team.cache.MercurialStatusCache;
@@ -67,14 +70,17 @@ public class ResourceDecorator extends LabelProvider implements ILightweightLabe
 	private static final LocalChangesetCache LOCAL_CACHE = LocalChangesetCache.getInstance();
 
 	private static final String[] FONTS = new String[] {
+		//@formatter:off
 		ADDED_FONT,
 		CONFLICT_FONT,
 		DELETED_FONT,
 		REMOVED_FONT,
 		UNKNOWN_FONT,
 		IGNORED_FONT, CHANGE_FONT };
+		//@formatter:on
 
 	private static final String[] COLORS = new String[] {
+		//@formatter:off
 		ADDED_BACKGROUND_COLOR,
 		ADDED_FOREGROUND_COLOR,
 		CHANGE_BACKGROUND_COLOR,
@@ -89,7 +95,13 @@ public class ResourceDecorator extends LabelProvider implements ILightweightLabe
 		REMOVED_FOREGROUND_COLOR,
 		UNKNOWN_BACKGROUND_COLOR,
 		UNKNOWN_FOREGROUND_COLOR };
+		//@formatter:on
 
+	/**
+	 * These are prefs that we want to be notified about when they are changed. In order to save on
+	 * preference store querying operations, these preferences are read once in the constructor and
+	 * reloaded we are notified of a change.
+	 */
 	private static final Set<String> INTERESTING_PREFS = new HashSet<String>();
 	static {
 		INTERESTING_PREFS.add(LABELDECORATOR_LOGIC_2MM);
@@ -100,6 +112,8 @@ public class ResourceDecorator extends LabelProvider implements ILightweightLabe
 		INTERESTING_PREFS.add(RESOURCE_DECORATOR_SHOW_INCOMING_CHANGESET);
 		INTERESTING_PREFS.add(RESOURCE_DECORATOR_SHOW_SUMMARY);
 		INTERESTING_PREFS.add(PREF_ENABLE_SUBREPO_SUPPORT);
+		INTERESTING_PREFS.add(PREF_SHOW_LOGICAL_NAME_OF_REPOSITORIES);
+		INTERESTING_PREFS.add(PREF_DECORATE_PROJECT_LABEL_SYNTAX);
 	}
 
 	/** set to true when having 2 different statuses in a folder flags it has modified */
@@ -110,10 +124,15 @@ public class ResourceDecorator extends LabelProvider implements ILightweightLabe
 	private boolean showChangeset;
 	private boolean showIncomingChangeset;
 	private boolean enableSubrepos;
+	private boolean showRepoLogicalName;
+	private String userSyntax;
 	private boolean disposed;
 	private final IPropertyChangeListener themeListener;
 	private final IPropertyChangeListener prefsListener;
 	private boolean showSummary;
+
+	/** Bean used when the user configures the project label syntax from the preference page. */
+	private static ProjectInfoBean previewInfoBean = null;
 
 	public ResourceDecorator() {
 		configureFromPreferences();
@@ -143,7 +162,6 @@ public class ResourceDecorator extends LabelProvider implements ILightweightLabe
 		};
 		MercurialEclipsePlugin.getDefault().getPreferenceStore().addPropertyChangeListener(prefsListener);
 	}
-
 
 	/**
 	 * This method will ensure that the fonts and colors used by the decorator
@@ -192,7 +210,8 @@ public class ResourceDecorator extends LabelProvider implements ILightweightLabe
 		showChangeset = store.getBoolean(RESOURCE_DECORATOR_SHOW_CHANGESET);
 		showIncomingChangeset = store.getBoolean(RESOURCE_DECORATOR_SHOW_INCOMING_CHANGESET);
 		showSummary = store.getBoolean(RESOURCE_DECORATOR_SHOW_SUMMARY);
-		enableSubrepos = store.getBoolean(MercurialPreferenceConstants.PREF_ENABLE_SUBREPO_SUPPORT);
+		enableSubrepos = store.getBoolean(PREF_ENABLE_SUBREPO_SUPPORT);
+		userSyntax = store.getString(PREF_DECORATE_PROJECT_LABEL_SYNTAX);
 	}
 
 	public void decorate(Object element, IDecoration d) {
@@ -347,6 +366,8 @@ public class ResourceDecorator extends LabelProvider implements ILightweightLabe
 					prefix.append('>');
 				}
 				break;
+			default:
+				break;
 			}
 		}
 		return overlay;
@@ -426,37 +447,54 @@ public class ResourceDecorator extends LabelProvider implements ILightweightLabe
 		return suffix;
 	}
 
+	/**
+	 * Builds the decoration suffix for containers (aka "projects" in our context). First,
+	 * information about the project is collected, and then, a delegate function is tasked with
+	 * interpreting the user-given syntax, which is read from the preference store.
+	 *
+	 * @param container
+	 *            the project to decorate
+	 * @return the string used by the workbench as a decoration suffix
+	 * @throws CoreException
+	 */
 	private String getSuffixForContainer(IContainer container) throws CoreException {
 		ChangeSet changeSet = null;
 
 		HgRoot root;
-		if(container instanceof IProject){
+		if (container instanceof IProject) {
 			root = MercurialTeamProvider.getHgRoot(container);
-			if(root == null) {
+			if (root == null) {
 				return "";
 			}
 			changeSet = LOCAL_CACHE.getCurrentChangeSet(container);
-		}else{
+		} else {
 			root = AbstractClient.isHgRoot(container);
-			if(root == null) {
+			if (root == null) {
 				return "";
 			}
 			changeSet = LOCAL_CACHE.getCurrentChangeSet(root);
 		}
 
-		StringBuilder suffix = new StringBuilder();
+		ProjectInfoBean infoBean = new ProjectInfoBean();
 		if (changeSet == null) {
-			suffix.append(Messages.getString("ResourceDecorator.new"));
+			infoBean.isNew = true;
 		} else {
-			suffix.append(" ["); //$NON-NLS-1$
-			String hex = changeSet.getNodeShort();
+			// Add logical name of the repo if there's one configured and the appropriate pref is
+			// set
+			if (container instanceof IProject) {
+				IHgRepositoryLocation repoLocation = MercurialEclipsePlugin.getRepoManager()
+						.getDefaultRepoLocation(root);
+				if (repoLocation != null && !Strings.isNullOrEmpty(repoLocation.getLogicalName())
+						&& showRepoLogicalName) {
+					infoBean.repoLogicalName = "[" + repoLocation.getLogicalName() + "]";
+				}
+			}
 			String tags = ChangeSetUtils.getPrintableTagsString(changeSet);
 			boolean merging = !StringUtils.isEmpty(STATUS_CACHE.getMergeChangesetId(container));
-			boolean bisecting = false;
 
 			// XXX should use map, as there can be 100 projects under the same root
 			if (HgBisectClient.isBisecting(root)) {
-				bisecting = true;
+				infoBean.bisectMsg = "BISECTING"; //
 			}
 
 			// branch
@@ -464,11 +502,11 @@ public class ResourceDecorator extends LabelProvider implements ILightweightLabe
 			if (branch.length() == 0) {
 				branch = BranchUtils.DEFAULT;
 			}
-			suffix.append(branch);
+			infoBean.branch = branch;
 
 			// tags
 			if (tags.length() > 0) {
-				suffix.append('(').append(tags).append(')');
+				infoBean.tags = tags;
 			}
 
 			if (showSummary) {
@@ -476,45 +514,226 @@ public class ResourceDecorator extends LabelProvider implements ILightweightLabe
 				int n;
 				if (HgFeatures.PHASES.isEnabled()) {
 					n = HgLogClient.countChangesets(root, "draft()");
-
 					if (n > 0) {
 						bDraftShown = true;
-						suffix.append(" \u2191").append(n);
+						infoBean.outgoing = String.valueOf(n);
 					}
 				}
 
 				n = HgLogClient.numHeadsInBranch(root, branch);
-
 				if (n > 1) {
 					if (bDraftShown) {
-						suffix.append(',');
 					}
-					suffix.append(' ').append(n).append(" heads");
+					infoBean.heads = String.valueOf(n);
 				}
 			}
 
 			// rev info
 			if (showChangesetInProjectLabel) {
-				suffix.append(' ').append(changeSet.getIndex()).append(':').append(hex);
+				infoBean.index = String.valueOf(changeSet.getIndex());
+				infoBean.hex = changeSet.getNodeShort();
+				infoBean.node = changeSet.getNode();
+				infoBean.author = changeSet.getAuthor();
 			}
 
 			// merge flag
 			if (merging) {
 				// XXX should use map, as there can be 100 projects under the same root
-				if(HgRebaseClient.isRebasing(root)) {
-					suffix.append(Messages.getString("ResourceDecorator.rebasing"));
+				if (HgRebaseClient.isRebasing(root)) {
+					infoBean.mergeMsg = Messages.getString("ResourceDecorator.rebasing");
 				} else {
-					suffix.append(Messages.getString("ResourceDecorator.merging"));
+					infoBean.rebaseMsg = Messages.getString("ResourceDecorator.merging");
 				}
 			}
 
-			// bisect information
-			if (bisecting) {
-				suffix.append(" BISECTING");
-			}
-			suffix.append(']');
 		}
-		return suffix.toString();
+		return buildSuffixForProject(infoBean, userSyntax);
+	}
+
+	/**
+	 * Gets the value (among the collected project information) that matches the given keyword.
+	 *
+	 * @param keyword
+	 *            the keyword part of a lexem extracted from the user syntax string: e.g. "tags" in
+	 *            the "{tags}" lexem.
+	 * @param infoBean
+	 *            Information collected about the project
+	 * @return <code>null</code> if the keyword is not supported, or otherwise the value of the
+	 *         appropriate collected info.
+	 */
+	private static String getLexemValue(String keyword, ProjectInfoBean infoBean) {
+
+		if (HgDecoratorConstants.LEX_AUTHOR.equals(keyword)) {
+			return infoBean.author;
+		}
+		if (HgDecoratorConstants.LEX_BRANCH.equals(keyword)) {
+			return infoBean.branch;
+		}
+		if (HgDecoratorConstants.LEX_HEADS.equals(keyword)) {
+			return infoBean.heads;
+		}
+		if (HgDecoratorConstants.LEX_HEX.equals(keyword)) {
+			return infoBean.hex;
+		}
+		if (HgDecoratorConstants.LEX_INDEX.equals(keyword)) {
+			return infoBean.index;
+		}
+		if (HgDecoratorConstants.LEX_MERGING_STATUS.equals(keyword)) {
+			return infoBean.mergeMsg;
+		}
+		if (HgDecoratorConstants.LEX_NODE.equals(keyword)) {
+			return infoBean.node;
+		}
+		if (HgDecoratorConstants.LEX_OUTGOING.equals(keyword)) {
+			return infoBean.outgoing;
+		}
+		if (HgDecoratorConstants.LEX_REPO.equals(keyword)) {
+			return infoBean.repoLogicalName;
+		}
+		if (HgDecoratorConstants.LEX_TAGS.equals(keyword)) {
+			return infoBean.tags;
+		}
+		if (HgDecoratorConstants.LEX_MERGING_STATUS.equals(keyword)) {
+			return infoBean.mergeMsg;
+		}
+		if (HgDecoratorConstants.LEX_REBASING_STATUS.equals(keyword)) {
+			return infoBean.rebaseMsg;
+		}
+		if (HgDecoratorConstants.LEX_BISECTING_STATUS.equals(keyword)) {
+			return infoBean.bisectMsg;
+		}
+		return null;
+	}
+
+	/**
+	 * Builds the string that will appear (in views such as Package Explorer) as the suffix of the
+	 * project, respecting both the format that the user has given and the conventions below.
+	 * <p>
+	 * Conventions:
+	 * <ul>
+	 * <li>Suffixes are not supported: some syntaxes (such as enclosing the branch name within
+	 * parentheses) are not possible.
+	 * <li>Keywords are enclosed within curly braces and stand as placeholders for "information
+	 * values" (e.g. changeset index or short node, author, repository logical name, etc.).
+	 * <li>Empty information values are omitted.
+	 * <li>The concept of <em>conditional prefixes</em> is defined:
+	 * <ul>
+	 * <li>A conditional prefix must immediately precede a supported keyword.
+	 * <li>An absent or empty information value prevents the conditional prefix from showing up.
+	 * <li>Conditional prefixes are in the output string only when immediately followed by the
+	 * information of which they are a prefix.
+	 * <li>Conditional prefixes cannot be chained/repeated, i.e. one conditional prefix per keyword.
+	 * </ul>
+	 * <li>A keyword is either a supported placeholder, which will provide an "information value",
+	 * or a conditional prefix.
+	 * <li>Supported keywords cannot stand as conditional prefixes.
+	 * <li>Leading and trailing spaces are removed.
+	 * <li>Unless contributed by a conditional prefix or by the value of a keyword, spaces are not
+	 * repeated.
+	 * </ul>
+	 * <p>
+	 * Algorithm: we copy the user syntax string to the output buffer, character per character, only
+	 * triggering special processing when a "keyword" (aka "lexem") delimited by braces is
+	 * encountered. The keyword is of one of two types: either a supported lexem or a conditional
+	 * prefix (everything not supported is treated as a cond prefix). A conditional prefix is left
+	 * hanging and will only be copied to the output buffer if the next keyword is a supported
+	 * lexem. Everything in-between lexems is copied as-is to the output buffer except repeated
+	 * spaces which are simply skipped.
+	 * <p>
+	 *
+	 * @param infoBean
+	 *            The information collected about the project
+	 * @param syntax
+	 *            The format specified by the user
+	 * @return A string respecting the user format and the conventions.
+	 */
+	private static String buildSuffixForProject(ProjectInfoBean infoBean, String syntax) {
+		if (infoBean.isNew) {
+			return Messages.getString("ResourceDecorator.new");
+		}
+		StringBuilder res = new StringBuilder(128);
+
+		String hangingConditionalPrefix = null;
+		int index = 0, openingIdx, closingIdx;
+
+		// Using TRUE has the effect of not allowing leading whitespace.
+		boolean lastCharIsSpace = true;
+
+		res.append(" ["); //$NON-NLS-1$
+		while (index < syntax.length()) {
+			char c = syntax.charAt(index);
+			if (c == '{') {
+				openingIdx = index;
+				closingIdx = syntax.indexOf('}', openingIdx + 1);
+				if (closingIdx == -1) {
+					/*
+					 * We bail out at the first sign of incomplete/incorrect syntax. However, we
+					 * don't return a null string so that the user can see where the syntax is
+					 * wrong.
+					 */
+					break;
+				}
+				index = closingIdx + 1;
+				//
+				String keyword = syntax.substring(openingIdx + 1, closingIdx);
+				String replacement = getLexemValue(keyword, infoBean);
+				if (replacement == null) {
+					hangingConditionalPrefix = keyword;
+				} else {
+					//
+					if (replacement.length() > 0) {
+						if (hangingConditionalPrefix != null) {
+							res.append(hangingConditionalPrefix);
+						}
+						res.append(replacement);
+						lastCharIsSpace = false;
+					}
+					hangingConditionalPrefix = null;
+				}
+			} else {
+				hangingConditionalPrefix = null;
+				if (c != ' ' || !lastCharIsSpace) { // Space characters are not repeated.
+					res.append(c);
+
+					lastCharIsSpace = (c == ' ');
+				}
+				index++;
+			}
+		}
+
+		//
+		// The 'lastCharIsSpace' flag prevents leading spaces and repetition of internal spaces, but
+		// it doesn't help with the possible trailing space, which we therefore remove here.
+		int lastCharPos = res.length() - 1;
+		if (res.charAt(lastCharPos) == ' ') {
+			res.deleteCharAt(lastCharPos);
+		}
+		res.append(']');
+
+		return res.toString();
+	}
+
+	/**
+	 * Entry point for the preference page.
+	 *
+	 * @param previewUserSyntax text entered by the user in the input of the preference page.
+	 * @return
+	 */
+	synchronized public static String previewProjectLabel(String previewUserSyntax) {
+		if (previewInfoBean == null) {
+			previewInfoBean = new ProjectInfoBean();
+			previewInfoBean.author = "Jean Bosco";
+			previewInfoBean.branch = "Issue502";
+			previewInfoBean.heads = "2";
+			previewInfoBean.hex = "206f49079726";
+			previewInfoBean.index = "375";
+			previewInfoBean.outgoing = "7";
+			previewInfoBean.repoLogicalName = "[Repo-PUB]";
+			previewInfoBean.tags = "v2.3.0";
+			previewInfoBean.node = "206f4907972600593c740928d08f61ca21f18092";
+		}
+
+		return buildSuffixForProject(previewInfoBean, previewUserSyntax);
 	}
 
 	public static String getDecoratorId() {

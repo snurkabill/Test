@@ -81,6 +81,7 @@ public class PreferenceInitializer extends AbstractPreferenceInitializer {
 		store.setDefault(RESOURCE_DECORATOR_SHOW_CHANGESET, false);
 		store.setDefault(RESOURCE_DECORATOR_SHOW_INCOMING_CHANGESET, false);
 		store.setDefault(RESOURCE_DECORATOR_SHOW_SUMMARY, true);
+		store.setDefault(PREF_DECORATE_PROJECT_LABEL_SYNTAX, HgDecoratorConstants.DEFAULT_PROJECT_SYNTAX);
 
 		store.setDefault(SYNC_COMPUTE_FULL_REMOTE_FILE_STATUS, true);
 

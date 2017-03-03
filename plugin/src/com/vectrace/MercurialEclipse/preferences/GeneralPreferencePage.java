@@ -23,7 +23,6 @@ import java.io.File;
 import org.eclipse.jface.preference.BooleanFieldEditor;
 import org.eclipse.jface.preference.FieldEditorPreferencePage;
 import org.eclipse.jface.preference.FileFieldEditor;
-import org.eclipse.jface.preference.RadioGroupFieldEditor;
 import org.eclipse.jface.preference.StringFieldEditor;
 import org.eclipse.swt.widgets.Composite;
 import org.eclipse.ui.IWorkbench;
@@ -46,22 +45,6 @@ public class GeneralPreferencePage extends FieldEditorPreferencePage implements
 IWorkbenchPreferencePage {
 
 	private MercurialExecutableFileFieldEditor execField;
-
-	private static final class LabelDecoratorRadioGroupFieldEditor extends
-	RadioGroupFieldEditor {
-		private LabelDecoratorRadioGroupFieldEditor(String name,
-				String labelText, int numColumns, String[][] labelAndValues,
-				Composite parent, boolean useGroup) {
-			super(name, labelText, numColumns, labelAndValues, parent, useGroup);
-		}
-
-		@Override
-		protected void doStore() {
-			super.doStore();
-			MercurialEclipsePlugin.getDefault().checkHgInstallation();
-			// ResourceDecorator.onConfigurationChanged();
-		}
-	}
 
 	private static final class MercurialExecutableFileFieldEditor extends FileFieldEditor {
 		private MercurialExecutableFileFieldEditor(String name,
@@ -176,23 +159,6 @@ IWorkbenchPreferencePage {
 				Messages.getString("GeneralPreferencePage.pushNewBranches"), getFieldEditorParent());
 		addField(editor);
 
-		addField(new LabelDecoratorRadioGroupFieldEditor(
-				LABELDECORATOR_LOGIC,
-				Messages.getString("GeneralPreferencePage.field.decorationGroup.description"), //$NON-NLS-1$
-				1,
-				new String[][] {
-					{
-						Messages.getString("GeneralPreferencePage.field.decorationGroup.asModified"), //$NON-NLS-1$
-						LABELDECORATOR_LOGIC_2MM },
-						{
-							Messages.getString("GeneralPreferencePage.field.decorationGroup.mostImportant"), //$NON-NLS-1$
-							LABELDECORATOR_LOGIC_HB } },
-							getFieldEditorParent(), true));
-
-		addField(new BooleanFieldEditor(
-				PREF_DECORATE_WITH_COLORS,
-				Messages.getString("GeneralPreferencePage.enableFontAndColorDecorations"), getFieldEditorParent())); //$NON-NLS-1$
-
 		addField(new BooleanFieldEditor(
 				PREF_AUTO_SHARE_PROJECTS,
 				Messages.getString("GeneralPreferencePage.autoshare"), //$NON-NLS-1$
@@ -203,11 +169,6 @@ IWorkbenchPreferencePage {
 				Messages.getString("GeneralPreferencePage.verifyServerCertificate"), //$NON-NLS-1$
 				getFieldEditorParent());
 		addField(cert_editor);
-
-		addField(new BooleanFieldEditor(
-				PREF_SHOW_LOGICAL_NAME_OF_REPOSITORIES,
-				Messages.getString("GeneralPreferencePage.showLogicalNameOfRepositories"), //$NON-NLS-1$
-				getFieldEditorParent()));
 
 	}
 

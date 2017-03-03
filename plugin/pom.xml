@@ -111,12 +111,17 @@
 			<artifactId>javahg-ext-mq</artifactId>
 			<version>0.7-SNAPSHOT</version>
 		</dependency>
-		<dependency>
-         <groupId>com.aragost.javahg</groupId>
-         <artifactId>javahg-ext-largefiles</artifactId>
-         <version>0.1-SNAPSHOT</version>
-      </dependency>
-	</dependencies>
+        <dependency>
+            <groupId>com.aragost.javahg</groupId>
+            <artifactId>javahg-ext-largefiles</artifactId>
+            <version>0.1-SNAPSHOT</version>
+        </dependency>
+        <dependency>
+            <groupId>com.google.code.findbugs</groupId>
+            <artifactId>annotations</artifactId>
+            <version>3.0.1u2</version>
+            <scope>provided</scope>
+        </dependency>	</dependencies>
 	<repositories>
 		<repository>
 			<releases>

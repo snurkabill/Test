@@ -1395,6 +1395,10 @@
             id="com.vectrace.MercurialEclipse.prefspage.Commit"
             category="com.vectrace.MercurialEclipse.prefspage"
             name="%prefPage.commit"/>
+      <page class="com.vectrace.MercurialEclipse.preferences.LabelDecorationsPreferencePage"
+            id="com.vectrace.MercurialEclipse.prefspage.LabelDecorations"
+            category="com.vectrace.MercurialEclipse.prefspage"
+            name="%prefPage.labeldecorations"/>
 
    </extension>
 
