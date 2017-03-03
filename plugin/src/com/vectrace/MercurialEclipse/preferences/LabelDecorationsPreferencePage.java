@@ -34,8 +34,6 @@ import com.vectrace.MercurialEclipse.MercurialEclipsePlugin;
 import com.vectrace.MercurialEclipse.team.ResourceDecorator;
 import com.vectrace.MercurialEclipse.ui.SWTWidgetHelper;
 
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-
 /**
  * @author Amenel VOGLOZIN
  *
@@ -125,7 +123,6 @@ public class LabelDecorationsPreferencePage extends FieldEditorPreferencePage
 	/**
 	 * @param parent
 	 */
-	@SuppressFBWarnings(value="DLS", justification="Voluntary use of variables for holding PreferenceLinkArea objects.")
 	private void createFontAndColorGroup(Composite parent) {
 		Group fontAndColorGroup = createGroup(parent, 1,
 				Messages.getString("LabelDecorationsPreferencePage.fontAndColorGroup.description")); // $NON-NLS-1$
