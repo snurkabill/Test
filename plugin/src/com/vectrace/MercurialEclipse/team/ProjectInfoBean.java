@@ -28,8 +28,9 @@ public class ProjectInfoBean {
 	public String outgoing = "";
 
 	/**
-	 * The logical name of a repo is always enclosed (when present) by MercurialEclipse as enclosed
-	 * between square brackets. If the user enters "REPONAME", it will be reformatted as [REPONAME].
+	 * The logical name of a repo is always enclosed (when present) by MercurialEclipse between
+	 * square brackets. If the user has specified "REPONAME", it will be reformatted as
+	 * "[REPONAME]".
 	 */
 	public String repoLogicalName = "";
 

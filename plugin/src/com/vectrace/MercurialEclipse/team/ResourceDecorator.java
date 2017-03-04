@@ -716,9 +716,18 @@ public class ResourceDecorator extends LabelProvider implements ILightweightLabe
 
 	/**
 	 * Entry point for the preference page.
+	 * <p>
+	 * NOTE: There is a preference setting that controls whether the user wants to see logical names
+	 * of repos in the IDE. Because the project information bean is non-configurable and lazily
+	 * created (so that the same object will be reused), we do not honor that preference setting
+	 * here. The preference setting is always respected elsewhere but here, we knowingly do not
+	 * honor it, solely for conceptual reasons (I -@Amenel- see no reason to create this object
+	 * multiple times).
 	 *
-	 * @param previewUserSyntax text entered by the user in the input of the preference page.
-	 * @return
+	 * @param previewUserSyntax
+	 *            text entered by the user in the input of the preference page.
+	 * @return a string rendered according to the user text, but on a non-configurable set of
+	 *         project information.
 	 */
 	synchronized public static String previewProjectLabel(String previewUserSyntax) {
 		if (previewInfoBean == null) {

@@ -113,7 +113,7 @@ public class LabelDecorationsPreferencePage extends FieldEditorPreferencePage
 		GridData data = new GridData(SWT.FILL, SWT.FILL, true, false);
 		data.horizontalIndent = 0;
 		// NOTE: I can't figure out why, but a +1 is necessary for correct right alignment with the
-		// radio group.
+		// radiobuttons group.
 		data.horizontalSpan = numColumns + 1;
 		group.setLayoutData(data);
 		//
@@ -128,7 +128,7 @@ public class LabelDecorationsPreferencePage extends FieldEditorPreferencePage
 				Messages.getString("LabelDecorationsPreferencePage.fontAndColorGroup.description")); // $NON-NLS-1$
 
 		Composite box = new Composite(fontAndColorGroup, SWT.NONE);
-		GridLayout boxLayout = new GridLayout();
+		GridLayout boxLayout = new GridLayout(); // Recheck whether this is necessary.
 		boxLayout.numColumns = 1;
 		box.setLayout(boxLayout);
 
@@ -161,7 +161,7 @@ public class LabelDecorationsPreferencePage extends FieldEditorPreferencePage
 		 * alignment with controls in the radiobuttons group.
 		 */
 		Composite box = new Composite(syntaxGroup, SWT.NONE);
-		GridData boxGd = new GridData(GridData.FILL_HORIZONTAL);
+		GridData boxGd = new GridData(GridData.FILL_HORIZONTAL); // Recheck whether necessary.
 		box.setLayoutData(boxGd);
 
 		addField(new BooleanFieldEditor(RESOURCE_DECORATOR_SHOW_CHANGESET_IN_PROJECT_LABEL,
@@ -222,6 +222,10 @@ public class LabelDecorationsPreferencePage extends FieldEditorPreferencePage
 		gd.horizontalAlignment = SWT.RIGHT;
 	}
 
+	/**
+	 * Updates the static preview text so that it reflects the syntax currently entered in the
+	 * syntax text field.
+	 */
 	private void updatePreview() {
 		String previewUserSyntax = syntaxField.getStringValue();
 		previewStaticField.setText(ResourceDecorator.previewProjectLabel(previewUserSyntax));
