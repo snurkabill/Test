@@ -24,6 +24,7 @@ import org.eclipse.core.runtime.IStatus;
 import org.eclipse.core.runtime.Status;
 import org.eclipse.core.runtime.jobs.Job;
 import org.eclipse.jface.dialogs.MessageDialog;
+import org.eclipse.jface.preference.IPreferenceStore;
 import org.eclipse.team.ui.synchronize.ISynchronizePageConfiguration;
 import org.eclipse.team.ui.synchronize.SynchronizeModelOperation;
 import org.eclipse.ui.statushandlers.StatusManager;
@@ -43,6 +44,7 @@ import com.vectrace.MercurialEclipse.synchronize.cs.ChangesetGroup;
 import com.vectrace.MercurialEclipse.synchronize.cs.RepositoryChangesetGroup;
 import com.vectrace.MercurialEclipse.team.MercurialTeamProvider;
 import com.vectrace.MercurialEclipse.utils.ResourceUtils;
+import com.vectrace.MercurialEclipse.utils.StringUtils;
 
 public class PushPullSynchronizeOperation extends SynchronizeModelOperation {
 
@@ -163,20 +165,20 @@ public class PushPullSynchronizeOperation extends SynchronizeModelOperation {
 	}
 
 	private void checkChangesets(final IProgressMonitor monitor, ChangesetGroup group) {
-		checkChangesets(monitor, group.getChangesets().size());
+		checkChangesets(monitor, group.getChangesets().size(), group.getRepositoryChangesetGroup());
 	}
 
-	private void checkChangesets(final IProgressMonitor monitor, RepositoryChangesetGroup group) {
+	private void checkChangesets(final IProgressMonitor monitor, RepositoryChangesetGroup rcGroup) {
 		int csCount;
 		if (isPull) {
-			csCount = group.getIncoming().getChangesets().size();
+			csCount = rcGroup.getIncoming().getChangesets().size();
 		} else {
-			csCount = group.getOutgoing().getChangesets().size();
+			csCount = rcGroup.getOutgoing().getChangesets().size();
 		}
-		checkChangesets(monitor, csCount);
+		checkChangesets(monitor, csCount, rcGroup);
 	}
 
-	private void checkChangesets(final IProgressMonitor monitor, int csCount)
+	private void checkChangesets(final IProgressMonitor monitor, int csCount, RepositoryChangesetGroup rcGroup)
 	{
 		if(csCount < 1){
 			// paranoia...
@@ -185,16 +187,31 @@ public class PushPullSynchronizeOperation extends SynchronizeModelOperation {
 		}
 		final String title;
 		final String message;
+
+		//
+		// Get the repo logical name in order to embed it in the message shown to the user.
+		//
+		IPreferenceStore store = MercurialEclipsePlugin.getDefault().getPreferenceStore();
+		boolean showRepoLogicalName = store.getBoolean(MercurialPreferenceConstants.PREF_SHOW_LOGICAL_NAME_OF_REPOSITORIES);
+		String repoName = "";
+		if (rcGroup.getRoot() != null && showRepoLogicalName) {
+			IHgRepositoryLocation repoLocation = MercurialEclipsePlugin.getRepoManager().getDefaultRepoLocation(rcGroup.getRoot());
+			if (!StringUtils.isEmpty(repoLocation.getLogicalName())) {
+				repoName = " ([" + repoLocation.getLogicalName() + "])";
+			}
+		}
+		//
+
 		if(isPull){
 			title = "Hg Pull";
-			message = "Pulling " + csCount + " changesets (or more) from the remote repository.\n"
-					+ "The pull will fetch the *latest* version available remote.\n" + "Continue?";
+			message = "Pulling " + csCount + " changesets (or more) from the remote repository" + repoName + ".\n"
+					+ "The pull will fetch the *latest* version available remotely.\n" + "Continue?";
 		} else {
 			if(csCount == 1){
 				return;
 			}
 			title = "Hg Push";
-			message = "Pushing " + csCount + " changesets to the remote repository. Continue?";
+			message = "Pushing " + csCount + " changesets to the remote repository" + repoName + ". Continue?";
 		}
 		getShell().getDisplay().syncExec(new Runnable(){
 			public void run() {
