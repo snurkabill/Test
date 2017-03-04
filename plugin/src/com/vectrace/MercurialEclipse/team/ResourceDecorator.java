@@ -212,6 +212,7 @@ public class ResourceDecorator extends LabelProvider implements ILightweightLabe
 		showSummary = store.getBoolean(RESOURCE_DECORATOR_SHOW_SUMMARY);
 		enableSubrepos = store.getBoolean(PREF_ENABLE_SUBREPO_SUPPORT);
 		userSyntax = store.getString(PREF_DECORATE_PROJECT_LABEL_SYNTAX);
+		showRepoLogicalName = store.getBoolean(PREF_SHOW_LOGICAL_NAME_OF_REPOSITORIES);
 	}
 
 	public void decorate(Object element, IDecoration d) {
