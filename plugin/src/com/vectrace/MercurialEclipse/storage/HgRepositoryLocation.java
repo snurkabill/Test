@@ -20,6 +20,7 @@ import java.io.File;
 import java.io.IOException;
 import java.net.URI;
 import java.net.URISyntaxException;
+import java.util.Locale;
 
 import org.eclipse.jface.resource.ImageDescriptor;
 import org.eclipse.ui.model.IWorkbenchAdapter;
@@ -30,6 +31,7 @@ import com.vectrace.MercurialEclipse.exception.HgException;
 import com.vectrace.MercurialEclipse.model.HgRoot;
 import com.vectrace.MercurialEclipse.model.IHgRepositoryLocation;
 import com.vectrace.MercurialEclipse.preferences.MercurialPreferenceConstants;
+import com.vectrace.MercurialEclipse.repository.RepositoriesView;
 
 /**
  * A class abstracting a Mercurial repository location which may be either local
@@ -150,7 +152,7 @@ public class HgRepositoryLocation implements  Comparable<IHgRepositoryLocation>,
 		if(loc.getLocation() == null){
 			return 1;
 		}
-		return getLocation().compareTo(loc.getLocation());
+		return getLocation().toLowerCase(Locale.ROOT).compareTo(loc.getLocation().toLowerCase(Locale.ROOT));
 	}
 
 	@Override
@@ -265,6 +267,13 @@ public class HgRepositoryLocation implements  Comparable<IHgRepositoryLocation>,
 		this.logicalName = logicalName;
 	}
 
+	/**
+	 * Provides the textual rendition of this repo location to the Eclipse platform. This is
+	 * typically the text that can be seen in the Mercurial Repositories view
+	 * ({@link RepositoriesView}).
+	 *
+	 * @see org.eclipse.ui.model.IWorkbenchAdapter#getLabel(java.lang.Object)
+	 */
 	public String getLabel(Object o) {
 		boolean prefValue = MercurialEclipsePlugin.getDefault().getPreferenceStore().getBoolean(
 				MercurialPreferenceConstants.PREF_SHOW_LOGICAL_NAME_OF_REPOSITORIES);

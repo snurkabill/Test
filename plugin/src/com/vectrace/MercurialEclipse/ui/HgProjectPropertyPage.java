@@ -208,12 +208,7 @@ public class HgProjectPropertyPage extends PropertyPage {
 		}
 		sortedRepos.sort(new Comparator<IHgRepositoryLocation>() {
 			public int compare(IHgRepositoryLocation o1, IHgRepositoryLocation o2) {
-				try {
-					return o1.getUri().compareTo(o2.getUri());
-				} catch (HgException e) {
-					MercurialEclipsePlugin.logError(e);
-					return 0;
-				}
+				return o1.compareTo(o2);
 			}
 		});
 		//
