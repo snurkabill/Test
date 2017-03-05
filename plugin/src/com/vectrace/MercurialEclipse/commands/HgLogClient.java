@@ -4,12 +4,13 @@
  * under the terms of the Eclipse Public License v1.0 which accompanies this
  * distribution, and is available at http://www.eclipse.org/legal/epl-v10.html
  *
- * Contributors: Bastian Doetsch - implementation
- * Andrei Loskutov - bugfixes
+ * Contributors:
+ * Bastian Doetsch         - implementation
+ * Andrei Loskutov         - bugfixes
  * Zsolt Koppany (Intland)
  * Ilya Ivanov (Intland)
- * Josh Tam - bugfixes
- * Amenel Voglozin               - bug #485 (Show history across renames)
+ * Josh Tam                - bugfixes
+ * Amenel Voglozin         - #485 (Show history across renames) & #511 (Exception showing the history of a renamed file)
  ******************************************************************************/
 
 package com.vectrace.MercurialEclipse.commands;
@@ -151,7 +152,19 @@ public class HgLogClient extends AbstractClient {
 				if (canFollow(root, relPath)) {
 					command.follow();
 				}
-				c = command.execute(sPath);
+				try {
+					c = command.execute(sPath);
+				} catch (ExecutionException e) {
+					if (e.getMessage().startsWith("cannot follow file not in parent revision")) {
+						/*
+						 * It's normal that the new name of a renamed file can't be found in the
+						 * parent revision until the next commit, when Hg records the rename.
+						 */
+						c = new ArrayList<Changeset>();
+					} else {
+						throw e;
+					}
+				}
 			}
 		}
 		else
