@@ -19,6 +19,7 @@ package com.vectrace.MercurialEclipse.storage;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.Iterator;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -88,6 +89,13 @@ public class HgRepositoryLocationManager {
 	private volatile boolean initialized;
 	private final List<IRepositoryListener> repositoryListeners;
 
+	// @Amenel: this is to avoid redefining the same comparator throughout the code base.
+	private static final Comparator<IHgRepositoryLocation> repoLocationComparator = new Comparator<IHgRepositoryLocation>() {
+		public int compare(IHgRepositoryLocation o1, IHgRepositoryLocation o2) {
+			return o1.compareTo(o2);
+		}
+	};
+
 	public HgRepositoryLocationManager() {
 		super();
 		entriesLock = new Object();
@@ -95,6 +103,10 @@ public class HgRepositoryLocationManager {
 		rootRepos = new ConcurrentHashMap<HgRoot, Set<IHgRepositoryLocation>>();
 		repoHistory = new LinkedHashSet<IHgRepositoryLocation>();
 		delegator = new HgRepositoryLocationParserDelegator();
+	}
+
+	public static Comparator<IHgRepositoryLocation> getRepoLocationComparator() {
+		return repoLocationComparator;
 	}
 
 	/**

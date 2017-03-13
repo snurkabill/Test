@@ -406,7 +406,22 @@ public class ConfigurationWizardMainPage extends HgWizardPage {
 		} else {
 			repositories = MercurialEclipsePlugin.getRepoManager().getAllRepoLocations(hgRoot);
 		}
-		for (IHgRepositoryLocation repoLocation : repositories) {
+		//
+		// Sort alphabetically as it will be easier on the user.
+		List<IHgRepositoryLocation> sortedRepositories = new ArrayList<IHgRepositoryLocation>(repositories.size());
+		List<IHgRepositoryLocation> sortedAll = new ArrayList<IHgRepositoryLocation>(all.size());
+		for (IHgRepositoryLocation repo : repositories) {
+			sortedRepositories.add(repo);
+		}
+		for (IHgRepositoryLocation repo: all) {
+			sortedAll.add(repo);
+		}
+
+		sortedRepositories.sort(HgRepositoryLocationManager.getRepoLocationComparator());
+		sortedAll.sort(HgRepositoryLocationManager.getRepoLocationComparator());
+		//
+		//
+		for (IHgRepositoryLocation repoLocation : sortedRepositories) {
 			if(repoLocation.getLocation() != null) {
 				newHostNames.add(repoLocation.getLocation());
 			}
@@ -414,7 +429,7 @@ public class ConfigurationWizardMainPage extends HgWizardPage {
 		if(repositories.size() > 0) {
 			newHostNames.add(REPO_SEPARATOR);
 		}
-		for (IHgRepositoryLocation repoLocation : all) {
+		for (IHgRepositoryLocation repoLocation : sortedAll) {
 			String location = repoLocation.getLocation();
 			if(location != null && !newHostNames.contains(location)) {
 				newHostNames.add(location);

@@ -15,7 +15,6 @@ package com.vectrace.MercurialEclipse.ui;
 import static com.vectrace.MercurialEclipse.ui.SWTWidgetHelper.*;
 
 import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.List;
 import java.util.Set;
 
@@ -206,11 +205,7 @@ public class HgProjectPropertyPage extends PropertyPage {
 		for (IHgRepositoryLocation repo : allRepos) {
 			sortedRepos.add(repo);
 		}
-		sortedRepos.sort(new Comparator<IHgRepositoryLocation>() {
-			public int compare(IHgRepositoryLocation o1, IHgRepositoryLocation o2) {
-				return o1.compareTo(o2);
-			}
-		});
+		sortedRepos.sort(HgRepositoryLocationManager.getRepoLocationComparator());
 		//
 		//
 		for (final IHgRepositoryLocation repo : sortedRepos) {
