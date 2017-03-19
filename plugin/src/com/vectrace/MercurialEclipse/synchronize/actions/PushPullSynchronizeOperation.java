@@ -6,8 +6,9 @@
  * http://www.eclipse.org/legal/epl-v10.html
  *
  * Contributors:
- *     Bastian Doetsch			 - implementation
- *     Andrei Loskutov           - bug fixes
+ *     Bastian Doetsch - implementation
+ *     Andrei Loskutov - bug fixes
+ *     Amenel Voglozin - User information features: repo logical names in dialog msgs.
  ******************************************************************************/
 package com.vectrace.MercurialEclipse.synchronize.actions;
 
@@ -195,7 +196,7 @@ public class PushPullSynchronizeOperation extends SynchronizeModelOperation {
 		boolean showRepoLogicalName = store.getBoolean(MercurialPreferenceConstants.PREF_SHOW_LOGICAL_NAME_OF_REPOSITORIES);
 		String repoName = "";
 		if (rcGroup.getRoot() != null && showRepoLogicalName) {
-			IHgRepositoryLocation repoLocation = MercurialEclipsePlugin.getRepoManager().getDefaultRepoLocation(rcGroup.getRoot());
+			IHgRepositoryLocation repoLocation = participant.getRepositoryLocation(rcGroup.getRoot());
 			if (!StringUtils.isEmpty(repoLocation.getLogicalName())) {
 				repoName = " ([" + repoLocation.getLogicalName() + "])";
 			}
@@ -224,6 +225,16 @@ public class PushPullSynchronizeOperation extends SynchronizeModelOperation {
 		});
 	}
 
+	/**
+	 * Checks whether all conditions (related to projects) necessary for a normal operation are
+	 * fulfilled. The monitor is canceled when the operation should not continue.
+	 * <p>
+	 * Conditions:
+	 * <ul>
+	 * <li>There must be at least one project.
+	 * <li>All projects impacted must be open.
+	 * </ul>
+	 */
 	private void checkProjects(final IProgressMonitor monitor, HgRoot hgRoot) {
 		Set<IProject> projects = ResourceUtils.getProjects(hgRoot);
 		if(!isPull || projects.size() <= 1) {
