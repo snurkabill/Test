@@ -2,21 +2,20 @@
 <feature
       id="mercurialeclipse"
       label="MercurialEclipse"
-      version="2.2.0.qualifier"
+      version="2.3.0.qualifier"
       provider-name="MercurialEclipse project"
       image="mercurial.png">
 
    <description url="https://bitbucket.org/mercurialeclipse/main">
-      Mercurial plugin for Eclipse IDE
+      This plug-in provides a graphical user interface for managing Eclipse IDE projects that are under version control
+with Mercurial.
    </description>
 
    <copyright>
-      Copyright (C) 2005-2012 MercurialEclipse project.
-All rights reserved. This program and the accompanying materials
-are made available under the terms of the Eclipse Public License
-v1.0
-which accompanies this distribution, and is available at
-http://www.eclipse.org/legal/epl-v10.html
+      Copyright (C) 2005-2017 MercurialEclipse project. All rights
+reserved. This program and the accompanying materials are made
+available under the terms of the Eclipse Public License v1.0
+which accompanies this distribution, and is available at http://www.eclipse.org/legal/epl-v10.html
    </copyright>
 
    <license url="http://www.eclipse.org/legal/epl-v10.html">
@@ -135,8 +134,8 @@ This Agreement is governed by the laws of the State of New York and the intellec
 
    <plugin
          id="com.vectrace.MercurialEclipse"
-         download-size="1500"
-         install-size="1500"
+         download-size="3353"
+         install-size="3353"
          version="0.0.0"
          unpack="false"/>
 
